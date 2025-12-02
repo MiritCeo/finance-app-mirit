@@ -1,0 +1,9 @@
+{
+  "query": "DELETE FROM timeEntries \nWHERE assignmentId IN (\n  SELECT epa.id FROM employeeProjectAssignments epa\n  JOIN employees e ON epa.employeeId = e.id\n  WHERE e.firstName = 'Maciej' AND e.lastName = 'K'\n) \nAND YEAR(workDate) = 2025 AND MONTH(workDate) = 12",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute DELETE FROM timeEntries \nWHERE assignmentId IN (\n  SELECT epa.id FROM employeeProjectAssignments epa\n  JOIN employees e ON epa.employeeId = e.id\n  WHERE e.firstName = 'Maciej' AND e.lastName = 'K'\n) \nAND YEAR(workDate) = 2025 AND MONTH(workDate) = 12",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 68
+}

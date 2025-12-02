@@ -1,0 +1,82 @@
+{
+  "query": "SELECT e.id, e.firstName, e.lastName, COUNT(te.id) as timeEntriesCount FROM employees e LEFT JOIN employeeProjectAssignments epa ON e.id = epa.employeeId LEFT JOIN timeEntries te ON epa.id = te.assignmentId GROUP BY e.id ORDER BY e.id DESC LIMIT 15",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute SELECT e.id, e.firstName, e.lastName, COUNT(te.id) as timeEntriesCount FROM employees e LEFT JOIN employeeProjectAssignments epa ON e.id = epa.employeeId LEFT JOIN timeEntries te ON epa.id = te.assignmentId GROUP BY e.id ORDER BY e.id DESC LIMIT 15",
+  "rows": [
+    {
+      "id": "90083",
+      "firstName": "Ewa",
+      "lastName": "Mazur",
+      "timeEntriesCount": "64"
+    },
+    {
+      "id": "90082",
+      "firstName": "Paweł",
+      "lastName": "Jankowski",
+      "timeEntriesCount": "64"
+    },
+    {
+      "id": "90081",
+      "firstName": "Aleksandra",
+      "lastName": "Krawczyk",
+      "timeEntriesCount": "64"
+    },
+    {
+      "id": "90080",
+      "firstName": "Michał",
+      "lastName": "Wójcik",
+      "timeEntriesCount": "64"
+    },
+    {
+      "id": "90079",
+      "firstName": "Natalia",
+      "lastName": "Szymańska",
+      "timeEntriesCount": "64"
+    },
+    {
+      "id": "90078",
+      "firstName": "Tomasz",
+      "lastName": "Dąbrowski",
+      "timeEntriesCount": "64"
+    },
+    {
+      "id": "90077",
+      "firstName": "Maria",
+      "lastName": "Zielińska",
+      "timeEntriesCount": "64"
+    },
+    {
+      "id": "90076",
+      "firstName": "Jakub",
+      "lastName": "Kamiński",
+      "timeEntriesCount": "64"
+    },
+    {
+      "id": "90075",
+      "firstName": "Katarzyna",
+      "lastName": "Lewandowska",
+      "timeEntriesCount": "64"
+    },
+    {
+      "id": "90074",
+      "firstName": "Piotr",
+      "lastName": "Wiśniewski",
+      "timeEntriesCount": "64"
+    },
+    {
+      "id": "90073",
+      "firstName": "Anna",
+      "lastName": "Nowak",
+      "timeEntriesCount": "64"
+    },
+    {
+      "id": "90072",
+      "firstName": "Mateusz",
+      "lastName": "Kowalski",
+      "timeEntriesCount": "64"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfirstName\tlastName\ttimeEntriesCount\n90083\tEwa\tMazur\t64\n90082\tPaweł\tJankowski\t64\n90081\tAleksandra\tKrawczyk\t64\n90080\tMichał\tWójcik\t64\n90079\tNatalia\tSzymańska\t64\n90078\tTomasz\tDąbrowski\t64\n90077\tMaria\tZielińska\t64\n90076\tJakub\tKamiński\t64\n90075\tKatarzyna\tLewandowska\t64\n90074\tPiotr\tWiśniewski\t64\n90073\tAnna\tNowak\t64\n90072\tMateusz\tKowalski\t64\n",
+  "stderr": "",
+  "execution_time_ms": 62
+}

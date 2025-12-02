@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE monthlyEmployeeReports ADD COLUMN actualCost INT NULL COMMENT 'Opcjonalny koszt rzeczywisty w groszach (ręcznie wprowadzony)'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute ALTER TABLE monthlyEmployeeReports ADD COLUMN actualCost INT NULL COMMENT 'Opcjonalny koszt rzeczywisty w groszach (ręcznie wprowadzony)'",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 432
+}

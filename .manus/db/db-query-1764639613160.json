@@ -1,0 +1,22 @@
+{
+  "query": "SELECT te.*, e.firstName, e.lastName, e.id as employeeId\nFROM timeEntries te\nJOIN employeeProjectAssignments epa ON te.assignmentId = epa.id\nJOIN employees e ON epa.employeeId = e.id\nWHERE e.firstName = 'Maciej' AND e.lastName = 'K'\nLIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute SELECT te.*, e.firstName, e.lastName, e.id as employeeId\nFROM timeEntries te\nJOIN employeeProjectAssignments epa ON te.assignmentId = epa.id\nJOIN employees e ON epa.employeeId = e.id\nWHERE e.firstName = 'Maciej' AND e.lastName = 'K'\nLIMIT 10",
+  "rows": [
+    {
+      "id": "60007",
+      "assignmentId": "60007",
+      "workDate": "2026-01-31",
+      "hoursWorked": "2200",
+      "description": "Raport miesięczny za 1/2026",
+      "createdAt": "2025-12-01 23:42:03",
+      "updatedAt": "2025-12-01 23:42:03",
+      "firstName": "Maciej",
+      "lastName": "K",
+      "employeeId": "60011"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tassignmentId\tworkDate\thoursWorked\tdescription\tcreatedAt\tupdatedAt\tfirstName\tlastName\temployeeId\n60007\t60007\t2026-01-31\t2200\tRaport miesięczny za 1/2026\t2025-12-01 23:42:03\t2025-12-01 23:42:03\tMaciej\tK\t60011\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

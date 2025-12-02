@@ -1,0 +1,285 @@
+import { useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Loader2, Save, Calendar, TrendingUp, ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
+import { useLocation } from "wouter";
+
+export default function TimeReporting() {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
+  const [, setLocation] = useLocation();
+  
+  const currentDate = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
+  const [hoursData, setHoursData] = useState<Record<number, string>>({});
+
+  const { data: employees, isLoading: employeesLoading } = trpc.employees.list.useQuery(undefined, { enabled: !!user });
+  const { data: monthlyReports, isLoading: reportsLoading } = trpc.timeEntries.monthlyReports.useQuery(
+    undefined,
+    { enabled: !!user }
+  );
+
+  const saveMutation = trpc.timeEntries.saveMonthlyHours.useMutation({
+    onSuccess: () => {
+      toast.success("Godziny zapisane pomyślnie");
+      utils.timeEntries.monthlyReports.invalidate();
+      utils.dashboard.kpi.invalidate();
+      setHoursData({});
+    },
+    onError: (error) => {
+      toast.error(`Błąd: ${error.message}`);
+    },
+  });
+
+  const handleHoursChange = (employeeId: number, value: string) => {
+    setHoursData(prev => ({
+      ...prev,
+      [employeeId]: value
+    }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const entries = Object.entries(hoursData)
+      .filter(([_, hours]) => hours && parseFloat(hours) > 0)
+      .map(([employeeId, hours]) => ({
+        employeeId: parseInt(employeeId),
+        hoursWorked: Math.round(parseFloat(hours) * 100), // Konwersja do setnych
+      }));
+
+    if (entries.length === 0) {
+      toast.error("Wpisz godziny dla przynajmniej jednego pracownika");
+      return;
+    }
+
+    saveMutation.mutate({
+      month: selectedMonth,
+      year: selectedYear,
+      entries,
+    });
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("pl-PL", {
+      style: "currency",
+      currency: "PLN",
+      minimumFractionDigits: 2,
+    }).format(amount / 100);
+  };
+
+  const getMonthName = (month: number) => {
+    const months = [
+      "Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
+      "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"
+    ];
+    return months[month - 1];
+  };
+
+  const totalRevenue = employees?.reduce((sum, emp) => {
+    const hours = parseFloat(hoursData[emp.id] || "0");
+    if (hours === 0) return sum;
+    
+    // Znajdź aktywne przypisanie pracownika (zakładamy pierwsze aktywne)
+    const assignment = emp.id; // TODO: pobierz rzeczywiste przypisanie z stawką
+    const hourlyRate = 20000; // TODO: pobierz rzeczywistą stawkę z przypisania (w groszach)
+    
+    return sum + (hours * hourlyRate);
+  }, 0) || 0;
+
+  return (
+    <div className="container mx-auto p-6 space-y-6 max-w-7xl">
+      <Button onClick={() => setLocation("/")} variant="outline" className="mb-4">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Wróć do dashboardu
+      </Button>
+      
+      <div>
+        <h1 className="text-3xl font-bold">Raportowanie godzin miesięcznych</h1>
+        <p className="text-muted-foreground">
+          Wpisz łączne godziny przepracowane przez każdego pracownika w danym miesiącu
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Formularz miesięczny */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              Raport za {getMonthName(selectedMonth)} {selectedYear}
+            </CardTitle>
+            <CardDescription>
+              Wpisz godziny otrzymane w emailach od pracowników
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Wybór miesiąca i roku */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="month">Miesiąc</Label>
+                  <select
+                    id="month"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border rounded-md"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                      <option key={month} value={month}>
+                        {getMonthName(month)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="year">Rok</Label>
+                  <select
+                    id="year"
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border rounded-md"
+                  >
+                    {Array.from({ length: 3 }, (_, i) => currentDate.getFullYear() - 1 + i).map(year => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Lista pracowników */}
+              {employeesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : employees && employees.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Pracownik</TableHead>
+                          <TableHead>Typ umowy</TableHead>
+                          <TableHead className="text-right">Godziny w miesiącu</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {employees.map((employee) => (
+                          <TableRow key={employee.id}>
+                            <TableCell className="font-medium">
+                              {employee.firstName} {employee.lastName}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground uppercase">
+                              {employee.employmentType}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Input
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                max="300"
+                                placeholder="0"
+                                value={hoursData[employee.id] || ""}
+                                onChange={(e) => handleHoursChange(employee.id, e.target.value)}
+                                className="w-32 ml-auto text-right"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Szacowany przychód za miesiąc</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {formatCurrency(Math.round(totalRevenue))}
+                      </p>
+                    </div>
+                    <Button type="submit" size="lg" disabled={saveMutation.isPending}>
+                      {saveMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Zapisywanie...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Zapisz raport
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-12">
+                  Brak pracowników w systemie
+                </div>
+              )}
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Historia raportów */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5" />
+              Historia raportów
+            </CardTitle>
+            <CardDescription>Ostatnio zapisane miesiące</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {reportsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : monthlyReports && monthlyReports.length > 0 ? (
+              <div className="space-y-3">
+                {monthlyReports.slice(0, 12).map((report) => (
+                  <div
+                    key={`${report.year}-${report.month}`}
+                    className="p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">
+                          {getMonthName(report.month)} {report.year}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {report.totalHours.toFixed(0)} godz. • {report.employeeCount} prac.
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">
+                          Przychód: {formatCurrency(report.totalRevenue)}
+                        </p>
+                        <p className={`font-bold ${(report.totalProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {(report.totalProfit || 0) >= 0 ? 'Zysk' : 'Strata'}: {formatCurrency(Math.abs(report.totalProfit || 0))}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center text-muted-foreground py-12 text-sm">
+                Brak zapisanych raportów
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,100 @@
+{
+  "query": "SELECT * FROM timeEntries ORDER BY createdAt DESC LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute SELECT * FROM timeEntries ORDER BY createdAt DESC LIMIT 10",
+  "rows": [
+    {
+      "id": "23",
+      "assignmentId": "4",
+      "workDate": "2026-06-30",
+      "hoursWorked": "500",
+      "description": "Raport miesięczny za 6/2026",
+      "createdAt": "2025-12-01 20:38:01",
+      "updatedAt": "2025-12-01 20:38:01"
+    },
+    {
+      "id": "22",
+      "assignmentId": "3",
+      "workDate": "2026-06-30",
+      "hoursWorked": "500",
+      "description": "Raport miesięczny za 6/2026",
+      "createdAt": "2025-12-01 20:38:01",
+      "updatedAt": "2025-12-01 20:38:01"
+    },
+    {
+      "id": "20",
+      "assignmentId": "1",
+      "workDate": "2026-06-30",
+      "hoursWorked": "500",
+      "description": "Raport miesięczny za 6/2026",
+      "createdAt": "2025-12-01 20:38:01",
+      "updatedAt": "2025-12-01 20:38:01"
+    },
+    {
+      "id": "21",
+      "assignmentId": "2",
+      "workDate": "2026-06-30",
+      "hoursWorked": "500",
+      "description": "Raport miesięczny za 6/2026",
+      "createdAt": "2025-12-01 20:38:01",
+      "updatedAt": "2025-12-01 20:38:01"
+    },
+    {
+      "id": "17",
+      "assignmentId": "1",
+      "workDate": "2026-06-30",
+      "hoursWorked": "500",
+      "description": "Raport miesięczny za 6/2026",
+      "createdAt": "2025-12-01 20:36:33",
+      "updatedAt": "2025-12-01 20:36:33"
+    },
+    {
+      "id": "19",
+      "assignmentId": "3",
+      "workDate": "2026-06-30",
+      "hoursWorked": "500",
+      "description": "Raport miesięczny za 6/2026",
+      "createdAt": "2025-12-01 20:36:33",
+      "updatedAt": "2025-12-01 20:36:33"
+    },
+    {
+      "id": "18",
+      "assignmentId": "2",
+      "workDate": "2026-06-30",
+      "hoursWorked": "500",
+      "description": "Raport miesięczny za 6/2026",
+      "createdAt": "2025-12-01 20:36:33",
+      "updatedAt": "2025-12-01 20:36:33"
+    },
+    {
+      "id": "16",
+      "assignmentId": "4",
+      "workDate": "2025-12-31",
+      "hoursWorked": "200",
+      "description": "Raport miesięczny za 12/2025",
+      "createdAt": "2025-12-01 20:32:38",
+      "updatedAt": "2025-12-01 20:32:38"
+    },
+    {
+      "id": "14",
+      "assignmentId": "2",
+      "workDate": "2025-12-31",
+      "hoursWorked": "200",
+      "description": "Raport miesięczny za 12/2025",
+      "createdAt": "2025-12-01 20:32:38",
+      "updatedAt": "2025-12-01 20:32:38"
+    },
+    {
+      "id": "13",
+      "assignmentId": "1",
+      "workDate": "2025-12-31",
+      "hoursWorked": "13100",
+      "description": "Raport miesięczny za 12/2025",
+      "createdAt": "2025-12-01 20:32:38",
+      "updatedAt": "2025-12-01 20:32:38"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tassignmentId\tworkDate\thoursWorked\tdescription\tcreatedAt\tupdatedAt\n23\t4\t2026-06-30\t500\tRaport miesięczny za 6/2026\t2025-12-01 20:38:01\t2025-12-01 20:38:01\n22\t3\t2026-06-30\t500\tRaport miesięczny za 6/2026\t2025-12-01 20:38:01\t2025-12-01 20:38:01\n20\t1\t2026-06-30\t500\tRaport miesięczny za 6/2026\t2025-12-01 20:38:01\t2025-12-01 20:38:01\n21\t2\t2026-06-30\t500\tRaport miesięczny za 6/2026\t2025-12-01 20:38:01\t2025-12-01 20:38:01\n17\t1\t2026-06-30\t500\tRaport miesięczny za 6/2026\t2025-12-01 20:36:33\t2025-12-01 20:36:33\n19\t3\t2026-06-30\t500\tRaport miesięczny za 6/2026\t2025-12-01 20:36:33\t2025-12-01 20:36:33\n18\t2\t2026-06-30\t500\tRaport miesięczny za 6/2026\t2025-12-01 20:36:33\t2025-12-01 20:36:33\n16\t4\t2025-12-31\t200\tRaport miesięczny za 12/2025\t2025-12-01 20:32:38\t2025-12-01 20:32:38\n14\t2\t2025-12-31\t200\tRaport miesięczny za 12/2025\t2025-12-01 20:32:38\t2025-12-01 20:32:38\n13\t1\t2025-12-31\t13100\tRaport miesięczny za 12/2025\t2025-12-01 20:32:38\t2025-12-01 20:32:38\n",
+  "stderr": "",
+  "execution_time_ms": 63
+}

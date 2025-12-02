@@ -1,0 +1,94 @@
+{
+  "query": "SELECT id, firstName, lastName, employmentType, isActive FROM employees ORDER BY id",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute SELECT id, firstName, lastName, employmentType, isActive FROM employees ORDER BY id",
+  "rows": [
+    {
+      "id": "1",
+      "firstName": "Jan",
+      "lastName": "Kowalski",
+      "employmentType": "zlecenie",
+      "isActive": "1"
+    },
+    {
+      "id": "2",
+      "firstName": "Anna",
+      "lastName": "Nowak",
+      "employmentType": "b2b",
+      "isActive": "1"
+    },
+    {
+      "id": "3",
+      "firstName": "Piotr",
+      "lastName": "Wiśniewski",
+      "employmentType": "uop",
+      "isActive": "1"
+    },
+    {
+      "id": "4",
+      "firstName": "Maria",
+      "lastName": "Lewandowska",
+      "employmentType": "zlecenie",
+      "isActive": "1"
+    },
+    {
+      "id": "30001",
+      "firstName": "Jan",
+      "lastName": "Kowalski",
+      "employmentType": "uop",
+      "isActive": "1"
+    },
+    {
+      "id": "30002",
+      "firstName": "Anna",
+      "lastName": "Nowak",
+      "employmentType": "b2b",
+      "isActive": "1"
+    },
+    {
+      "id": "30003",
+      "firstName": "Piotr",
+      "lastName": "Wiśniewski",
+      "employmentType": "uop",
+      "isActive": "1"
+    },
+    {
+      "id": "30004",
+      "firstName": "Maria",
+      "lastName": "Lewandowska",
+      "employmentType": "zlecenie",
+      "isActive": "1"
+    },
+    {
+      "id": "30005",
+      "firstName": "Jan",
+      "lastName": "Kowalski",
+      "employmentType": "uop",
+      "isActive": "1"
+    },
+    {
+      "id": "30006",
+      "firstName": "Anna",
+      "lastName": "Nowak",
+      "employmentType": "b2b",
+      "isActive": "1"
+    },
+    {
+      "id": "30007",
+      "firstName": "Piotr",
+      "lastName": "Wiśniewski",
+      "employmentType": "uop",
+      "isActive": "1"
+    },
+    {
+      "id": "30008",
+      "firstName": "Maria",
+      "lastName": "Lewandowska",
+      "employmentType": "zlecenie",
+      "isActive": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfirstName\tlastName\temploymentType\tisActive\n1\tJan\tKowalski\tzlecenie\t1\n2\tAnna\tNowak\tb2b\t1\n3\tPiotr\tWiśniewski\tuop\t1\n4\tMaria\tLewandowska\tzlecenie\t1\n30001\tJan\tKowalski\tuop\t1\n30002\tAnna\tNowak\tb2b\t1\n30003\tPiotr\tWiśniewski\tuop\t1\n30004\tMaria\tLewandowska\tzlecenie\t1\n30005\tJan\tKowalski\tuop\t1\n30006\tAnna\tNowak\tb2b\t1\n30007\tPiotr\tWiśniewski\tuop\t1\n30008\tMaria\tLewandowska\tzlecenie\t1\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

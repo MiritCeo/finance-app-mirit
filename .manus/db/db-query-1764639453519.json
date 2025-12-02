@@ -1,0 +1,100 @@
+{
+  "query": "SELECT * FROM timeEntries LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute SELECT * FROM timeEntries LIMIT 10",
+  "rows": [
+    {
+      "id": "1",
+      "assignmentId": "1",
+      "workDate": "2024-10-31",
+      "hoursWorked": "16800",
+      "description": "Raport miesięczny za 10/2024",
+      "createdAt": "2025-12-01 20:30:19",
+      "updatedAt": "2025-12-01 20:30:19"
+    },
+    {
+      "id": "2",
+      "assignmentId": "2",
+      "workDate": "2024-10-31",
+      "hoursWorked": "15000",
+      "description": "Raport miesięczny za 10/2024",
+      "createdAt": "2025-12-01 20:30:19",
+      "updatedAt": "2025-12-01 20:30:19"
+    },
+    {
+      "id": "3",
+      "assignmentId": "3",
+      "workDate": "2024-10-31",
+      "hoursWorked": "16000",
+      "description": "Raport miesięczny za 10/2024",
+      "createdAt": "2025-12-01 20:30:19",
+      "updatedAt": "2025-12-01 20:30:19"
+    },
+    {
+      "id": "4",
+      "assignmentId": "4",
+      "workDate": "2024-10-31",
+      "hoursWorked": "14000",
+      "description": "Raport miesięczny za 10/2024",
+      "createdAt": "2025-12-01 20:30:19",
+      "updatedAt": "2025-12-01 20:30:19"
+    },
+    {
+      "id": "5",
+      "assignmentId": "1",
+      "workDate": "2024-11-30",
+      "hoursWorked": "16800",
+      "description": "Raport miesięczny za 11/2024",
+      "createdAt": "2025-12-01 20:30:19",
+      "updatedAt": "2025-12-01 20:30:19"
+    },
+    {
+      "id": "6",
+      "assignmentId": "2",
+      "workDate": "2024-11-30",
+      "hoursWorked": "15000",
+      "description": "Raport miesięczny za 11/2024",
+      "createdAt": "2025-12-01 20:30:19",
+      "updatedAt": "2025-12-01 20:30:19"
+    },
+    {
+      "id": "7",
+      "assignmentId": "3",
+      "workDate": "2024-11-30",
+      "hoursWorked": "16000",
+      "description": "Raport miesięczny za 11/2024",
+      "createdAt": "2025-12-01 20:30:19",
+      "updatedAt": "2025-12-01 20:30:19"
+    },
+    {
+      "id": "8",
+      "assignmentId": "4",
+      "workDate": "2024-11-30",
+      "hoursWorked": "14000",
+      "description": "Raport miesięczny za 11/2024",
+      "createdAt": "2025-12-01 20:30:19",
+      "updatedAt": "2025-12-01 20:30:19"
+    },
+    {
+      "id": "9",
+      "assignmentId": "1",
+      "workDate": "2024-12-31",
+      "hoursWorked": "16800",
+      "description": "Raport miesięczny za 12/2024",
+      "createdAt": "2025-12-01 20:30:19",
+      "updatedAt": "2025-12-01 20:30:19"
+    },
+    {
+      "id": "10",
+      "assignmentId": "2",
+      "workDate": "2024-12-31",
+      "hoursWorked": "15000",
+      "description": "Raport miesięczny za 12/2024",
+      "createdAt": "2025-12-01 20:30:19",
+      "updatedAt": "2025-12-01 20:30:19"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tassignmentId\tworkDate\thoursWorked\tdescription\tcreatedAt\tupdatedAt\n1\t1\t2024-10-31\t16800\tRaport miesięczny za 10/2024\t2025-12-01 20:30:19\t2025-12-01 20:30:19\n2\t2\t2024-10-31\t15000\tRaport miesięczny za 10/2024\t2025-12-01 20:30:19\t2025-12-01 20:30:19\n3\t3\t2024-10-31\t16000\tRaport miesięczny za 10/2024\t2025-12-01 20:30:19\t2025-12-01 20:30:19\n4\t4\t2024-10-31\t14000\tRaport miesięczny za 10/2024\t2025-12-01 20:30:19\t2025-12-01 20:30:19\n5\t1\t2024-11-30\t16800\tRaport miesięczny za 11/2024\t2025-12-01 20:30:19\t2025-12-01 20:30:19\n6\t2\t2024-11-30\t15000\tRaport miesięczny za 11/2024\t2025-12-01 20:30:19\t2025-12-01 20:30:19\n7\t3\t2024-11-30\t16000\tRaport miesięczny za 11/2024\t2025-12-01 20:30:19\t2025-12-01 20:30:19\n8\t4\t2024-11-30\t14000\tRaport miesięczny za 11/2024\t2025-12-01 20:30:19\t2025-12-01 20:30:19\n9\t1\t2024-12-31\t16800\tRaport miesięczny za 12/2024\t2025-12-01 20:30:19\t2025-12-01 20:30:19\n10\t2\t2024-12-31\t15000\tRaport miesięczny za 12/2024\t2025-12-01 20:30:19\t2025-12-01 20:30:19\n",
+  "stderr": "",
+  "execution_time_ms": 84
+}

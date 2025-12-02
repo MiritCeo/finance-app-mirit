@@ -1,0 +1,90 @@
+{
+  "query": "SELECT employeeId, year, month, hoursWorked, revenue, cost FROM monthlyEmployeeReports ORDER BY year DESC, month DESC LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute SELECT employeeId, year, month, hoursWorked, revenue, cost FROM monthlyEmployeeReports ORDER BY year DESC, month DESC LIMIT 10",
+  "rows": [
+    {
+      "employeeId": "90044",
+      "year": "2025",
+      "month": "12",
+      "hoursWorked": "0",
+      "revenue": "0",
+      "cost": "0"
+    },
+    {
+      "employeeId": "90041",
+      "year": "2025",
+      "month": "12",
+      "hoursWorked": "0",
+      "revenue": "0",
+      "cost": "0"
+    },
+    {
+      "employeeId": "90043",
+      "year": "2025",
+      "month": "12",
+      "hoursWorked": "0",
+      "revenue": "0",
+      "cost": "0"
+    },
+    {
+      "employeeId": "90042",
+      "year": "2025",
+      "month": "12",
+      "hoursWorked": "0",
+      "revenue": "0",
+      "cost": "0"
+    },
+    {
+      "employeeId": "90040",
+      "year": "2025",
+      "month": "12",
+      "hoursWorked": "0",
+      "revenue": "0",
+      "cost": "0"
+    },
+    {
+      "employeeId": "90039",
+      "year": "2025",
+      "month": "12",
+      "hoursWorked": "0",
+      "revenue": "0",
+      "cost": "0"
+    },
+    {
+      "employeeId": "90037",
+      "year": "2025",
+      "month": "12",
+      "hoursWorked": "0",
+      "revenue": "0",
+      "cost": "0"
+    },
+    {
+      "employeeId": "90036",
+      "year": "2025",
+      "month": "12",
+      "hoursWorked": "0",
+      "revenue": "0",
+      "cost": "0"
+    },
+    {
+      "employeeId": "90038",
+      "year": "2025",
+      "month": "12",
+      "hoursWorked": "0",
+      "revenue": "0",
+      "cost": "0"
+    },
+    {
+      "employeeId": "90045",
+      "year": "2025",
+      "month": "12",
+      "hoursWorked": "0",
+      "revenue": "0",
+      "cost": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "employeeId\tyear\tmonth\thoursWorked\trevenue\tcost\n90044\t2025\t12\t0\t0\t0\n90041\t2025\t12\t0\t0\t0\n90043\t2025\t12\t0\t0\t0\n90042\t2025\t12\t0\t0\t0\n90040\t2025\t12\t0\t0\t0\n90039\t2025\t12\t0\t0\t0\n90037\t2025\t12\t0\t0\t0\n90036\t2025\t12\t0\t0\t0\n90038\t2025\t12\t0\t0\t0\n90045\t2025\t12\t0\t0\t0\n",
+  "stderr": "",
+  "execution_time_ms": 123
+}

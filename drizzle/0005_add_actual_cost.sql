@@ -1,0 +1,1 @@
+ALTER TABLE `monthlyEmployeeReports` ADD `actualCost` int;

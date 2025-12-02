@@ -1,0 +1,9 @@
+{
+  "query": "\n-- Dla wszystkich pracowników: monthlyCostTotal powinien zawierać vacationCostMonthly\nUPDATE employees \nSET monthlyCostTotal = monthlyCostTotal + vacationCostMonthly\nWHERE vacationCostMonthly > 0;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute \n-- Dla wszystkich pracowników: monthlyCostTotal powinien zawierać vacationCostMonthly\nUPDATE employees \nSET monthlyCostTotal = monthlyCostTotal + vacationCostMonthly\nWHERE vacationCostMonthly > 0;\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 66
+}

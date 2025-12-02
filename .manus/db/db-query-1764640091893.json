@@ -1,0 +1,15 @@
+{
+  "query": "SELECT firstName, lastName, hourlyRateClient FROM employees WHERE firstName = 'Maciej' AND lastName = 'K'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute SELECT firstName, lastName, hourlyRateClient FROM employees WHERE firstName = 'Maciej' AND lastName = 'K'",
+  "rows": [
+    {
+      "firstName": "Maciej",
+      "lastName": "K",
+      "hourlyRateClient": "10000"
+    }
+  ],
+  "messages": [],
+  "stdout": "firstName\tlastName\thourlyRateClient\nMaciej\tK\t10000\n",
+  "stderr": "",
+  "execution_time_ms": 47
+}
