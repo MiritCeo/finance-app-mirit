@@ -639,3 +639,14 @@ Dodać możliwość ręcznego wprowadzenia rzeczywistego kosztu pracownika dla d
 - [ ] Przebudować aplikację (pnpm build)
 - [ ] Przetestować dostęp bez logowania na serwerze produkcyjnym
 - [ ] Załadować dane testowe (pnpm exec tsx scripts/seedRealistic.ts)
+
+
+## Zarządzanie Klientami - UI (Grudzień 2024)
+
+- [x] Sprawdzić procedury tRPC dla klientów w server/routers.ts
+- [x] Utworzyć stronę Clients.tsx z listą klientów
+- [x] Dodać formularz dodawania nowego klienta
+- [x] Dodać funkcje edycji i usuwania klientów
+- [x] Zaktualizować routing w App.tsx
+- [x] Dodać link "Klienci" w menu nawigacyjnym
+- [x] Przetestować pełny przepływ: Klient → Projekt → Raport

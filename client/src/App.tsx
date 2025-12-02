@@ -11,6 +11,7 @@ import EmployeeProfitSimulator from "./pages/EmployeeProfitSimulator";
 import TimeReporting from "./pages/TimeReporting";
 import EmployeeAnnualReport from "./pages/EmployeeAnnualReport";
 import FixedCosts from "./pages/FixedCosts";
+import Clients from "./pages/Clients";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <Route path={"/"} component={Dashboard} />
       <Route path={"/employees"} component={Employees} />
       <Route path={"/projects"} component={Projects} />
+      <Route path={"/clients"} component={Clients} />
       <Route path={"/time-reporting"} component={TimeReporting} />
       <Route path={"/simulator"} component={EmployeeProfitSimulator} />
       <Route path={"/employee/:id/annual-report"} component={EmployeeAnnualReport} />

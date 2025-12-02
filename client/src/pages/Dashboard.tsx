@@ -265,6 +265,9 @@ export default function Dashboard() {
               <a href="/projects">Zarządzaj projektami</a>
             </Button>
             <Button variant="outline" className="w-full justify-start" asChild>
+              <a href="/clients">Zarządzaj klientami</a>
+            </Button>
+            <Button variant="outline" className="w-full justify-start" asChild>
               <a href="/simulator">Symulator zysku z pracownika</a>
             </Button>
             <Button variant="outline" className="w-full justify-start" asChild>
