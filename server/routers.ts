@@ -1026,10 +1026,10 @@ export const appRouter = router({
       const operatingMargin = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0;
       
       return {
-        totalRevenue: Math.round(totalRevenue * 100), // Konwersja do groszy
-        employeeCosts: Math.round(totalEmployeeCosts * 100), // Konwersja do groszy
-        fixedCosts: totalFixedCosts,
-        operatingProfit: Math.round(operatingProfit * 100), // Konwersja do groszy
+        totalRevenue: Math.round(totalRevenue), // Już w groszach z bazy (hourlyRateClient jest w groszach)
+        employeeCosts: Math.round(totalEmployeeCosts), // Już w groszach z bazy (monthlyCostTotal jest w groszach)
+        fixedCosts: totalFixedCosts, // Już w groszach z bazy (fixedCosts.amount jest w groszach)
+        operatingProfit: Math.round(operatingProfit), // Już w groszach (różnica wartości w groszach)
         operatingMargin: Math.round(operatingMargin * 100) / 100,
         employeeCount: employees.length,
       };
