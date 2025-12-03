@@ -1,0 +1,58 @@
+{
+  "query": "SELECT id, firstName, lastName, employmentType, monthlySalaryNet, monthlyCostTotal FROM employees WHERE employmentType IN ('zlecenie', 'zlecenie_studenckie')",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute SELECT id, firstName, lastName, employmentType, monthlySalaryNet, monthlyCostTotal FROM employees WHERE employmentType IN ('zlecenie', 'zlecenie_studenckie')",
+  "rows": [
+    {
+      "id": "90076",
+      "firstName": "Jakub",
+      "lastName": "Kamiński",
+      "employmentType": "zlecenie",
+      "monthlySalaryNet": "700000",
+      "monthlyCostTotal": "1123286"
+    },
+    {
+      "id": "90077",
+      "firstName": "Maria",
+      "lastName": "Zielińska",
+      "employmentType": "zlecenie",
+      "monthlySalaryNet": "650000",
+      "monthlyCostTotal": "1043051"
+    },
+    {
+      "id": "90078",
+      "firstName": "Tomasz",
+      "lastName": "Dąbrowski",
+      "employmentType": "zlecenie_studenckie",
+      "monthlySalaryNet": "400000",
+      "monthlyCostTotal": "454545"
+    },
+    {
+      "id": "90079",
+      "firstName": "Natalia",
+      "lastName": "Szymańska",
+      "employmentType": "zlecenie_studenckie",
+      "monthlySalaryNet": "350000",
+      "monthlyCostTotal": "397727"
+    },
+    {
+      "id": "90081",
+      "firstName": "Aleksandra",
+      "lastName": "Krawczyk",
+      "employmentType": "zlecenie",
+      "monthlySalaryNet": "800000",
+      "monthlyCostTotal": "1283755"
+    },
+    {
+      "id": "90083",
+      "firstName": "Ewa",
+      "lastName": "Mazur",
+      "employmentType": "zlecenie",
+      "monthlySalaryNet": "600000",
+      "monthlyCostTotal": "962816"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfirstName\tlastName\temploymentType\tmonthlySalaryNet\tmonthlyCostTotal\n90076\tJakub\tKamiński\tzlecenie\t700000\t1123286\n90077\tMaria\tZielińska\tzlecenie\t650000\t1043051\n90078\tTomasz\tDąbrowski\tzlecenie_studenckie\t400000\t454545\n90079\tNatalia\tSzymańska\tzlecenie_studenckie\t350000\t397727\n90081\tAleksandra\tKrawczyk\tzlecenie\t800000\t1283755\n90083\tEwa\tMazur\tzlecenie\t600000\t962816\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

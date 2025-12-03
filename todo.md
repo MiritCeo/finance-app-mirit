@@ -706,3 +706,17 @@ Dodać możliwość ręcznego wprowadzenia rzeczywistego kosztu pracownika dla d
 - [x] Przetestować zmianę statusów zadań - działa
 - [x] Przetestować bazę wiedzy - strona działa
 - [x] Naprawić invalidację cache - dodano awaitPrzetestować bazę wiedzy
+
+## Naprawa obliczeń kosztów dla umów zlecenie
+
+- [ ] Sprawdzić kod obliczania kosztów w EmployeesPage.tsx
+- [ ] Naprawić obliczenia dla umowy "zlecenie"
+- [ ] Naprawić obliczenia dla umowy "zlecenie_studenckie"
+- [ ] Naprawić wyświetlanie kosztów w tabeli pracowników
+- [ ] Przetestować dodawanie pracownika z różnymi typami umów
+
+## Naprawa obliczeń kosztów dla umów zlecenie i zlecenie studenckie (Grudzień 2024)
+
+- [x] Naprawić procedurę calculateSalary - dodać koszty urlopów dla zlecenie i zlecenie studenckie
+- [x] Przetestować dodawanie pracownika z umową zlecenie studenckie - działa poprawnie (7318,12 zł dla 6000 zł netto)
+- [x] Sprawdzić czy koszty wyświetlają się w tabeli pracowników - działa poprawnie

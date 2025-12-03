@@ -127,8 +127,26 @@ export const appRouter = router({
           result = calculateB2B(monthlySalaryNet, hourlyRateEmployee);
         } else if (employmentType === "zlecenie") {
           result = calculateZlecenieFromNet(monthlySalaryNet);
+          // Dodaj koszty urlopów
+          const vacationCostMonthly = Math.round((hourlyRateEmployee * 168) / 12);
+          const vacationCostAnnual = hourlyRateEmployee * 168;
+          result = {
+            ...result,
+            employerCostWithVacation: result.employerCost + vacationCostMonthly,
+            vacationCostMonthly,
+            vacationCostAnnual,
+          };
         } else if (employmentType === "zlecenie_studenckie") {
           result = calculateZlecenieStudenckieFromNet(monthlySalaryNet);
+          // Dodaj koszty urlopów
+          const vacationCostMonthly = Math.round((hourlyRateEmployee * 168) / 12);
+          const vacationCostAnnual = hourlyRateEmployee * 168;
+          result = {
+            ...result,
+            employerCostWithVacation: result.employerCost + vacationCostMonthly,
+            vacationCostMonthly,
+            vacationCostAnnual,
+          };
         }
         
         // Oblicz koszt godzinowy
