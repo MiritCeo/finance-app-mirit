@@ -171,7 +171,7 @@ export const appRouter = router({
           if (!monthlyHours[month]) {
             monthlyHours[month] = 0;
           }
-          monthlyHours[month] += entry.hoursWorked / 100; // Konwersja z groszy na godziny
+          monthlyHours[month] += entry.hoursWorked; // Godziny jako liczba całkowita
         }
         
         // Pobierz zapisane raporty miesięczne (z actualCost)
@@ -270,7 +270,7 @@ export const appRouter = router({
         
         // Oblicz przychód, koszt i zysk
         const hourlyRateClient = employee.hourlyRateClient;
-        const revenue = Math.round((hoursWorked / 100) * hourlyRateClient); // hoursWorked w groszach (np. 16800 = 168h)
+        const revenue = Math.round(hoursWorked * hourlyRateClient); // hoursWorked jako liczba całkowita
         const cost = employee.monthlyCostTotal;
         const profit = revenue - cost;
         // Ta procedura nie jest już używana - godziny są pobierane z timeEntries
@@ -536,12 +536,65 @@ export const appRouter = router({
             await db.createTimeEntry({
               assignmentId: activeAssignment.id,
               workDate,
-              hoursWorked: Math.round(entry.hoursWorked * 100), // Konwersja na setne (100h = 10000)
+              hoursWorked: Math.round(entry.hoursWorked * 100), // Konwersja do setnych (132.39h → 13239)
               description: `Raport miesięczny za ${input.month}/${input.year}`,
             });
           }
         }
         return { success: true };
+      }),
+    
+    deleteMonthlyReport: protectedProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        // Usuń wszystkie wpisy godzinowe dla danego miesiąca
+        const { sql } = await import("drizzle-orm");
+        const db = await import("./db");
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
+        
+        const { timeEntries } = await import("../drizzle/schema");
+        
+        // Usuń wpisy z time_entries dla danego miesiąca i roku
+        await database.delete(timeEntries).where(
+          sql`MONTH(${timeEntries.workDate}) = ${input.month} AND YEAR(${timeEntries.workDate}) = ${input.year}`
+        );
+        
+        return { success: true };
+      }),
+    
+    getMonthlyReportDetails: protectedProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const { year, month } = input;
+        
+        // Pobierz wszystkich aktywnych pracowników
+        const employees = await db.getActiveEmployees();
+        
+        // Dla każdego pracownika pobierz godziny z time_entries
+        const employeeHours: Array<{ employeeId: number; hours: number }> = [];
+        
+        for (const employee of employees) {
+          const entries = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
+          
+          if (entries.length > 0) {
+            // Zsumuj godziny (godziny są w setnych w bazie, np. 13600 = 136h)
+            const totalHours = entries.reduce((sum: number, entry: any) => sum + (entry.hoursWorked / 100), 0);
+            
+            employeeHours.push({
+              employeeId: employee.id,
+              hours: totalHours,
+            });
+          }
+        }
+        
+        return employeeHours;
       }),
     
     monthlyReports: protectedProcedure.query(async () => {
@@ -594,7 +647,7 @@ export const appRouter = router({
         }
         
         const report = reportMap.get(key)!;
-        const hours = entry.hoursWorked / 100;
+        const hours = entry.hoursWorked; // Godziny już są jako liczba całkowita
         const revenue = hours * assignment.hourlyRateClient;
         
         report.totalHours += hours;
@@ -664,7 +717,7 @@ export const appRouter = router({
           const employee = await db.getEmployeeById(assignment.employeeId);
           if (!employee) continue;
           
-          const hours = entry.hoursWorked / 100;
+          const hours = entry.hoursWorked; // Godziny jako liczba całkowita
           const revenue = hours * assignment.hourlyRateClient;
           
           // Oblicz pełny miesięczny koszt pracownika
@@ -895,40 +948,38 @@ export const appRouter = router({
   // ============ DASHBOARD / REPORTS ============
   dashboard: router({
     kpi: protectedProcedure.query(async () => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      
       // Pobierz wszystkich aktywnych pracowników
       const employees = await db.getActiveEmployees();
       
-      // Suma kosztów pracowników
-      const employeeCosts = employees.reduce((sum, emp) => sum + emp.monthlyCostTotal, 0);
-      
-      // Oblicz rzeczywisty przychód z time entries
-      // Pobierz wszystkie time entries z bieżącego miesiąca
-      const now = new Date();
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      
-      const timeEntries = await db.getTimeEntriesByDateRange(
-        firstDayOfMonth.toISOString().split('T')[0],
-        lastDayOfMonth.toISOString().split('T')[0]
-      );
-      
-      // Oblicz przychód: suma (godziny × stawka klienta) dla każdego time entry
       let totalRevenue = 0;
-      for (const entry of timeEntries) {
-        // Pobierz assignment aby uzyskać stawkę klienta i projekt
-        const assignment = await db.getAssignmentById(entry.assignmentId);
-        
-        if (assignment) {
-          // Przychód = godziny × stawka klienta
-          // hoursWorked jest w setnych (np. 8.5h = 850)
-          const revenue = Math.round((entry.hoursWorked / 100) * assignment.hourlyRateClient);
-          totalRevenue += revenue;
-        }
-      }
+      let totalEmployeeCosts = 0;
       
-      // Jeśli brak time entries (np. nowy miesiąc), użyj uproszczonego obliczenia
-      if (totalRevenue === 0 && employees.length > 0) {
-        totalRevenue = Math.round(employeeCosts * 1.2); // 20% marża dla przykładu
+      // Dla każdego pracownika pobierz godziny z time_entries
+      for (const employee of employees) {
+        // Pobierz wszystkie wpisy godzinowe dla pracownika w bieżącym miesiącu
+        const entries = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
+        
+        // Jeśli brak wpisów, pomiń pracownika
+        if (entries.length === 0) continue;
+        
+        // Zsumuj godziny (godziny są w setnych, np. 13600 = 136h)
+        const totalHours = entries.reduce((sum: number, entry: any) => sum + (entry.hoursWorked / 100), 0);
+        
+        // Oblicz przychód: godziny × stawka klienta
+        const revenue = totalHours * (employee.hourlyRateClient / 100);
+        totalRevenue += revenue;
+        
+        // Sprawdź czy jest custom koszt w monthlyEmployeeReports
+        const customReport = await db.getMonthlyReport(employee.id, year, month);
+        const employeeCost = customReport?.actualCost 
+          ? customReport.actualCost / 100 
+          : employee.monthlyCostTotal / 100;
+        
+        totalEmployeeCosts += employeeCost;
       }
       
       // Pobierz koszty stałe
@@ -953,14 +1004,14 @@ export const appRouter = router({
         return sum + monthlyCost;
       }, 0);
       
-      const operatingProfit = totalRevenue - employeeCosts - totalFixedCosts;
+      const operatingProfit = totalRevenue - totalEmployeeCosts - totalFixedCosts;
       const operatingMargin = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0;
       
       return {
-        totalRevenue,
-        employeeCosts,
+        totalRevenue: Math.round(totalRevenue * 100), // Konwersja do groszy
+        employeeCosts: Math.round(totalEmployeeCosts * 100), // Konwersja do groszy
         fixedCosts: totalFixedCosts,
-        operatingProfit,
+        operatingProfit: Math.round(operatingProfit * 100), // Konwersja do groszy
         operatingMargin: Math.round(operatingMargin * 100) / 100,
         employeeCount: employees.length,
       };
@@ -981,20 +1032,28 @@ export const appRouter = router({
         let totalRevenue = 0;
         let totalEmployeeCosts = 0;
         
-        // Dla każdego pracownika pobierz raport miesięczny
+        // Dla każdego pracownika pobierz godziny z time_entries
         for (const employee of employees) {
-          // Pobierz raport miesięczny dla tego pracownika
-          const report = await db.getMonthlyReport(employee.id, year, month);
+          // Pobierz wszystkie wpisy godzinowe dla pracownika w danym miesiącu
+          const entries = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
           
-          // Jeśli brak raportu, pomiń pracownika
-          if (!report) continue;
+          // Jeśli brak wpisów, pomiń pracownika
+          if (entries.length === 0) continue;
           
-          // Dodaj przychód i koszt z raportu
-          totalRevenue += report.revenue;
+          // Zsumuj godziny (godziny są w setnych, np. 13600 = 136h)
+          const totalHours = entries.reduce((sum: number, entry: any) => sum + (entry.hoursWorked / 100), 0);
           
-          // Koszt = actualCost jeśli istnieje, w przeciwnym razie cost
-          const cost = report.actualCost ?? report.cost;
-          totalEmployeeCosts += cost;
+          // Oblicz przychód: godziny × stawka klienta
+          const revenue = totalHours * (employee.hourlyRateClient / 100);
+          totalRevenue += revenue;
+          
+          // Sprawdź czy jest custom koszt w monthlyEmployeeReports
+          const customReport = await db.getMonthlyReport(employee.id, year, month);
+          const employeeCost = customReport?.actualCost 
+            ? customReport.actualCost / 100 
+            : employee.monthlyCostTotal / 100;
+          
+          totalEmployeeCosts += employeeCost;
         }
         
         // Pobierz koszty stałe
@@ -1053,18 +1112,26 @@ export const appRouter = router({
           let totalEmployeeCosts = 0;
           
           for (const employee of employees) {
-            // Pobierz raport miesięczny dla tego pracownika
-            const report = await db.getMonthlyReport(employee.id, year, month);
+            // Pobierz wszystkie wpisy godzinowe dla pracownika w danym miesiącu
+            const entries = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
             
-            // Jeśli brak raportu, pomiń pracownika
-            if (!report) continue;
+            // Jeśli brak wpisów, pomiń pracownika
+            if (entries.length === 0) continue;
             
-            // Dodaj przychód i koszt z raportu
-            totalRevenue += report.revenue;
+            // Zsumuj godziny (godziny są w setnych, np. 13600 = 136h)
+            const totalHours = entries.reduce((sum: number, entry: any) => sum + (entry.hoursWorked / 100), 0);
             
-            // Koszt = actualCost jeśli istnieje, w przeciwnym razie cost
-            const cost = report.actualCost ?? report.cost;
-            totalEmployeeCosts += cost;
+            // Oblicz przychód: godziny × stawka klienta
+            const revenue = totalHours * (employee.hourlyRateClient / 100);
+            totalRevenue += revenue;
+            
+            // Sprawdź czy jest custom koszt w monthlyEmployeeReports
+            const customReport = await db.getMonthlyReport(employee.id, year, month);
+            const employeeCost = customReport?.actualCost 
+              ? customReport.actualCost / 100 
+              : employee.monthlyCostTotal / 100;
+            
+            totalEmployeeCosts += employeeCost;
           }
           
           // Koszty stałe
@@ -1132,6 +1199,103 @@ export const appRouter = router({
             input.expectedHoursPerMonth
           ),
         };
+      }),
+  }),
+
+  // ============ TASKS ============
+  tasks: router({
+    getAll: protectedProcedure.query(async () => {
+      return db.getAllTasks();
+    }),
+    
+    getByStatus: protectedProcedure
+      .input(z.object({
+        status: z.enum(["planned", "in_progress", "urgent", "done"]),
+      }))
+      .query(async ({ input }) => {
+        return db.getTasksByStatus(input.status);
+      }),
+    
+    getUrgent: protectedProcedure
+      .input(z.object({
+        limit: z.number().default(10),
+      }))
+      .query(async ({ input }) => {
+        return db.getUrgentTasks(input.limit);
+      }),
+    
+    create: protectedProcedure
+      .input(z.object({
+        title: z.string().min(1).max(500),
+        description: z.string().optional(),
+        status: z.enum(["planned", "in_progress", "urgent", "done"]).default("planned"),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createTask(input);
+        return { id, success: true };
+      }),
+    
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().min(1).max(500).optional(),
+        description: z.string().optional(),
+        status: z.enum(["planned", "in_progress", "urgent", "done"]).optional(),
+        completedAt: z.date().nullable().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateTask(id, data);
+        return { success: true };
+      }),
+    
+    delete: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.deleteTask(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ============ KNOWLEDGE BASE ============
+  knowledgeBase: router({
+    getAll: protectedProcedure.query(async () => {
+      return db.getAllKnowledgeBase();
+    }),
+    
+    create: protectedProcedure
+      .input(z.object({
+        title: z.string().min(1).max(500),
+        content: z.string().min(1),
+        label: z.string().max(100).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createKnowledgeBase(input);
+        return { id, success: true };
+      }),
+    
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().min(1).max(500).optional(),
+        content: z.string().min(1).optional(),
+        label: z.string().max(100).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateKnowledgeBase(id, data);
+        return { success: true };
+      }),
+    
+    delete: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.deleteKnowledgeBase(input.id);
+        return { success: true };
       }),
   }),
 });

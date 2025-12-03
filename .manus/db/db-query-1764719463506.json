@@ -1,0 +1,46 @@
+{
+  "query": "SHOW TABLES",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute SHOW TABLES",
+  "rows": [
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "clients"
+    },
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "employeeProjectAssignments"
+    },
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "employees"
+    },
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "fixedCosts"
+    },
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "monthlyEmployeeReports"
+    },
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "ownerSalarySimulations"
+    },
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "projectRevenues"
+    },
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "projects"
+    },
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "timeEntries"
+    },
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "users"
+    },
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR": "vacations"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_NohioRQJxaLfTKHfAohCFR\n__drizzle_migrations\nclients\nemployeeProjectAssignments\nemployees\nfixedCosts\nmonthlyEmployeeReports\nownerSalarySimulations\nprojectRevenues\nprojects\ntimeEntries\nusers\nvacations\n",
+  "stderr": "",
+  "execution_time_ms": 49
+}

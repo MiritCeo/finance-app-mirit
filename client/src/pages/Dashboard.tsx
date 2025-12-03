@@ -5,6 +5,66 @@ import { Loader2, DollarSign, Users, TrendingUp, TrendingDown, Calendar } from "
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
+import { Link } from "wouter";
+import { Badge } from "@/components/ui/badge";
+import { CheckCircle2, Circle } from "lucide-react";
+
+function UrgentTasksList() {
+  const { data: urgentTasks, isLoading } = trpc.tasks.getUrgent.useQuery({ limit: 10 });
+  const utils = trpc.useUtils();
+  const updateTask = trpc.tasks.update.useMutation({
+    onSuccess: () => {
+      utils.tasks.getUrgent.invalidate();
+    },
+  });
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center py-4"><Loader2 className="w-4 h-4 animate-spin" /></div>;
+  }
+
+  if (!urgentTasks || urgentTasks.length === 0) {
+    return <p className="text-sm text-muted-foreground">Brak pilnych zadań 🎉</p>;
+  }
+
+  const handleToggleStatus = (taskId: number, currentStatus: string) => {
+    const newStatus = currentStatus === "done" ? "urgent" : "done";
+    updateTask.mutate({
+      id: taskId,
+      status: newStatus as "planned" | "in_progress" | "urgent" | "done",
+      completedAt: newStatus === "done" ? new Date() : null,
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      {urgentTasks.map((task) => (
+        <div key={task.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+          <button
+            onClick={() => handleToggleStatus(task.id, task.status)}
+            className="mt-0.5 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {task.status === "done" ? (
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
+            ) : (
+              <Circle className="w-5 h-5" />
+            )}
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-medium ${
+              task.status === "done" ? "line-through text-muted-foreground" : ""
+            }`}>
+              {task.title}
+            </p>
+            {task.description && (
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{task.description}</p>
+            )}
+          </div>
+          <Badge variant="destructive" className="shrink-0">Pilne</Badge>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
@@ -277,18 +337,19 @@ export default function Dashboard() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Informacje</CardTitle>
-            <CardDescription>
-              O aplikacji ProfitFlow
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>🔴 Pilne zadania</CardTitle>
+              <CardDescription>
+                Zadania wymagające natychmiastowej uwagi
+              </CardDescription>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/tasks">Pokaż wszystkie</Link>
+            </Button>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              ProfitFlow to system do zarządzania finansami firmy outsourcingowej.
-              Aplikacja pozwala na śledzenie kosztów pracowników, projektów oraz
-              generowanie raportów finansowych.
-            </p>
+            <UrgentTasksList />
           </CardContent>
         </Card>
       </div>

@@ -1,0 +1,80 @@
+{
+  "query": "SELECT id, assignmentId, workDate, hoursWorked, description \nFROM timeEntries \nWHERE MONTH(workDate) = 11 AND YEAR(workDate) = 2025 \nLIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute SELECT id, assignmentId, workDate, hoursWorked, description \nFROM timeEntries \nWHERE MONTH(workDate) = 11 AND YEAR(workDate) = 2025 \nLIMIT 10",
+  "rows": [
+    {
+      "id": "150023",
+      "assignmentId": "90037",
+      "workDate": "2025-11-03",
+      "hoursWorked": "730",
+      "description": "Praca nad projektem"
+    },
+    {
+      "id": "150024",
+      "assignmentId": "90037",
+      "workDate": "2025-11-04",
+      "hoursWorked": "714",
+      "description": "Praca nad projektem"
+    },
+    {
+      "id": "150025",
+      "assignmentId": "90037",
+      "workDate": "2025-11-05",
+      "hoursWorked": "681",
+      "description": "Praca nad projektem"
+    },
+    {
+      "id": "150026",
+      "assignmentId": "90037",
+      "workDate": "2025-11-06",
+      "hoursWorked": "696",
+      "description": "Praca nad projektem"
+    },
+    {
+      "id": "150027",
+      "assignmentId": "90037",
+      "workDate": "2025-11-07",
+      "hoursWorked": "666",
+      "description": "Praca nad projektem"
+    },
+    {
+      "id": "150028",
+      "assignmentId": "90037",
+      "workDate": "2025-11-10",
+      "hoursWorked": "620",
+      "description": "Praca nad projektem"
+    },
+    {
+      "id": "150029",
+      "assignmentId": "90037",
+      "workDate": "2025-11-11",
+      "hoursWorked": "629",
+      "description": "Praca nad projektem"
+    },
+    {
+      "id": "150030",
+      "assignmentId": "90037",
+      "workDate": "2025-11-12",
+      "hoursWorked": "750",
+      "description": "Praca nad projektem"
+    },
+    {
+      "id": "150031",
+      "assignmentId": "90037",
+      "workDate": "2025-11-13",
+      "hoursWorked": "722",
+      "description": "Praca nad projektem"
+    },
+    {
+      "id": "150032",
+      "assignmentId": "90037",
+      "workDate": "2025-11-14",
+      "hoursWorked": "657",
+      "description": "Praca nad projektem"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tassignmentId\tworkDate\thoursWorked\tdescription\n150023\t90037\t2025-11-03\t730\tPraca nad projektem\n150024\t90037\t2025-11-04\t714\tPraca nad projektem\n150025\t90037\t2025-11-05\t681\tPraca nad projektem\n150026\t90037\t2025-11-06\t696\tPraca nad projektem\n150027\t90037\t2025-11-07\t666\tPraca nad projektem\n150028\t90037\t2025-11-10\t620\tPraca nad projektem\n150029\t90037\t2025-11-11\t629\tPraca nad projektem\n150030\t90037\t2025-11-12\t750\tPraca nad projektem\n150031\t90037\t2025-11-13\t722\tPraca nad projektem\n150032\t90037\t2025-11-14\t657\tPraca nad projektem\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

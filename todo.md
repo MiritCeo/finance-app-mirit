@@ -650,3 +650,59 @@ Dodać możliwość ręcznego wprowadzenia rzeczywistego kosztu pracownika dla d
 - [x] Zaktualizować routing w App.tsx
 - [x] Dodać link "Klienci" w menu nawigacyjnym
 - [x] Przetestować pełny przepływ: Klient → Projekt → Raport
+
+
+## Naprawa błędu mnożenia godzin × 100 (Grudzień 2024)
+
+- [x] Znaleźć miejsce w kodzie gdzie godziny są mnożone × 100
+- [x] Usunąć mnożenie × 100 dla pola hoursWorked w timeEntries.saveMonthlyHours
+- [x] Usunąć dzielenie przez 100 we wszystkich miejscach (5 miejsc w routers.ts)
+- [x] Przygotować skrypt SQL do naprawy istniejących danych
+- [ ] Przetestować zapis i wyświetlanie godzin
+- [ ] Zapisać checkpoint i wdrożyć na serwer
+
+## Naprawa błędów w raportowaniu i dashboardzie
+
+- [x] Naprawić procedurę dashboard.getAccurateMonthlyResults - dodać przychody i koszty z time_entries
+- [x] Naprawić procedurę dashboard.getProfitTrends - dodać dane z time_entries do wykresów
+- [x] Naprawić procedurę dashboard.kpi - używa tej samej logiki co getAccurateMonthlyResults
+- [x] Dodać możliwość edycji raportów miesięcznych w TimeReporting
+- [x] Dodać możliwość usuwania raportów miesięcznych
+- [x] Przygotować skrypt SQL do naprawy starych danych (godziny × 100)
+- [x] Napisać testy dla naprawionych procedur (8/9 passed)
+
+## Naprawa funkcji edycji raportów
+
+- [x] Dodać procedurę tRPC do pobierania szczegółów raportu miesięcznego (godziny per pracownik)
+- [x] Zaimplementować ładowanie godzin do formularza po kliknięciu "Edytuj"
+- [x] Przetestować edycję raportu - działa poprawnie
+
+## Naprawa błędu podwójnej konwersji godzin
+
+- [x] Usunąć dzielenie przez 100 w procedurze getMonthlyReportDetails - COFNIĘTE, godziny są w setnych
+- [x] Dodać mnożenie × 100 w saveMonthlyHours przy zapisie godzin
+- [x] Przetestować edycję raportu po naprawie - działa poprawnie
+
+## Moduł Zadania i Baza Wiedzy
+
+### Schemat bazy danych
+- [x] Zaprojektować tabelę tasks (id, title, description, status, createdAt, completedAt)
+- [x] Zaprojektować tabelę knowledgeBase (id, title, content, label, createdAt, updatedAt)
+- [x] Migracja bazy danych - tabele utworzone
+
+### Backend (tRPC)
+- [x] Dodać procedury CRUD dla tasks (create, getAll, getByStatus, update, delete)
+- [x] Dodać procedury CRUD dla knowledgeBase (create, getAll, update, delete)
+- [x] Dodać procedurę getUrgentTasks (10 ostatnich pilnych)
+- [x] Dodać funkcje db dla tasks i knowledgeBase
+
+### Frontend
+- [x] Zastąpić kartę "Informacje" kartą "Pilne zadania" na dashboardzie
+- [x] Utworzyć stronę TasksPage.tsx z zakładkami (W planach/W trakcie/Pilne/Historia)
+- [x] Utworzyć stronę KnowledgeBasePage.tsx z listą ważnych informacji
+- [x] Dodać kolorowe labelki dla statusów zadań
+- [x] Dodać nawigację do nowych stron w App.tsx i DashboardLayout### Testowanie
+- [x] Przetestować dodawanie/edycję/usuwanie zadań - działa (wymaga odświeżenia)
+- [x] Przetestować zmianę statusów zadań - działa
+- [x] Przetestować bazę wiedzy - strona działa
+- [x] Naprawić invalidację cache - dodano awaitPrzetestować bazę wiedzy

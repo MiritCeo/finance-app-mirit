@@ -1,0 +1,13 @@
+{
+  "query": "SHOW TABLES LIKE '%time%'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute SHOW TABLES LIKE '%time%'",
+  "rows": [
+    {
+      "Tables_in_NohioRQJxaLfTKHfAohCFR (%time%)": "timeEntries"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_NohioRQJxaLfTKHfAohCFR (%time%)\ntimeEntries\n",
+  "stderr": "",
+  "execution_time_ms": 48
+}

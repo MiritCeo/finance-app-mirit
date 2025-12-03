@@ -11,7 +11,9 @@ import {
   vacations, InsertVacation,
   fixedCosts, InsertFixedCost,
   ownerSalarySimulations, InsertOwnerSalarySimulation,
-  monthlyEmployeeReports, InsertMonthlyEmployeeReport, MonthlyEmployeeReport
+  monthlyEmployeeReports, InsertMonthlyEmployeeReport, MonthlyEmployeeReport,
+  tasks, InsertTask, Task,
+  knowledgeBase, InsertKnowledgeBase, KnowledgeBase
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -389,6 +391,37 @@ export async function getTimeEntriesByEmployeeAndYear(employeeId: number, year: 
     .orderBy(timeEntries.workDate);
 }
 
+// Get time entries by employee, year and month
+export async function getTimeEntriesByEmployeeAndMonth(employeeId: number, year: number, month: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { sql } = await import("drizzle-orm");
+  
+  return await db
+    .select({
+      id: timeEntries.id,
+      assignmentId: timeEntries.assignmentId,
+      workDate: timeEntries.workDate,
+      hoursWorked: timeEntries.hoursWorked,
+      description: timeEntries.description,
+      employeeId: employeeProjectAssignments.employeeId,
+    })
+    .from(timeEntries)
+    .innerJoin(
+      employeeProjectAssignments,
+      eq(timeEntries.assignmentId, employeeProjectAssignments.id)
+    )
+    .where(
+      and(
+        eq(employeeProjectAssignments.employeeId, employeeId),
+        sql`YEAR(${timeEntries.workDate}) = ${year}`,
+        sql`MONTH(${timeEntries.workDate}) = ${month}`
+      )
+    )
+    .orderBy(timeEntries.workDate);
+}
+
 // Monthly Employee Reports
 export async function getMonthlyReportsByEmployeeAndYear(employeeId: number, year: number) {
   const database = await getDb();
@@ -431,4 +464,90 @@ export async function upsertMonthlyReport(data: {
     });
     return result[0].insertId;
   }
+}
+
+// Tasks
+export async function getAllTasks() {
+  const database = await getDb();
+  if (!database) return [];
+  return database.select().from(tasks).orderBy(sql`${tasks.createdAt} DESC`);
+}
+
+export async function getTasksByStatus(status: "planned" | "in_progress" | "urgent" | "done") {
+  const database = await getDb();
+  if (!database) return [];
+  return database.select().from(tasks).where(eq(tasks.status, status)).orderBy(sql`${tasks.createdAt} DESC`);
+}
+
+export async function getUrgentTasks(limit: number = 10) {
+  const database = await getDb();
+  if (!database) return [];
+  return database.select().from(tasks).where(eq(tasks.status, "urgent")).orderBy(sql`${tasks.createdAt} DESC`).limit(limit);
+}
+
+export async function getTaskById(id: number) {
+  const database = await getDb();
+  if (!database) return null;
+  const result = await database.select().from(tasks).where(eq(tasks.id, id));
+  return result[0] || null;
+}
+
+export async function createTask(data: InsertTask) {
+  const database = await getDb();
+  if (!database) return 0;
+  const result = await database.insert(tasks).values({
+    ...data,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  return result[0].insertId;
+}
+
+export async function updateTask(id: number, data: Partial<InsertTask>) {
+  const database = await getDb();
+  if (!database) return;
+  await database.update(tasks).set({ ...data, updatedAt: new Date() }).where(eq(tasks.id, id));
+}
+
+export async function deleteTask(id: number) {
+  const database = await getDb();
+  if (!database) return;
+  await database.delete(tasks).where(eq(tasks.id, id));
+}
+
+// Knowledge Base
+export async function getAllKnowledgeBase() {
+  const database = await getDb();
+  if (!database) return [];
+  return database.select().from(knowledgeBase).orderBy(sql`${knowledgeBase.createdAt} DESC`);
+}
+
+export async function getKnowledgeBaseById(id: number) {
+  const database = await getDb();
+  if (!database) return null;
+  const result = await database.select().from(knowledgeBase).where(eq(knowledgeBase.id, id));
+  return result[0] || null;
+}
+
+export async function createKnowledgeBase(data: InsertKnowledgeBase) {
+  const database = await getDb();
+  if (!database) return 0;
+  const result = await database.insert(knowledgeBase).values({
+    ...data,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  return result[0].insertId;
+}
+
+export async function updateKnowledgeBase(id: number, data: Partial<InsertKnowledgeBase>) {
+  const database = await getDb();
+  if (!database) return;
+  await database.update(knowledgeBase).set({ ...data, updatedAt: new Date() }).where(eq(knowledgeBase.id, id));
+}
+
+export async function deleteKnowledgeBase(id: number) {
+  const database = await getDb();
+  if (!database) return;
+  await database.delete(knowledgeBase).where(eq(knowledgeBase.id, id));
 }

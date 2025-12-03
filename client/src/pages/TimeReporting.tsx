@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Save, Calendar, TrendingUp, ArrowLeft } from "lucide-react";
+import { Loader2, Save, Calendar, TrendingUp, ArrowLeft, Edit, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -31,7 +31,22 @@ export default function TimeReporting() {
       toast.success("Godziny zapisane pomyślnie");
       utils.timeEntries.monthlyReports.invalidate();
       utils.dashboard.kpi.invalidate();
+      utils.dashboard.getAccurateMonthlyResults.invalidate();
+      utils.dashboard.getProfitTrends.invalidate();
       setHoursData({});
+    },
+    onError: (error) => {
+      toast.error(`Błąd: ${error.message}`);
+    },
+  });
+  
+  const deleteMutation = trpc.timeEntries.deleteMonthlyReport.useMutation({
+    onSuccess: () => {
+      toast.success("Raport usunięty pomyślnie");
+      utils.timeEntries.monthlyReports.invalidate();
+      utils.dashboard.kpi.invalidate();
+      utils.dashboard.getAccurateMonthlyResults.invalidate();
+      utils.dashboard.getProfitTrends.invalidate();
     },
     onError: (error) => {
       toast.error(`Błąd: ${error.message}`);
@@ -260,13 +275,64 @@ export default function TimeReporting() {
                           {report.totalHours.toFixed(0)} godz. • {report.employeeCount} prac.
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">
-                          Przychód: {formatCurrency(report.totalRevenue)}
-                        </p>
-                        <p className={`font-bold ${(report.totalProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {(report.totalProfit || 0) >= 0 ? 'Zysk' : 'Strata'}: {formatCurrency(Math.abs(report.totalProfit || 0))}
-                        </p>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-sm text-muted-foreground">
+                            Przychód: {formatCurrency(report.totalRevenue)}
+                          </p>
+                          <p className={`font-bold ${(report.totalProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {(report.totalProfit || 0) >= 0 ? 'Zysk' : 'Strata'}: {formatCurrency(Math.abs(report.totalProfit || 0))}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              setSelectedMonth(report.month);
+                              setSelectedYear(report.year);
+                              
+                              // Załaduj godziny pracowników dla tego miesiąca
+                              try {
+                                const details = await utils.timeEntries.getMonthlyReportDetails.fetch({
+                                  month: report.month,
+                                  year: report.year,
+                                });
+                                
+                                // Ustaw godziny w formularzu
+                                const newHoursData: Record<number, string> = {};
+                                details.forEach((item) => {
+                                  newHoursData[item.employeeId] = item.hours.toString();
+                                });
+                                setHoursData(newHoursData);
+                                
+                                toast.success(`Załadowano raport za ${getMonthName(report.month)} ${report.year}`);
+                                
+                                // Przewiń do góry
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              } catch (error) {
+                                toast.error("Błąd podczas ładowania raportu");
+                              }
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`Czy na pewno chcesz usunąć raport za ${getMonthName(report.month)} ${report.year}?`)) {
+                                deleteMutation.mutate({
+                                  month: report.month,
+                                  year: report.year,
+                                });
+                              }
+                            }}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>

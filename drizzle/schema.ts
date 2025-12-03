@@ -211,3 +211,33 @@ export const monthlyEmployeeReports = mysqlTable("monthlyEmployeeReports", {
 export type MonthlyEmployeeReport = typeof monthlyEmployeeReports.$inferSelect;
 export type InsertMonthlyEmployeeReport = typeof monthlyEmployeeReports.$inferInsert;
 
+/**
+ * Tasks table - stores company tasks and to-dos
+ */
+export const tasks = mysqlTable("tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 500 }).notNull(),
+  description: text("description"),
+  status: mysqlEnum("status", ["planned", "in_progress", "urgent", "done"]).default("planned").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = typeof tasks.$inferInsert;
+
+/**
+ * Knowledge base table - stores important company information
+ */
+export const knowledgeBase = mysqlTable("knowledgeBase", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 500 }).notNull(),
+  content: text("content").notNull(),
+  label: varchar("label", { length: 100 }), // Kolorowa labelka (np. "Finanse", "HR", "IT")
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type KnowledgeBase = typeof knowledgeBase.$inferSelect;
+export type InsertKnowledgeBase = typeof knowledgeBase.$inferInsert;
