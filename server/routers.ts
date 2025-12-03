@@ -60,7 +60,7 @@ export const appRouter = router({
         monthlyCostTotal: z.number().default(0),
         vacationCostMonthly: z.number().default(0),
         vacationCostAnnual: z.number().default(0),
-        vacationDaysPerYear: z.number().default(20),
+        vacationDaysPerYear: z.number().default(21),
         notes: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
@@ -105,18 +105,23 @@ export const appRouter = router({
         employmentType: z.enum(["uop", "b2b", "zlecenie", "zlecenie_studenckie"]),
         monthlySalaryNet: z.number(),
         hourlyRateEmployee: z.number(),
+        vacationDaysPerYear: z.number().default(21),
       }))
       .query(async ({ input }) => {
-        const { employmentType, monthlySalaryNet, hourlyRateEmployee } = input;
+        const { employmentType, monthlySalaryNet, hourlyRateEmployee, vacationDaysPerYear } = input;
         
         let result: any = {};
+        
+        // Oblicz godziny urlopu na podstawie dni
+        const vacationHoursPerYear = vacationDaysPerYear * 8;
         
         // Dla UoP: monthlySalaryNet to BRUTTO, dla pozostałych to NETTO
         if (employmentType === "uop") {
           const uopResult = calculateUOP(monthlySalaryNet);
-          // Dodaj koszty urlopów
-          const vacationCostMonthly = Math.round((hourlyRateEmployee * 168) / 12);
-          const vacationCostAnnual = hourlyRateEmployee * 168;
+          // Koszt urlopów jako procent kosztu pracodawcy (252 dni robocze w roku)
+          const vacationCostPercentage = vacationDaysPerYear / 252;
+          const vacationCostMonthly = Math.round(uopResult.employerCost * vacationCostPercentage);
+          const vacationCostAnnual = vacationCostMonthly * 12;
           result = {
             ...uopResult,
             employerCostWithVacation: uopResult.employerCost + vacationCostMonthly,
@@ -124,12 +129,31 @@ export const appRouter = router({
             vacationCostAnnual,
           };
         } else if (employmentType === "b2b") {
-          result = calculateB2B(monthlySalaryNet, hourlyRateEmployee);
+          // Dla B2B obliczamy koszt urlopu jako procent wynagrodzenia
+          // 252 dni robocze w roku (21 dni × 12 miesięcy)
+          const vacationCostPercentage = vacationDaysPerYear / 252;
+          const employerCost = monthlySalaryNet; // Dla B2B to kwota netto faktury
+          
+          // Koszt urlopów miesięcznie jako procent wynagrodzenia
+          const vacationCostMonthly = Math.round(employerCost * vacationCostPercentage);
+          const vacationCostAnnual = vacationCostMonthly * 12;
+          
+          result = {
+            monthlySalaryNet,
+            monthlySalaryGross: monthlySalaryNet,
+            grossSalary: monthlySalaryNet,
+            netSalary: monthlySalaryNet,
+            employerCost,
+            employerCostWithVacation: employerCost + vacationCostMonthly,
+            vacationCostMonthly,
+            vacationCostAnnual,
+          };
         } else if (employmentType === "zlecenie") {
           result = calculateZlecenieFromNet(monthlySalaryNet);
-          // Dodaj koszty urlopów
-          const vacationCostMonthly = Math.round((hourlyRateEmployee * 168) / 12);
-          const vacationCostAnnual = hourlyRateEmployee * 168;
+          // Koszt urlopów jako procent kosztu pracodawcy (252 dni robocze w roku)
+          const vacationCostPercentage = vacationDaysPerYear / 252;
+          const vacationCostMonthly = Math.round(result.employerCost * vacationCostPercentage);
+          const vacationCostAnnual = vacationCostMonthly * 12;
           result = {
             ...result,
             employerCostWithVacation: result.employerCost + vacationCostMonthly,
@@ -138,9 +162,10 @@ export const appRouter = router({
           };
         } else if (employmentType === "zlecenie_studenckie") {
           result = calculateZlecenieStudenckieFromNet(monthlySalaryNet);
-          // Dodaj koszty urlopów
-          const vacationCostMonthly = Math.round((hourlyRateEmployee * 168) / 12);
-          const vacationCostAnnual = hourlyRateEmployee * 168;
+          // Koszt urlopów jako procent kosztu pracodawcy (252 dni robocze w roku)
+          const vacationCostPercentage = vacationDaysPerYear / 252;
+          const vacationCostMonthly = Math.round(result.employerCost * vacationCostPercentage);
+          const vacationCostAnnual = vacationCostMonthly * 12;
           result = {
             ...result,
             employerCostWithVacation: result.employerCost + vacationCostMonthly,
@@ -152,9 +177,12 @@ export const appRouter = router({
         // Oblicz koszt godzinowy
         const hourlyRateCost = result.employerCostWithVacation ? Math.round(result.employerCostWithVacation / 168) : 0;
         
+        // Dla różnych typów umów pola są w różnych miejscach
+        const monthlySalaryGross = result.grossSalary || result.breakdown?.grossSalary || result.monthlySalaryGross || 0;
+        
         return {
-          monthlySalaryGross: result.grossSalary || result.breakdown?.grossSalary || 0,
-          netSalary: result.netSalary || 0,
+          monthlySalaryGross,
+          netSalary: result.netSalary || result.monthlySalaryNet || 0,
           monthlyCostTotal: result.employerCostWithVacation || 0,
           hourlyRateCost,
           vacationCostMonthly: result.vacationCostMonthly || 0,
@@ -189,7 +217,7 @@ export const appRouter = router({
           if (!monthlyHours[month]) {
             monthlyHours[month] = 0;
           }
-          monthlyHours[month] += entry.hoursWorked; // Godziny jako liczba całkowita
+          monthlyHours[month] += entry.hoursWorked; // Sumuj w groszach (13100)
         }
         
         // Pobierz zapisane raporty miesięczne (z actualCost)
@@ -199,9 +227,9 @@ export const appRouter = router({
         // Uzupełnij wszystkie miesiące (1-12)
         const allMonths = [];
         for (let month = 1; month <= 12; month++) {
-          const hoursWorked = monthlyHours[month] || 0;
-          const hourlyRateClient = employee.hourlyRateClient / 100; // Konwersja z groszy na złotówki
-          const revenue = Math.round(hoursWorked * hourlyRateClient); // hourlyRateClient już jest w groszach
+          const hoursWorked = (monthlyHours[month] || 0) / 100; // Konwersja z groszy na godziny (13100 -> 131h)
+          const hourlyRateClient = employee.hourlyRateClient; // Stawka w groszach (20000 = 200 PLN/h)
+          const revenue = Math.round(hoursWorked * hourlyRateClient); // godziny × stawka w groszach
           const defaultCost = employee.monthlyCostTotal; // Koszt domyślny z bazy (w groszach)
           
           // Pobierz actualCost z zapisanego raportu (jeśli istnieje)
@@ -475,9 +503,12 @@ export const appRouter = router({
         description: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
+        // workDate jako string YYYY-MM-DD, konwertuj na Date (jak w seed.mjs)
+        // hoursWorked musi być w groszach (×100)
         const data = {
           ...input,
           workDate: new Date(input.workDate),
+          hoursWorked: Math.round(input.hoursWorked * 100),
         };
         const id = await db.createTimeEntry(data as any);
         return { id, success: true };
@@ -547,16 +578,31 @@ export const appRouter = router({
           }
           
           if (activeAssignment) {
-            // Utwórz wpis na ostatni dzień miesiąca
+            // Utwórz wpis na ostatni dzień miesiąca (tak jak w seed.mjs)
             const lastDay = new Date(input.year, input.month, 0).getDate();
             const workDate = new Date(input.year, input.month - 1, lastDay);
             
-            await db.createTimeEntry({
+            console.log('[saveMonthlyHours] Creating time entry:', {
               assignmentId: activeAssignment.id,
-              workDate,
-              hoursWorked: entry.hoursWorked, // Zapisz godziny jako normalne liczby dziesiętne (132.39h)
-              description: `Raport miesięczny za ${input.month}/${input.year}`,
+              workDate: workDate,
+              hoursWorked: Math.round(entry.hoursWorked * 100),
+              employeeId: entry.employeeId,
             });
+            
+            try {
+              await db.createTimeEntry({
+                assignmentId: activeAssignment.id,
+                workDate: workDate, // Drizzle date() akceptuje obiekt Date (jak w seed.mjs)
+                hoursWorked: Math.round(entry.hoursWorked * 100), // Konwersja do groszy (131h = 13100)
+                description: `Raport miesięczny za ${input.month}/${input.year}`,
+              });
+            } catch (error: any) {
+              console.error('[saveMonthlyHours] Error creating time entry:', error);
+              console.error('[saveMonthlyHours] Assignment:', activeAssignment);
+              throw error;
+            }
+          } else {
+            console.warn('[saveMonthlyHours] No active assignment for employee:', entry.employeeId);
           }
         }
         return { success: true };
@@ -602,8 +648,8 @@ export const appRouter = router({
           const entries = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
           
           if (entries.length > 0) {
-            // Zsumuj godziny (godziny są zapisane jako normalne liczby dziesiętne, np. 136h)
-            const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0);
+            // Zsumuj godziny (godziny są zapisane jako grosze, np. 13100 = 131h)
+            const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0) / 100; // Konwersja z groszy na godziny
             
             employeeHours.push({
               employeeId: employee.id,
@@ -616,41 +662,51 @@ export const appRouter = router({
       }),
     
     monthlyReports: protectedProcedure.query(async () => {
-      // Pobierz wszystkie dane za jednym razem (optymalizacja N+1)
-      const entries = await db.getAllTimeEntries();
-      const allEmployees = await db.getActiveEmployees();
-      
-      // Pobierz wszystkie assignments
-      const database = await db.getDb();
-      if (!database) throw new Error("Database not available");
-      const allAssignments = await database.select().from(employeeProjectAssignments);
-      
-      // Utwórz mapy dla szybkiego dostępu
-      const assignmentMap = new Map(allAssignments.map((a: any) => [a.id, a]));
-      const employeeMap = new Map(allEmployees.map(e => [e.id, e]));
-      
-      // Grupuj po miesiącu i roku
-      const reportMap = new Map<string, {
-        month: number;
-        year: number;
-        totalHours: number;
-        totalRevenue: number;
-        totalCost: number;
-        totalProfit: number;
-        employeeCount: Set<number>;
-      }>();
-      
-      for (const entry of entries) {
-        const date = new Date(entry.workDate);
-        const month = date.getMonth() + 1;
-        const year = date.getFullYear();
-        const key = `${year}-${month}`;
+      try {
+        // Pobierz wszystkie dane za jednym razem (optymalizacja N+1)
+        const entries = await db.getAllTimeEntries();
+        const allEmployees = await db.getActiveEmployees();
         
-        const assignment = assignmentMap.get(entry.assignmentId);
-        if (!assignment) continue;
+        // Pobierz wszystkie assignments
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
+        const allAssignments = await database.select().from(employeeProjectAssignments);
         
-        const employee = employeeMap.get(assignment.employeeId);
-        if (!employee) continue;
+        // Utwórz mapy dla szybkiego dostępu
+        const assignmentMap = new Map(allAssignments.map((a: any) => [a.id, a]));
+        const employeeMap = new Map(allEmployees.map(e => [e.id, e]));
+        
+        // Grupuj po miesiącu i roku
+        const reportMap = new Map<string, {
+          month: number;
+          year: number;
+          totalHours: number;
+          totalRevenue: number;
+          totalCost: number;
+          totalProfit: number;
+          employeeCount: Set<number>;
+        }>();
+        
+        for (const entry of entries) {
+          // workDate może być stringiem (YYYY-MM-DD) lub obiektem Date
+          const date = entry.workDate instanceof Date 
+            ? entry.workDate 
+            : new Date(entry.workDate);
+          
+          if (isNaN(date.getTime())) {
+            console.warn('[monthlyReports] Invalid date:', entry.workDate);
+            continue;
+          }
+          
+          const month = date.getMonth() + 1;
+          const year = date.getFullYear();
+          const key = `${year}-${month}`;
+          
+          const assignment = assignmentMap.get(entry.assignmentId);
+          if (!assignment) continue;
+          
+          const employee = employeeMap.get(assignment.employeeId);
+          if (!employee) continue;
         
         if (!reportMap.has(key)) {
           reportMap.set(key, {
@@ -665,10 +721,10 @@ export const appRouter = router({
         }
         
         const report = reportMap.get(key)!;
-        const hours = entry.hoursWorked; // Godziny już są jako liczba całkowita
-        const revenue = hours * assignment.hourlyRateClient;
+        const hours = entry.hoursWorked / 100; // Konwersja z groszy na godziny (13100 -> 131h)
+        const revenue = Math.round(hours * assignment.hourlyRateClient); // godziny × stawka w groszach
         
-        report.totalHours += hours;
+        report.totalHours += hours; // Sumuj godziny (nie grosze)
         report.totalRevenue += revenue;
         report.employeeCount.add(assignment.employeeId);
       }
@@ -700,6 +756,10 @@ export const appRouter = router({
           if (a.year !== b.year) return b.year - a.year;
           return b.month - a.month;
         });
+      } catch (error: any) {
+        console.error('[monthlyReports] Error:', error);
+        throw new Error(`Failed to fetch monthly reports: ${error.message}`);
+      }
     }),
     
     details: protectedProcedure
@@ -735,8 +795,8 @@ export const appRouter = router({
           const employee = await db.getEmployeeById(assignment.employeeId);
           if (!employee) continue;
           
-          const hours = entry.hoursWorked; // Godziny jako liczba całkowita
-          const revenue = hours * assignment.hourlyRateClient;
+          const hours = entry.hoursWorked / 100; // Konwersja z groszy na godziny (13100 -> 131h)
+          const revenue = Math.round(hours * assignment.hourlyRateClient); // godziny × stawka w groszach
           
           // Oblicz pełny miesięczny koszt pracownika
           let monthlyCost = 0;
@@ -984,11 +1044,11 @@ export const appRouter = router({
         // Jeśli brak wpisów, pomiń pracownika
         if (entries.length === 0) continue;
         
-                // Zsumuj godziny (godziny są zapisane jako normalne liczby dziesiętne, np. 136h)
-        const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0);
+                // Zsumuj godziny (godziny są zapisane jako grosze, np. 13100 = 131h)
+        const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0) / 100; // Konwersja z groszy na godziny
         
-        // Oblicz przychód: godziny × stawka klienta
-        const revenue = totalHours * employee.hourlyRateClient;
+        // Oblicz przychód: godziny × stawka klienta (w groszach)
+        const revenue = Math.round(totalHours * employee.hourlyRateClient);
         totalRevenue += revenue;
         
         // Sprawdź czy jest custom koszt w monthlyEmployeeReports
@@ -1058,11 +1118,11 @@ export const appRouter = router({
           // Jeśli brak wpisów, pomiń pracownika
           if (entries.length === 0) continue;
           
-          // Zsumuj godziny (godziny są zapisane jako normalne liczby dziesiętne, np. 136h)
-          const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0);
+          // Zsumuj godziny (godziny są zapisane jako grosze, np. 13100 = 131h)
+          const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0) / 100; // Konwersja z groszy na godziny
           
-          // Oblicz przychód: godziny × stawka klienta
-          const revenue = totalHours * employee.hourlyRateClient;
+          // Oblicz przychód: godziny × stawka klienta (w groszach)
+          const revenue = Math.round(totalHours * employee.hourlyRateClient);
           totalRevenue += revenue;
           
           // Sprawdź czy jest custom koszt w monthlyEmployeeReports
@@ -1136,11 +1196,11 @@ export const appRouter = router({
             // Jeśli brak wpisów, pomiń pracownika
             if (entries.length === 0) continue;
             
-            // Zsumuj godziny (godziny są zapisane jako normalne liczby dziesiętne, np. 136h)
-            const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0);
+            // Zsumuj godziny (godziny są zapisane jako grosze, np. 13100 = 131h)
+            const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0) / 100; // Konwersja z groszy na godziny
             
-            // Oblicz przychód: godziny × stawka klienta
-            const revenue = totalHours * employee.hourlyRateClient;
+            // Oblicz przychód: godziny × stawka klienta (w groszach)
+            const revenue = Math.round(totalHours * employee.hourlyRateClient);
             totalRevenue += revenue;
             
             // Sprawdź czy jest custom koszt w monthlyEmployeeReports
@@ -1190,6 +1250,7 @@ export const appRouter = router({
         hourlyRateClient: z.number(),
         hourlyRateEmployee: z.number(),
         expectedHoursPerMonth: z.number().optional(),
+        vacationDaysPerYear: z.number().min(0).max(365).optional(),
       }))
       .query(async ({ input }) => {
         const { simulateNegotiation } = await import("./employeeProfitCalculator");
@@ -1198,7 +1259,8 @@ export const appRouter = router({
           input.monthlySalaryNet,
           input.hourlyRateClient,
           input.hourlyRateEmployee,
-          input.expectedHoursPerMonth
+          input.expectedHoursPerMonth,
+          input.vacationDaysPerYear
         );
       }),
     

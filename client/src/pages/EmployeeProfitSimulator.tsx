@@ -19,6 +19,7 @@ export default function EmployeeProfitSimulator() {
     hourlyRateClient: "150",
     hourlyRateEmployee: "59.52", // Automatycznie obliczane: netto / 168h
     expectedHoursPerMonth: "168",
+    vacationDaysPerYear: "21",
   });
 
   // Automatyczne obliczanie stawki pracownika
@@ -37,6 +38,7 @@ export default function EmployeeProfitSimulator() {
       hourlyRateClient: Math.round(parseFloat(formData.hourlyRateClient || "0") * 100),
       hourlyRateEmployee: Math.round(parseFloat(formData.hourlyRateEmployee || "0") * 100),
       expectedHoursPerMonth: parseFloat(formData.expectedHoursPerMonth || "168"),
+      vacationDaysPerYear: parseInt(formData.vacationDaysPerYear || "21"),
     },
     {
       enabled: !!user && !!formData.monthlySalaryNet && !!formData.hourlyRateClient,
@@ -158,6 +160,22 @@ export default function EmployeeProfitSimulator() {
               />
               <p className="text-xs text-muted-foreground">
                 Standardowo 168h/miesiąc (21 dni × 8h)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="vacationDays">Dni urlopu rocznie</Label>
+              <Input
+                id="vacationDays"
+                type="number"
+                step="1"
+                min="0"
+                max="365"
+                value={formData.vacationDaysPerYear}
+                onChange={(e) => setFormData({ ...formData, vacationDaysPerYear: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Płatne dni urlopu w roku (wpływa na koszt pracownika)
               </p>
             </div>
           </CardContent>
@@ -584,10 +602,10 @@ export default function EmployeeProfitSimulator() {
               {simulation.breakdown.vacationCostMonthly && (
                 <>
                   <div className="pt-3 mt-3 border-t-2">
-                    <h4 className="text-sm font-semibold mb-2 text-blue-900">Koszty płatnych urlopów (21 dni rocznie)</h4>
+                    <h4 className="text-sm font-semibold mb-2 text-blue-900">Koszty płatnych urlopów ({formData.vacationDaysPerYear} dni rocznie)</h4>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b">
-                    <span className="text-sm">Koszt miesięczny (~8.33%)</span>
+                    <span className="text-sm">Koszt miesięczny (~{(parseInt(formData.vacationDaysPerYear || "21") / 252 * 100).toFixed(2)}%)</span>
                     <span className="text-orange-600">{formatCurrency(simulation.breakdown.vacationCostMonthly)}</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b">
@@ -645,7 +663,7 @@ export default function EmployeeProfitSimulator() {
                   💡 Uwzględnione w kosztach
                 </h3>
                 <ul className="text-xs text-blue-800 space-y-1">
-                  <li>• Płatne urlopy (21 dni rocznie dla wszystkich)</li>
+                  <li>• Płatne urlopy ({formData.vacationDaysPerYear} dni rocznie)</li>
                   <li>• Składki ZUS i podatki ({employmentTypeLabels[formData.employmentType]})</li>
                   <li>• Uśredniony koszt do 168h miesięcznie</li>
                 </ul>

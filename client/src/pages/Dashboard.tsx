@@ -68,7 +68,7 @@ function UrgentTasksList() {
 
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
-  const { data: kpi, isLoading } = trpc.dashboard.kpi.useQuery(undefined, {
+  const { data: kpi, isLoading, error: kpiError } = trpc.dashboard.kpi.useQuery(undefined, {
     enabled: !!user,
   });
   

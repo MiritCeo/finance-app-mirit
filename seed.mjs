@@ -1,5 +1,6 @@
+import "dotenv/config";
 import { drizzle } from "drizzle-orm/mysql2";
-import { employees, clients, projects, fixedCosts, employeeProjectAssignments, timeEntries } from "./drizzle/schema.js";
+import { employees, clients, projects, fixedCosts, employeeProjectAssignments, timeEntries } from "./drizzle/schema.ts";
 
 const db = drizzle(process.env.DATABASE_URL);
 
@@ -204,7 +205,7 @@ async function seed() {
     ]).$returningId();
 
     // Dodaj przykładowe miesięczne raporty godzin (ostatnie 3 miesiące)
-    console.log("Dodawanie przykładowych raportów godzin...");
+    console.log("Dodawanie przykładowych raportów godzin do tabeli timeentries...");
     const currentDate = new Date();
     const months = [
       { month: 10, year: 2024, day: 31 }, // Październik
@@ -213,6 +214,7 @@ async function seed() {
     ];
 
     for (const { month, year, day } of months) {
+      console.log(`  Wstawianie raportów za ${month}/${year}...`);
       await db.insert(timeEntries).values([
         {
           assignmentId: assignments[0].id,

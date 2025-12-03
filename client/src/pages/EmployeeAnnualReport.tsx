@@ -64,7 +64,7 @@ export default function EmployeeAnnualReport() {
   };
 
   const formatHours = (hours: number) => {
-    return (hours / 100).toFixed(2) + "h";
+    return hours.toFixed(2) + "h";
   };
 
   const monthNames = [

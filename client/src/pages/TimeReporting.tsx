@@ -185,6 +185,7 @@ export default function TimeReporting() {
                           <TableHead>Pracownik</TableHead>
                           <TableHead>Typ umowy</TableHead>
                           <TableHead className="text-right">Godziny w miesiącu</TableHead>
+                          <TableHead className="text-right">Akcje</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -207,6 +208,18 @@ export default function TimeReporting() {
                                 onChange={(e) => handleHoursChange(employee.id, e.target.value)}
                                 className="w-32 ml-auto text-right"
                               />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setLocation(`/employee/${employee.id}/annual-report`)}
+                                title="Raport roczny godzinowy"
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              >
+                                <Calendar className="w-4 h-4 mr-1" />
+                                <span className="text-xs">Raport</span>
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))}

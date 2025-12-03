@@ -105,7 +105,7 @@ export type InsertEmployeeProjectAssignment = typeof employeeProjectAssignments.
 /**
  * Time entries - tracks hours worked on projects
  */
-export const timeEntries = mysqlTable("timeEntries", {
+export const timeEntries = mysqlTable("timeentries", {
   id: int("id").autoincrement().primaryKey(),
   assignmentId: int("assignmentId").notNull(),
   workDate: date("workDate").notNull(),

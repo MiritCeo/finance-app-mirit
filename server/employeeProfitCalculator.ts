@@ -122,6 +122,7 @@ export interface NegotiationScenario {
  * @param monthlySalaryNet Proponowane wynagrodzenie netto
  * @param hourlyRateClient Stawka dla klienta
  * @param expectedHoursPerMonth Oczekiwane godziny miesięcznie (domyślnie 168)
+ * @param vacationDaysPerYear Dni urlopu rocznie (domyślnie 21)
  * @returns Scenariusz negocjacji
  */
 export function simulateNegotiation(
@@ -129,14 +130,15 @@ export function simulateNegotiation(
   monthlySalaryNet: number,
   hourlyRateClient: number,
   hourlyRateEmployee: number,
-  expectedHoursPerMonth: number = MONTHLY_WORKING_HOURS
+  expectedHoursPerMonth: number = MONTHLY_WORKING_HOURS,
+  vacationDaysPerYear: number = 21
 ): NegotiationScenario {
   // Oblicz koszt firmy i breakdown w zależności od typu umowy
   let monthlyCostTotal: number;
   let breakdown: CostBreakdown = {};
   
-  // Koszt urlopów: 21 dni roboczych / 252 dni robocze w roku = 8.33%
-  const vacationCostPercentage = 21 / 252;
+  // Koszt urlopów: X dni roboczych / 252 dni robocze w roku
+  const vacationCostPercentage = vacationDaysPerYear / 252;
   
   switch (employmentType) {
     case "uop": {
@@ -189,8 +191,8 @@ export function simulateNegotiation(
       const vat = Math.round(invoiceNet * 0.23); // VAT 23% (informacyjnie, nie jest kosztem)
       const invoiceAmount = invoiceNet + vat; // Faktura brutto (informacyjnie)
       
-      // Koszt urlopów dla B2B: stawka godzinowa pracownika × 168h (21 dni × 8h)
-      const vacationHoursPerYear = 21 * 8; // 168 godzin rocznie
+      // Koszt urlopów dla B2B: stawka godzinowa pracownika × (dni urlopu × 8h)
+      const vacationHoursPerYear = vacationDaysPerYear * 8;
       const vacationCostAnnual = Math.round(hourlyRateEmployee * vacationHoursPerYear);
       const vacationCostMonthly = Math.round(vacationCostAnnual / 12);
       

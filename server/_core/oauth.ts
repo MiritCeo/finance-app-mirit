@@ -10,6 +10,37 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 export function registerOAuthRoutes(app: Express) {
+  // Lokalne logowanie dla developmentu (bez OAuth)
+  app.get("/api/auth/local-login", async (req: Request, res: Response) => {
+    try {
+      const ownerOpenId = process.env.OWNER_OPEN_ID || "admin";
+      const ownerName = process.env.OWNER_NAME || "Administrator";
+      
+      // Utwórz lub zaktualizuj użytkownika
+      await db.upsertUser({
+        openId: ownerOpenId,
+        name: ownerName,
+        email: "admin@localhost",
+        loginMethod: "local",
+        lastSignedIn: new Date(),
+      });
+
+      // Utwórz token sesji
+      const sessionToken = await sdk.createSessionToken(ownerOpenId, {
+        name: ownerName,
+        expiresInMs: ONE_YEAR_MS,
+      });
+
+      const cookieOptions = getSessionCookieOptions(req);
+      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
+      res.redirect(302, "/");
+    } catch (error) {
+      console.error("[Auth] Local login failed", error);
+      res.status(500).json({ error: "Local login failed" });
+    }
+  });
+
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");

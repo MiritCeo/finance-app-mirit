@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -65,30 +65,55 @@ export default function Employees() {
     hourlyRateClient: "",
     vacationCostMonthly: "",
     vacationCostAnnual: "",
+    vacationDaysPerYear: "21",
   });
 
   // Automatyczne obliczanie kosztów
   const utils = trpc.useUtils();
 
+  // Automatyczne przeliczanie kosztów gdy zmieni się netto lub dni urlopu
+  useEffect(() => {
+    const netValue = parseFloat(formData.monthlySalaryNet || "0");
+    const vacationDays = parseInt(formData.vacationDaysPerYear || "21");
+    
+    // Przelicz tylko jeśli netto > 0 i formularz jest otwarty
+    if (netValue > 0 && isDialogOpen) {
+      const timeoutId = setTimeout(() => {
+        handleAutoCalculate();
+      }, 300);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [formData.monthlySalaryNet, formData.vacationDaysPerYear, formData.employmentType, isDialogOpen]);
+
   const handleAutoCalculate = async (netStr?: string) => {
     const netValue = parseFloat(netStr || formData.monthlySalaryNet);
+    const vacationDays = parseInt(formData.vacationDaysPerYear || "21");
     
     // Oblicz stawkę pracownika automatycznie: netto / 168h
     const employeeRate = Math.round((netValue / 168) * 100) / 100; // Zaokrąglenie do 2 miejsc
     
-    console.log('[AUTO-CALC] netValue:', netValue, 'employeeRate:', employeeRate);
+    console.log('[AUTO-CALC] netValue:', netValue, 'employeeRate:', employeeRate, 'vacationDays:', vacationDays);
     console.log('[AUTO-CALC] employmentType:', formData.employmentType);
     
     if (netValue > 0) {
-      console.log('[AUTO-CALC] Triggering calculation...');
+      console.log('[AUTO-CALC] Triggering calculation with:', {
+        employmentType: formData.employmentType,
+        monthlySalaryNet: Math.round(netValue * 100),
+        hourlyRateEmployee: Math.round(employeeRate * 100),
+        vacationDaysPerYear: vacationDays,
+      });
+      
       try {
         const result = await utils.client.employees.calculateSalary.query({
           employmentType: formData.employmentType,
           monthlySalaryNet: Math.round(netValue * 100),
           hourlyRateEmployee: Math.round(employeeRate * 100),
+          vacationDaysPerYear: vacationDays,
         });
         
         console.log('[AUTO-CALC] Received data:', result);
+        console.log('[AUTO-CALC] Monthly cost total:', result.monthlyCostTotal / 100, 'Vacation monthly:', result.vacationCostMonthly / 100);
         
         setFormData(prev => ({
           ...prev,
@@ -120,6 +145,7 @@ export default function Employees() {
       hourlyRateClient: "",
       vacationCostMonthly: "",
       vacationCostAnnual: "",
+      vacationDaysPerYear: "21",
     });
   };
 
@@ -139,6 +165,7 @@ export default function Employees() {
       hourlyRateClient: Math.round(parseFloat(formData.hourlyRateClient || "0") * 100),
       vacationCostMonthly: Math.round(parseFloat(formData.vacationCostMonthly || "0") * 100),
       vacationCostAnnual: Math.round(parseFloat(formData.vacationCostAnnual || "0") * 100),
+      vacationDaysPerYear: parseInt(formData.vacationDaysPerYear || "21"),
     };
 
     if (editingEmployee) {
@@ -150,21 +177,28 @@ export default function Employees() {
 
   const handleEdit = (employee: any) => {
     setEditingEmployee(employee);
+    const netSalary = (employee.monthlySalaryNet / 100).toString();
+    const vacationDays = (employee.vacationDaysPerYear || 21).toString();
+    
     setFormData({
       firstName: employee.firstName,
       lastName: employee.lastName,
       position: employee.position || "",
       employmentType: employee.employmentType,
       monthlySalaryGross: (employee.monthlySalaryGross / 100).toString(),
-      monthlySalaryNet: (employee.monthlySalaryNet / 100).toString(),
+      monthlySalaryNet: netSalary,
       monthlyCostTotal: (employee.monthlyCostTotal / 100).toString(),
       hourlyRateCost: (employee.hourlyRateCost / 100).toString(),
       hourlyRateEmployee: (employee.hourlyRateEmployee / 100).toString(),
       hourlyRateClient: (employee.hourlyRateClient / 100).toString(),
       vacationCostMonthly: (employee.vacationCostMonthly / 100).toString(),
       vacationCostAnnual: (employee.vacationCostAnnual / 100).toString(),
+      vacationDaysPerYear: vacationDays,
     });
     setIsDialogOpen(true);
+    
+    // Przelicz koszty z aktualnymi dniami urlopu
+    setTimeout(() => handleAutoCalculate(netSalary), 300);
   };
 
   const formatCurrency = (amount: number) => {
@@ -254,7 +288,11 @@ export default function Employees() {
                   <Label htmlFor="employmentType">Typ umowy</Label>
                   <Select
                     value={formData.employmentType}
-                    onValueChange={(value: any) => setFormData({ ...formData, employmentType: value })}
+                    onValueChange={(value: any) => {
+                      setFormData({ ...formData, employmentType: value });
+                      // Przelicz koszty po zmianie typu umowy
+                      setTimeout(() => handleAutoCalculate(), 200);
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -344,6 +382,25 @@ export default function Employees() {
                     />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vacationDays">Dni urlopu rocznie</Label>
+                  <Input
+                    id="vacationDays"
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="365"
+                    value={formData.vacationDaysPerYear}
+                    onChange={(e) => {
+                      setFormData({ ...formData, vacationDaysPerYear: e.target.value });
+                      // Przelicz koszty po zmianie dni urlopu
+                      setTimeout(() => handleAutoCalculate(), 200);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Płatne dni urlopu w roku (wpływa na koszt pracownika)
+                  </p>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
@@ -377,6 +434,7 @@ export default function Employees() {
                 <TableHead className="text-right">Koszt godz.</TableHead>
                 <TableHead className="text-right">Stawka prac.</TableHead>
                 <TableHead className="text-right">Stawka klient</TableHead>
+                <TableHead className="text-right">Dni urlopu</TableHead>
                 <TableHead className="text-right">Urlop mies.</TableHead>
                 <TableHead className="text-right">Urlop rocz.</TableHead>
                 <TableHead className="text-right">Zysk mies.</TableHead>
@@ -428,6 +486,9 @@ export default function Employees() {
                       {formatCurrency(employee.hourlyRateClient)}
                     </TableCell>
                     <TableCell className="text-right">
+                      {employee.vacationDaysPerYear || 21}
+                    </TableCell>
+                    <TableCell className="text-right">
                       {new Intl.NumberFormat("pl-PL", {
                         style: "currency",
                         currency: "PLN",
@@ -462,40 +523,47 @@ export default function Employees() {
                         {employee.isActive ? "Aktywny" : "Nieaktywny"}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setLocation(`/employee/${employee.id}/annual-report`)}
-                        title="Raport roczny"
-                      >
-                        <FileText className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(employee)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm("Czy na pewno chcesz usunąć tego pracownika?")) {
-                            deleteMutation.mutate({ id: employee.id });
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setLocation(`/employee/${employee.id}/annual-report`)}
+                          title="Raport roczny godzinowy"
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        >
+                          <Calendar className="w-4 h-4 mr-1" />
+                          <span className="text-xs">Raport</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(employee)}
+                          title="Edytuj pracownika"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm("Czy na pewno chcesz usunąć tego pracownika?")) {
+                              deleteMutation.mutate({ id: employee.id });
+                            }
+                          }}
+                          title="Usuń pracownika"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
               })}
               {employees?.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center text-muted-foreground">
+                  <TableCell colSpan={15} className="text-center text-muted-foreground">
                     Brak pracowników. Dodaj pierwszego pracownika.
                   </TableCell>
                 </TableRow>

@@ -250,8 +250,27 @@ export async function getTimeEntriesByAssignment(assignmentId: number) {
 export async function createTimeEntry(entry: InsertTimeEntry) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(timeEntries).values(entry);
-  return Number(result[0].insertId);
+  try {
+    // Konwertuj workDate na string YYYY-MM-DD jeśli jest obiektem Date
+    const entryData: any = { ...entry };
+    if (entryData.workDate instanceof Date) {
+      const year = entryData.workDate.getFullYear();
+      const month = String(entryData.workDate.getMonth() + 1).padStart(2, '0');
+      const day = String(entryData.workDate.getDate()).padStart(2, '0');
+      entryData.workDate = `${year}-${month}-${day}`;
+    }
+    
+    const result = await db.insert(timeEntries).values(entryData);
+    return Number(result[0].insertId);
+  } catch (error: any) {
+    console.error('[DB] createTimeEntry error:', error);
+    console.error('[DB] Entry data:', JSON.stringify(entry, null, 2));
+    if (error.cause) {
+      console.error('[DB] SQL Error:', error.cause.message);
+      console.error('[DB] SQL Code:', error.cause.code);
+    }
+    throw error;
+  }
 }
 
 export async function getTimeEntriesByDateRange(startDate: string, endDate: string) {
@@ -269,7 +288,12 @@ export async function getTimeEntriesByDateRange(startDate: string, endDate: stri
 export async function getAllTimeEntries() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(timeEntries).orderBy(desc(timeEntries.workDate));
+  try {
+    return await db.select().from(timeEntries).orderBy(desc(timeEntries.workDate));
+  } catch (error) {
+    console.error('[DB] getAllTimeEntries error:', error);
+    return [];
+  }
 }
 
 export async function deleteTimeEntry(id: number) {
@@ -366,29 +390,34 @@ export async function getTimeEntriesByEmployeeAndYear(employeeId: number, year: 
   const db = await getDb();
   if (!db) return [];
   
-  const { sql } = await import("drizzle-orm");
-  
-  return await db
-    .select({
-      id: timeEntries.id,
-      assignmentId: timeEntries.assignmentId,
-      workDate: timeEntries.workDate,
-      hoursWorked: timeEntries.hoursWorked,
-      description: timeEntries.description,
-      employeeId: employeeProjectAssignments.employeeId,
-    })
-    .from(timeEntries)
-    .innerJoin(
-      employeeProjectAssignments,
-      eq(timeEntries.assignmentId, employeeProjectAssignments.id)
-    )
-    .where(
-      and(
-        eq(employeeProjectAssignments.employeeId, employeeId),
-        sql`YEAR(${timeEntries.workDate}) = ${year}`
+  try {
+    const { sql } = await import("drizzle-orm");
+    
+    return await db
+      .select({
+        id: timeEntries.id,
+        assignmentId: timeEntries.assignmentId,
+        workDate: timeEntries.workDate,
+        hoursWorked: timeEntries.hoursWorked,
+        description: timeEntries.description,
+        employeeId: employeeProjectAssignments.employeeId,
+      })
+      .from(timeEntries)
+      .innerJoin(
+        employeeProjectAssignments,
+        eq(timeEntries.assignmentId, employeeProjectAssignments.id)
       )
-    )
-    .orderBy(timeEntries.workDate);
+      .where(
+        and(
+          eq(employeeProjectAssignments.employeeId, employeeId),
+          sql`YEAR(${timeEntries.workDate}) = ${year}`
+        )
+      )
+      .orderBy(timeEntries.workDate);
+  } catch (error) {
+    console.error('[DB] getTimeEntriesByEmployeeAndYear error:', error);
+    return [];
+  }
 }
 
 // Get time entries by employee, year and month
@@ -396,30 +425,35 @@ export async function getTimeEntriesByEmployeeAndMonth(employeeId: number, year:
   const db = await getDb();
   if (!db) return [];
   
-  const { sql } = await import("drizzle-orm");
-  
-  return await db
-    .select({
-      id: timeEntries.id,
-      assignmentId: timeEntries.assignmentId,
-      workDate: timeEntries.workDate,
-      hoursWorked: timeEntries.hoursWorked,
-      description: timeEntries.description,
-      employeeId: employeeProjectAssignments.employeeId,
-    })
-    .from(timeEntries)
-    .innerJoin(
-      employeeProjectAssignments,
-      eq(timeEntries.assignmentId, employeeProjectAssignments.id)
-    )
-    .where(
-      and(
-        eq(employeeProjectAssignments.employeeId, employeeId),
-        sql`YEAR(${timeEntries.workDate}) = ${year}`,
-        sql`MONTH(${timeEntries.workDate}) = ${month}`
+  try {
+    const { sql } = await import("drizzle-orm");
+    
+    return await db
+      .select({
+        id: timeEntries.id,
+        assignmentId: timeEntries.assignmentId,
+        workDate: timeEntries.workDate,
+        hoursWorked: timeEntries.hoursWorked,
+        description: timeEntries.description,
+        employeeId: employeeProjectAssignments.employeeId,
+      })
+      .from(timeEntries)
+      .innerJoin(
+        employeeProjectAssignments,
+        eq(timeEntries.assignmentId, employeeProjectAssignments.id)
       )
-    )
-    .orderBy(timeEntries.workDate);
+      .where(
+        and(
+          eq(employeeProjectAssignments.employeeId, employeeId),
+          sql`YEAR(${timeEntries.workDate}) = ${year}`,
+          sql`MONTH(${timeEntries.workDate}) = ${month}`
+        )
+      )
+      .orderBy(timeEntries.workDate);
+  } catch (error) {
+    console.error('[DB] getTimeEntriesByEmployeeAndMonth error:', error);
+    return [];
+  }
 }
 
 // Monthly Employee Reports
@@ -495,11 +529,14 @@ export async function getTaskById(id: number) {
 export async function createTask(data: InsertTask) {
   const database = await getDb();
   if (!database) return 0;
-  const result = await database.insert(tasks).values({
-    ...data,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  // createdAt i updatedAt mają defaultNow() w schemacie, więc nie ustawiamy ich ręcznie
+  // completedAt też może być null
+  const taskData: any = {
+    title: data.title,
+    description: data.description ?? null,
+    status: data.status ?? "planned",
+  };
+  const result = await database.insert(tasks).values(taskData);
   return result[0].insertId;
 }
 
