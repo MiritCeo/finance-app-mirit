@@ -554,7 +554,7 @@ export const appRouter = router({
             await db.createTimeEntry({
               assignmentId: activeAssignment.id,
               workDate,
-              hoursWorked: Math.round(entry.hoursWorked * 100), // Konwersja do setnych (132.39h → 13239)
+              hoursWorked: entry.hoursWorked, // Zapisz godziny jako normalne liczby dziesiętne (132.39h)
               description: `Raport miesięczny za ${input.month}/${input.year}`,
             });
           }
@@ -602,8 +602,8 @@ export const appRouter = router({
           const entries = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
           
           if (entries.length > 0) {
-            // Zsumuj godziny (godziny są w setnych w bazie, np. 13600 = 136h)
-            const totalHours = entries.reduce((sum: number, entry: any) => sum + (entry.hoursWorked / 100), 0);
+            // Zsumuj godziny (godziny są zapisane jako normalne liczby dziesiętne, np. 136h)
+            const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0);
             
             employeeHours.push({
               employeeId: employee.id,
@@ -984,18 +984,18 @@ export const appRouter = router({
         // Jeśli brak wpisów, pomiń pracownika
         if (entries.length === 0) continue;
         
-        // Zsumuj godziny (godziny są w setnych, np. 13600 = 136h)
-        const totalHours = entries.reduce((sum: number, entry: any) => sum + (entry.hoursWorked / 100), 0);
+                // Zsumuj godziny (godziny są zapisane jako normalne liczby dziesiętne, np. 136h)
+        const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0);
         
         // Oblicz przychód: godziny × stawka klienta
-        const revenue = totalHours * (employee.hourlyRateClient / 100);
+        const revenue = totalHours * employee.hourlyRateClient;
         totalRevenue += revenue;
         
         // Sprawdź czy jest custom koszt w monthlyEmployeeReports
         const customReport = await db.getMonthlyReport(employee.id, year, month);
         const employeeCost = customReport?.actualCost 
-          ? customReport.actualCost / 100 
-          : employee.monthlyCostTotal / 100;
+          ? customReport.actualCost 
+          : employee.monthlyCostTotal;
         
         totalEmployeeCosts += employeeCost;
       }
@@ -1058,18 +1058,18 @@ export const appRouter = router({
           // Jeśli brak wpisów, pomiń pracownika
           if (entries.length === 0) continue;
           
-          // Zsumuj godziny (godziny są w setnych, np. 13600 = 136h)
-          const totalHours = entries.reduce((sum: number, entry: any) => sum + (entry.hoursWorked / 100), 0);
+          // Zsumuj godziny (godziny są zapisane jako normalne liczby dziesiętne, np. 136h)
+          const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0);
           
           // Oblicz przychód: godziny × stawka klienta
-          const revenue = totalHours * (employee.hourlyRateClient / 100);
+          const revenue = totalHours * employee.hourlyRateClient;
           totalRevenue += revenue;
           
           // Sprawdź czy jest custom koszt w monthlyEmployeeReports
           const customReport = await db.getMonthlyReport(employee.id, year, month);
           const employeeCost = customReport?.actualCost 
-            ? customReport.actualCost / 100 
-            : employee.monthlyCostTotal / 100;
+            ? customReport.actualCost 
+            : employee.monthlyCostTotal;
           
           totalEmployeeCosts += employeeCost;
         }
@@ -1136,18 +1136,18 @@ export const appRouter = router({
             // Jeśli brak wpisów, pomiń pracownika
             if (entries.length === 0) continue;
             
-            // Zsumuj godziny (godziny są w setnych, np. 13600 = 136h)
-            const totalHours = entries.reduce((sum: number, entry: any) => sum + (entry.hoursWorked / 100), 0);
+            // Zsumuj godziny (godziny są zapisane jako normalne liczby dziesiętne, np. 136h)
+            const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0);
             
             // Oblicz przychód: godziny × stawka klienta
-            const revenue = totalHours * (employee.hourlyRateClient / 100);
+            const revenue = totalHours * employee.hourlyRateClient;
             totalRevenue += revenue;
             
             // Sprawdź czy jest custom koszt w monthlyEmployeeReports
             const customReport = await db.getMonthlyReport(employee.id, year, month);
             const employeeCost = customReport?.actualCost 
-              ? customReport.actualCost / 100 
-              : employee.monthlyCostTotal / 100;
+              ? customReport.actualCost 
+              : employee.monthlyCostTotal;
             
             totalEmployeeCosts += employeeCost;
           }

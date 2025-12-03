@@ -1,0 +1,9 @@
+{
+  "query": "DELETE FROM timeEntries WHERE description LIKE 'Raport miesięczny%'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JUsBG2X2GLXRvW.root --database NohioRQJxaLfTKHfAohCFR --execute DELETE FROM timeEntries WHERE description LIKE 'Raport miesięczny%'",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 58
+}

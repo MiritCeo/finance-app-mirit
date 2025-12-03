@@ -67,7 +67,7 @@ export default function TimeReporting() {
       .filter(([_, hours]) => hours && parseFloat(hours) > 0)
       .map(([employeeId, hours]) => ({
         employeeId: parseInt(employeeId),
-        hoursWorked: Math.round(parseFloat(hours) * 100), // Konwersja do setnych
+        hoursWorked: parseFloat(hours), // Zapisz godziny jako normalne liczby dziesiętne
       }));
 
     if (entries.length === 0) {

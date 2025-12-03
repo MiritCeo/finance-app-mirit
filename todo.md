@@ -720,3 +720,13 @@ Dodać możliwość ręcznego wprowadzenia rzeczywistego kosztu pracownika dla d
 - [x] Naprawić procedurę calculateSalary - dodać koszty urlopów dla zlecenie i zlecenie studenckie
 - [x] Przetestować dodawanie pracownika z umową zlecenie studenckie - działa poprawnie (7318,12 zł dla 6000 zł netto)
 - [x] Sprawdzić czy koszty wyświetlają się w tabeli pracowników - działa poprawnie
+
+## Naprawa mnożenia godzin × 100 w raportowaniu (Grudzień 2024)
+
+- [x] Usunąć mnożenie × 100 w procedurze saveMonthlyHours
+- [x] Usunąć dzielenie ÷ 100 w procedurze getMonthlyReportDetails
+- [x] Usunąć mnożenie × 100 w TimeReporting.tsx (frontend)
+- [x] Usunąć dzielenie ÷ 100 we wszystkich procedurach dashboardu (kpi, getAccurateMonthlyResults, getProfitTrends)
+- [x] Zapisy wać godziny jako normalne liczby dziesiętne (140h, 130.5h)
+- [x] Wyczyścić stare dane z bazy (usunąć raporty z błędnymi godzinami)
+- [x] Przetestować zapisywanie i edycję raportów po naprawie - działa idealnie (140h, 130h, 120h)
