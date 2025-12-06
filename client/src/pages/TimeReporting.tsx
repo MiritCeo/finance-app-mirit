@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import React from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,9 +7,134 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Save, Calendar, TrendingUp, ArrowLeft, Edit, Trash2 } from "lucide-react";
+import { Loader2, Save, Calendar, TrendingUp, ArrowLeft, Edit, Trash2, Clock, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+
+// Komponent karty pracownika z projektami
+function EmployeeCard({ 
+  employee, 
+  hoursData, 
+  onHoursChange, 
+  onViewReport,
+  onAssignmentData,
+  projects 
+}: { 
+  employee: any; 
+  hoursData: Record<number, string>; 
+  onHoursChange: (assignmentId: number, value: string) => void;
+  onViewReport: () => void;
+  onAssignmentData?: (assignments: any[]) => void;
+  projects?: any[];
+}) {
+  const { data: assignments, isLoading } = trpc.assignments.byEmployee.useQuery(
+    { employeeId: employee.id },
+    { enabled: !!employee.id }
+  );
+  
+  // Przekaż dane assignments do rodzica dla obliczeń przychodu
+  useEffect(() => {
+    if (assignments && onAssignmentData) {
+      onAssignmentData(assignments);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignments]);
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-6">
+          <div className="flex items-center justify-center">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Filtruj tylko aktywne przypisania
+  const activeAssignments = assignments?.filter(a => a.isActive) || [];
+
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="text-sm font-semibold text-primary">
+                {employee.firstName[0]}{employee.lastName[0]}
+              </span>
+            </div>
+            <div>
+              <CardTitle className="text-lg">
+                {employee.firstName} {employee.lastName}
+              </CardTitle>
+              <CardDescription className="text-xs uppercase mt-0.5">
+                {employee.employmentType}
+              </CardDescription>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onViewReport}
+            title="Raport roczny godzinowy"
+            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+          >
+            <Calendar className="w-4 h-4 mr-1.5" />
+            Raport
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {activeAssignments.length === 0 ? (
+          <div className="text-center py-6 text-sm text-muted-foreground">
+            Brak aktywnych projektów
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {activeAssignments.map((assignment) => {
+              const project = projects?.find(p => p.id === assignment.projectId) || { name: "Nieznany projekt" };
+              return (
+                <div
+                  key={assignment.id}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex-shrink-0">
+                      <Briefcase className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{project.name}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor={`hours-${assignment.id}`} className="text-sm text-muted-foreground whitespace-nowrap">
+                        Godziny:
+                      </Label>
+                      <Input
+                        id={`hours-${assignment.id}`}
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max="300"
+                        placeholder="0"
+                        value={hoursData[assignment.id] || ""}
+                        onChange={(e) => onHoursChange(assignment.id, e.target.value)}
+                        className="w-24 text-right font-medium"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function TimeReporting() {
   const { user } = useAuth();
@@ -18,13 +144,27 @@ export default function TimeReporting() {
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
-  const [hoursData, setHoursData] = useState<Record<number, string>>({});
+  // Struktura: { employeeId: { assignmentId: hours } }
+  const [hoursData, setHoursData] = useState<Record<number, Record<number, string>>>({});
+  // Cache assignments dla obliczeń przychodu: { assignmentId: assignment }
+  const [assignmentsCache, setAssignmentsCache] = useState<Record<number, any>>({});
 
   const { data: employees, isLoading: employeesLoading } = trpc.employees.list.useQuery(undefined, { enabled: !!user });
   const { data: monthlyReports, isLoading: reportsLoading } = trpc.timeEntries.monthlyReports.useQuery(
     undefined,
     { enabled: !!user }
   );
+  
+  // Pobierz projekty
+  const { data: projects } = trpc.projects.list.useQuery(undefined, { enabled: !!user });
+  
+  const handleAssignmentData = (employeeId: number, assignments: any[]) => {
+    const newCache: Record<number, any> = {};
+    assignments.forEach(assignment => {
+      newCache[assignment.id] = assignment;
+    });
+    setAssignmentsCache(prev => ({ ...prev, ...newCache }));
+  };
 
   const saveMutation = trpc.timeEntries.saveMonthlyHours.useMutation({
     onSuccess: () => {
@@ -53,25 +193,37 @@ export default function TimeReporting() {
     },
   });
 
-  const handleHoursChange = (employeeId: number, value: string) => {
+  const handleHoursChange = (employeeId: number, assignmentId: number, value: string) => {
     setHoursData(prev => ({
       ...prev,
-      [employeeId]: value
+      [employeeId]: {
+        ...(prev[employeeId] || {}),
+        [assignmentId]: value
+      }
     }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const entries = Object.entries(hoursData)
-      .filter(([_, hours]) => hours && parseFloat(hours) > 0)
-      .map(([employeeId, hours]) => ({
-        employeeId: parseInt(employeeId),
-        hoursWorked: parseFloat(hours), // Zapisz godziny jako normalne liczby dziesiętne
-      }));
+    const entries: Array<{ employeeId: number; assignmentId: number; hoursWorked: number }> = [];
+    
+    // Przekształć strukturę danych na płaską listę wpisów
+    Object.entries(hoursData).forEach(([employeeId, assignments]) => {
+      Object.entries(assignments).forEach(([assignmentId, hours]) => {
+        const hoursNum = parseFloat(hours);
+        if (hours && hoursNum > 0) {
+          entries.push({
+            employeeId: parseInt(employeeId),
+            assignmentId: parseInt(assignmentId),
+            hoursWorked: hoursNum,
+          });
+        }
+      });
+    });
 
     if (entries.length === 0) {
-      toast.error("Wpisz godziny dla przynajmniej jednego pracownika");
+      toast.error("Wpisz godziny dla przynajmniej jednego projektu");
       return;
     }
 
@@ -98,19 +250,35 @@ export default function TimeReporting() {
     return months[month - 1];
   };
 
-  const totalRevenue = employees?.reduce((sum, emp) => {
-    const hours = parseFloat(hoursData[emp.id] || "0");
-    if (hours === 0) return sum;
+  // Funkcja pomocnicza do obliczania szacowanego przychodu (w groszach)
+  const calculateTotalRevenue = () => {
+    if (!employees) return 0;
     
-    // Znajdź aktywne przypisanie pracownika (zakładamy pierwsze aktywne)
-    const assignment = emp.id; // TODO: pobierz rzeczywiste przypisanie z stawką
-    const hourlyRate = 20000; // TODO: pobierz rzeczywistą stawkę z przypisania (w groszach)
+    let total = 0; // w groszach
     
-    return sum + (hours * hourlyRate);
-  }, 0) || 0;
+    Object.entries(hoursData).forEach(([employeeId, assignments]) => {
+      const employee = employees.find(e => e.id === parseInt(employeeId));
+      if (!employee) return;
+      
+      Object.entries(assignments).forEach(([assignmentId, hours]) => {
+        const hoursNum = parseFloat(hours || "0");
+        if (hoursNum > 0) {
+          // Pobierz assignment z cache lub użyj domyślnej stawki pracownika
+          const assignment = assignmentsCache[parseInt(assignmentId)];
+          const hourlyRate = assignment?.hourlyRateClient || employee.hourlyRateClient || 0;
+          // hourlyRate jest w groszach, hoursNum to godziny (np. 131), więc przychód = 131 * hourlyRate (w groszach)
+          total += Math.round(hoursNum * hourlyRate);
+        }
+      });
+    });
+    
+    return total; // zwracamy w groszach
+  };
+  
+  const totalRevenue = calculateTotalRevenue(); // w groszach
 
   return (
-    <div className="container mx-auto p-6 space-y-6 max-w-7xl">
+    <div className="container mx-auto max-w-7xl space-y-6">
       <Button onClick={() => setLocation("/")} variant="outline" className="mb-4">
         <ArrowLeft className="mr-2 h-4 w-4" />
         Wróć do dashboardu
@@ -178,60 +346,25 @@ export default function TimeReporting() {
                 </div>
               ) : employees && employees.length > 0 ? (
                 <div className="space-y-4">
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Pracownik</TableHead>
-                          <TableHead>Typ umowy</TableHead>
-                          <TableHead className="text-right">Godziny w miesiącu</TableHead>
-                          <TableHead className="text-right">Akcje</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {employees.map((employee) => (
-                          <TableRow key={employee.id}>
-                            <TableCell className="font-medium">
-                              {employee.firstName} {employee.lastName}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground uppercase">
-                              {employee.employmentType}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Input
-                                type="number"
-                                step="0.5"
-                                min="0"
-                                max="300"
-                                placeholder="0"
-                                value={hoursData[employee.id] || ""}
-                                onChange={(e) => handleHoursChange(employee.id, e.target.value)}
-                                className="w-32 ml-auto text-right"
-                              />
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setLocation(`/employee/${employee.id}/annual-report`)}
-                                title="Raport roczny godzinowy"
-                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              >
-                                <Calendar className="w-4 h-4 mr-1" />
-                                <span className="text-xs">Raport</span>
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                  <div className="space-y-4">
+                    {employees.map((employee) => (
+                      <EmployeeCard
+                        key={employee.id}
+                        employee={employee}
+                        hoursData={hoursData[employee.id] || {}}
+                        onHoursChange={(assignmentId, value) => handleHoursChange(employee.id, assignmentId, value)}
+                        onViewReport={() => setLocation(`/employee/${employee.id}/annual-report`)}
+                        onAssignmentData={(assignments) => handleAssignmentData(employee.id, assignments)}
+                        projects={projects}
+                      />
+                    ))}
                   </div>
 
                   <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
                     <div>
                       <p className="text-sm text-muted-foreground">Szacowany przychód za miesiąc</p>
                       <p className="text-2xl font-bold text-green-600">
-                        {formatCurrency(Math.round(totalRevenue))}
+                        {formatCurrency(totalRevenue)}
                       </p>
                     </div>
                     <Button type="submit" size="lg" disabled={saveMutation.isPending}>
@@ -312,10 +445,13 @@ export default function TimeReporting() {
                                   year: report.year,
                                 });
                                 
-                                // Ustaw godziny w formularzu
-                                const newHoursData: Record<number, string> = {};
+                                // Ustaw godziny w formularzu per projekt (assignment)
+                                const newHoursData: Record<number, Record<number, string>> = {};
                                 details.forEach((item) => {
-                                  newHoursData[item.employeeId] = item.hours.toString();
+                                  if (!newHoursData[item.employeeId]) {
+                                    newHoursData[item.employeeId] = {};
+                                  }
+                                  newHoursData[item.employeeId][item.assignmentId] = item.hours.toString();
                                 });
                                 setHoursData(newHoursData);
                                 

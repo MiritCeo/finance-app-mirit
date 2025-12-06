@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -21,21 +22,21 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, CheckSquare, BookOpen, DollarSign, Calendar, Briefcase } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, CheckSquare, BookOpen, DollarSign, Calendar, Briefcase, UserCircle, Building2, Clock, Receipt, Plus, Zap, Moon, Sun } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: CheckSquare, label: "Zadania", path: "/tasks" },
-  { icon: BookOpen, label: "Baza Wiedzy", path: "/knowledge" },
-  { icon: Users, label: "Pracownicy", path: "/employees" },
-  { icon: Briefcase, label: "Projekty", path: "/projects" },
-  { icon: Users, label: "Klienci", path: "/clients" },
-  { icon: Calendar, label: "Raportowanie godzin", path: "/time-reporting" },
-  { icon: DollarSign, label: "Koszty stałe", path: "/fixed-costs" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/", color: "text-blue-600" },
+  { icon: CheckSquare, label: "Zadania", path: "/tasks", color: "text-purple-600" },
+  { icon: BookOpen, label: "Baza Wiedzy", path: "/knowledge", color: "text-indigo-600" },
+  { icon: Users, label: "Pracownicy", path: "/employees", color: "text-green-600" },
+  { icon: Briefcase, label: "Projekty", path: "/projects", color: "text-orange-600" },
+  { icon: Building2, label: "Klienci", path: "/clients", color: "text-cyan-600" },
+  { icon: Clock, label: "Raportowanie godzin", path: "/time-reporting", color: "text-pink-600" },
+  { icon: Receipt, label: "Koszty stałe", path: "/fixed-costs", color: "text-red-600" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -113,6 +114,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -165,19 +167,22 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center">
+          <SidebarHeader className="h-16 justify-center border-b bg-gradient-to-r from-primary/5 to-primary/10">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
                 onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                className="h-8 w-8 flex items-center justify-center hover:bg-primary/10 rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
                 aria-label="Toggle navigation"
               >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                <PanelLeft className="h-4 w-4 text-primary" />
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
+                  <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
+                    <LayoutDashboard className="h-4 w-4 text-white" />
+                  </div>
+                  <span className="font-bold text-lg tracking-tight truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                    Mirit Finance
                   </span>
                 </div>
               ) : null}
@@ -227,6 +232,24 @@ function DashboardLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                {toggleTheme && (
+                  <DropdownMenuItem
+                    onClick={toggleTheme}
+                    className="cursor-pointer"
+                  >
+                    {theme === "dark" ? (
+                      <>
+                        <Sun className="mr-2 h-4 w-4" />
+                        <span>Jasny motyw</span>
+                      </>
+                    ) : (
+                      <>
+                        <Moon className="mr-2 h-4 w-4" />
+                        <span>Ciemny motyw</span>
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
@@ -263,7 +286,7 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-4">{children}</main>
+        <main className="flex-1 p-6 min-h-screen">{children}</main>
       </SidebarInset>
     </>
   );

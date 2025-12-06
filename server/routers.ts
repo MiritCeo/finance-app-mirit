@@ -227,33 +227,61 @@ export const appRouter = router({
         // Uzupełnij wszystkie miesiące (1-12)
         const allMonths = [];
         for (let month = 1; month <= 12; month++) {
-          const hoursWorked = (monthlyHours[month] || 0) / 100; // Konwersja z groszy na godziny (13100 -> 131h)
-          const hourlyRateClient = employee.hourlyRateClient; // Stawka w groszach (20000 = 200 PLN/h)
-          const revenue = Math.round(hoursWorked * hourlyRateClient); // godziny × stawka w groszach
-          const defaultCost = employee.monthlyCostTotal; // Koszt domyślny z bazy (w groszach)
+          // Pobierz zapisany raport miesięczny (jeśli istnieje)
+          const savedReport = savedReportsMap.get(month) as any;
+          
+          // Jeśli istnieje zapisany raport, użyj zapisanych wartości (snapshot)
+          // W przeciwnym razie użyj aktualnych danych pracownika
+          let hoursWorked: number;
+          let hourlyRateClient: number;
+          let revenue: number;
+          let defaultCost: number;
+          
+          if (savedReport && savedReport.hoursWorked > 0) {
+            // Użyj zapisanych wartości z momentu zapisu raportu (snapshot)
+            hoursWorked = savedReport.hoursWorked / 100; // Konwersja z groszy na godziny
+            hourlyRateClient = savedReport.hourlyRateClient; // Zapisana stawka
+            revenue = savedReport.revenue; // Zapisany przychód
+            defaultCost = savedReport.cost; // Zapisany koszt domyślny - NIE ZMIENIA SIĘ po edycji pracownika
+          } else {
+            // Brak zapisanego raportu - użyj aktualnych danych
+            hoursWorked = (monthlyHours[month] || 0) / 100; // Konwersja z groszy na godziny (13100 -> 131h)
+            hourlyRateClient = employee.hourlyRateClient; // Aktualna stawka w groszach
+            revenue = Math.round(hoursWorked * hourlyRateClient); // godziny × stawka w groszach
+            defaultCost = employee.monthlyCostTotal; // Aktualny koszt domyślny z bazy (w groszach)
+          }
           
           // Pobierz actualCost z zapisanego raportu (jeśli istnieje)
-          const savedReport = savedReportsMap.get(month) as any;
           const actualCost = savedReport?.actualCost ?? null;
           
           // Użyj actualCost jeśli istnieje, w przeciwnym razie defaultCost
+          // defaultCost jest zawsze zapisaną wartością z momentu zapisu raportu (jeśli raport istnieje)
           const cost = actualCost ?? defaultCost;
-          const profit = revenue - cost;
+          
+          // Jeśli mamy zapisany raport, użyj zapisanego profit, w przeciwnym razie oblicz
+          let profit: number;
+          if (savedReport && savedReport.hoursWorked > 0 && actualCost === null) {
+            // Użyj zapisanego profit jeśli nie ma actualCost
+            profit = savedReport.profit;
+          } else {
+            // Przelicz profit (może być zmieniony przez actualCost)
+            profit = revenue - cost;
+          }
           
           allMonths.push({
-            id: (savedReport as any)?.id || 0,
+            id: savedReport?.id || 0,
             employeeId,
             year,
             month,
             hoursWorked,
-            hourlyRateClient: employee.hourlyRateClient,
+            hourlyRateClient,
             revenue,
             defaultCost,
             actualCost,
             cost,
             profit,
-            createdAt: (savedReport as any)?.createdAt || new Date(),
-            updatedAt: (savedReport as any)?.updatedAt || new Date(),
+            createdAt: savedReport?.createdAt || new Date(),
+            updatedAt: savedReport?.updatedAt || new Date(),
           });
         }
         
@@ -429,6 +457,13 @@ export const appRouter = router({
         await db.updateProject(id, data as any);
         return { success: true };
       }),
+    
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteProject(input.id);
+        return { success: true };
+      }),
   }),
 
   // ============ ASSIGNMENTS ============
@@ -462,6 +497,34 @@ export const appRouter = router({
         };
         const id = await db.createAssignment(data as any);
         return { id, success: true };
+      }),
+    
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        projectId: z.number().optional(),
+        hourlyRateClient: z.number().optional(),
+        hourlyRateCost: z.number().optional(),
+        assignmentStart: z.string().optional(),
+        assignmentEnd: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...rest } = input;
+        const data = {
+          ...rest,
+          assignmentStart: rest.assignmentStart ? new Date(rest.assignmentStart) : undefined,
+          assignmentEnd: rest.assignmentEnd ? new Date(rest.assignmentEnd) : undefined,
+        };
+        await db.updateAssignment(id, data as any);
+        return { success: true };
+      }),
+    
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteAssignment(input.id);
+        return { success: true };
       }),
   }),
 
@@ -527,84 +590,109 @@ export const appRouter = router({
         year: z.number(),
         entries: z.array(z.object({
           employeeId: z.number(),
+          assignmentId: z.number(),
           hoursWorked: z.number(),
         })),
       }))
       .mutation(async ({ input }) => {
-        // Sprawdź czy istnieje domyślny projekt dla raportowania
-        const projects = await db.getAllProjects();
-        let defaultProject = projects.find(p => p.name === "Raportowanie miesięczne");
+        // Grupuj wpisy po pracowniku, aby móc sumować godziny i przychody
+        const employeeEntries = new Map<number, Array<{ assignmentId: number; hoursWorked: number; hourlyRateClient: number }>>();
         
-        if (!defaultProject) {
-          // Utwórz domyślny projekt
-          const clients = await db.getAllClients();
-          const defaultClient = clients[0]; // Użyj pierwszego klienta lub utwórz domyślnego
-          
-          if (!defaultClient) {
-            throw new Error("Brak klientów w systemie. Dodaj przynajmniej jednego klienta.");
-          }
-          
-          const projectId = await db.createProject({
-            clientId: defaultClient.id,
-            name: "Raportowanie miesięczne",
-            billingModel: "time_material",
-            status: "active",
-            startDate: new Date(),
-          });
-          
-          defaultProject = await db.getProjectById(projectId);
-        }
-        
-        // Dla każdego pracownika, znajdź lub utwórz aktywne przypisanie
+        // Najpierw zbierz wszystkie wpisy i sprawdź czy wszystko jest poprawne
         for (const entry of input.entries) {
           const employee = await db.getEmployeeById(entry.employeeId);
-          if (!employee) continue;
-          
-          const assignments = await db.getAssignmentsByEmployee(entry.employeeId);
-          let activeAssignment = assignments.find(a => a.isActive);
-          
-          if (!activeAssignment && defaultProject) {
-            // Utwórz domyślne przypisanie
-            const assignmentId = await db.createAssignment({
-              employeeId: entry.employeeId,
-              projectId: defaultProject.id,
-              hourlyRateClient: employee.hourlyRateClient || 0,
-              hourlyRateCost: employee.hourlyRateCost || 0,
-              assignmentStart: new Date(),
-              isActive: true,
-            });
-            
-            activeAssignment = await db.getAssignmentById(assignmentId);
+          if (!employee) {
+            console.warn('[saveMonthlyHours] Employee not found:', entry.employeeId);
+            continue;
           }
           
-          if (activeAssignment) {
-            // Utwórz wpis na ostatni dzień miesiąca (tak jak w seed.mjs)
-            const lastDay = new Date(input.year, input.month, 0).getDate();
-            const workDate = new Date(input.year, input.month - 1, lastDay);
-            
-            console.log('[saveMonthlyHours] Creating time entry:', {
-              assignmentId: activeAssignment.id,
-              workDate: workDate,
-              hoursWorked: Math.round(entry.hoursWorked * 100),
-              employeeId: entry.employeeId,
-            });
-            
+          // Sprawdź czy assignment istnieje
+          const assignment = await db.getAssignmentById(entry.assignmentId);
+          if (!assignment) {
+            console.warn('[saveMonthlyHours] Assignment not found:', entry.assignmentId);
+            continue;
+          }
+          
+          const hoursWorkedInGrosze = Math.round(entry.hoursWorked * 100); // Konwersja do groszy (131h = 13100)
+          const hourlyRateClient = assignment.hourlyRateClient || employee.hourlyRateClient || 0;
+          
+          if (!employeeEntries.has(entry.employeeId)) {
+            employeeEntries.set(entry.employeeId, []);
+          }
+          
+          employeeEntries.get(entry.employeeId)!.push({
+            assignmentId: entry.assignmentId,
+            hoursWorked: hoursWorkedInGrosze,
+            hourlyRateClient: hourlyRateClient,
+          });
+        }
+        
+        // Utwórz wpisy godzinowe i zapisz snapshoty
+        const lastDay = new Date(input.year, input.month, 0).getDate();
+        const workDate = new Date(input.year, input.month - 1, lastDay);
+        
+        for (const [employeeId, entries] of Array.from(employeeEntries.entries())) {
+          const employee = await db.getEmployeeById(employeeId);
+          if (!employee) continue;
+          
+          // Sumuj godziny i przychody ze wszystkich projektów
+          let totalHoursWorked = 0; // w groszach
+          let totalRevenue = 0; // w groszach
+          
+          // Zapisz każdy wpis godzinowy osobno
+          for (const entry of entries) {
             try {
+              // Zapisz wpis godzinowy
               await db.createTimeEntry({
-                assignmentId: activeAssignment.id,
-                workDate: workDate, // Drizzle date() akceptuje obiekt Date (jak w seed.mjs)
-                hoursWorked: Math.round(entry.hoursWorked * 100), // Konwersja do groszy (131h = 13100)
+                assignmentId: entry.assignmentId,
+                workDate: workDate,
+                hoursWorked: entry.hoursWorked,
                 description: `Raport miesięczny za ${input.month}/${input.year}`,
+              });
+              
+              // Dodaj do sumy
+              totalHoursWorked += entry.hoursWorked;
+              const hours = entry.hoursWorked / 100; // Konwersja z groszy na godziny
+              totalRevenue += Math.round(hours * entry.hourlyRateClient);
+              
+              console.log('[saveMonthlyHours] Created time entry:', {
+                assignmentId: entry.assignmentId,
+                hoursWorked: entry.hoursWorked,
+                hourlyRate: entry.hourlyRateClient,
+                revenue: Math.round(hours * entry.hourlyRateClient),
               });
             } catch (error: any) {
               console.error('[saveMonthlyHours] Error creating time entry:', error);
-              console.error('[saveMonthlyHours] Assignment:', activeAssignment);
               throw error;
             }
-          } else {
-            console.warn('[saveMonthlyHours] No active assignment for employee:', entry.employeeId);
           }
+          
+          // Oblicz średnią ważoną stawki (dla zapisu w snapshot)
+          // Używamy średniej ważonej godzinami
+          // totalRevenue jest w groszach, totalHoursWorked jest w groszach (godziny * 100)
+          const totalHours = totalHoursWorked / 100; // Konwersja na godziny
+          const averageHourlyRate = totalHours > 0 
+            ? Math.round(totalRevenue / totalHours) // Przychód w groszach / godziny = stawka w groszach
+            : entries[0]?.hourlyRateClient || employee.hourlyRateClient || 0;
+          
+          // Zapisz snapshot z sumą godzin i przychodów
+          await db.saveMonthlyReportSnapshot({
+            employeeId: employeeId,
+            year: input.year,
+            month: input.month,
+            hoursWorked: totalHoursWorked, // Suma godzin ze wszystkich projektów (w groszach)
+            hourlyRateClient: averageHourlyRate, // Średnia ważona stawka w groszach (już obliczona)
+            monthlyCostTotal: employee.monthlyCostTotal || 0,
+          });
+          
+          console.log('[saveMonthlyHours] Saved snapshot:', {
+            employeeId: employeeId,
+            totalHours: totalHoursWorked / 100,
+            totalRevenue: totalRevenue,
+            averageHourlyRate: averageHourlyRate,
+          });
         }
+        
         return { success: true };
       }),
     
@@ -620,11 +708,17 @@ export const appRouter = router({
         const database = await db.getDb();
         if (!database) throw new Error("Database not available");
         
-        const { timeEntries } = await import("../drizzle/schema");
+        const { timeEntries, monthlyEmployeeReports } = await import("../drizzle/schema");
         
         // Usuń wpisy z time_entries dla danego miesiąca i roku
         await database.delete(timeEntries).where(
           sql`MONTH(${timeEntries.workDate}) = ${input.month} AND YEAR(${timeEntries.workDate}) = ${input.year}`
+        );
+        
+        // Usuń również snapshoty raportów miesięcznych dla wszystkich pracowników w danym miesiącu
+        // (monthlyReports teraz używa danych z monthlyEmployeeReports, więc musimy je też usunąć)
+        await database.delete(monthlyEmployeeReports).where(
+          sql`${monthlyEmployeeReports.month} = ${input.month} AND ${monthlyEmployeeReports.year} = ${input.year}`
         );
         
         return { success: true };
@@ -637,44 +731,60 @@ export const appRouter = router({
       }))
       .query(async ({ input }) => {
         const { year, month } = input;
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
         
-        // Pobierz wszystkich aktywnych pracowników
-        const employees = await db.getActiveEmployees();
+        const { timeEntries, employeeProjectAssignments } = await import("../drizzle/schema");
+        const { sql, eq, and } = await import("drizzle-orm");
         
-        // Dla każdego pracownika pobierz godziny z time_entries
-        const employeeHours: Array<{ employeeId: number; hours: number }> = [];
+        // Pobierz wszystkie wpisy godzinowe dla danego miesiąca z informacją o assignment
+        const entries = await database
+          .select({
+            id: timeEntries.id,
+            assignmentId: timeEntries.assignmentId,
+            hoursWorked: timeEntries.hoursWorked,
+            employeeId: employeeProjectAssignments.employeeId,
+          })
+          .from(timeEntries)
+          .innerJoin(
+            employeeProjectAssignments,
+            eq(timeEntries.assignmentId, employeeProjectAssignments.id)
+          )
+          .where(
+            and(
+              sql`YEAR(${timeEntries.workDate}) = ${year}`,
+              sql`MONTH(${timeEntries.workDate}) = ${month}`
+            )
+          );
         
-        for (const employee of employees) {
-          const entries = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
-          
-          if (entries.length > 0) {
-            // Zsumuj godziny (godziny są zapisane jako grosze, np. 13100 = 131h)
-            const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0) / 100; // Konwersja z groszy na godziny
-            
-            employeeHours.push({
-              employeeId: employee.id,
-              hours: totalHours,
-            });
-          }
+        // Grupuj po employeeId i assignmentId
+        const result: Array<{ employeeId: number; assignmentId: number; hours: number }> = [];
+        const grouped = new Map<string, number>();
+        
+        for (const entry of entries) {
+          const key = `${entry.employeeId}-${entry.assignmentId}`;
+          const hours = (entry.hoursWorked / 100); // Konwersja z groszy na godziny
+          grouped.set(key, (grouped.get(key) || 0) + hours);
         }
         
-        return employeeHours;
+        // Konwertuj na tablicę
+        Array.from(grouped.entries()).forEach(([key, hours]) => {
+          const [employeeId, assignmentId] = key.split('-').map(Number);
+          result.push({ employeeId, assignmentId, hours });
+        });
+        
+        return result;
       }),
     
     monthlyReports: protectedProcedure.query(async () => {
       try {
-        // Pobierz wszystkie dane za jednym razem (optymalizacja N+1)
-        const entries = await db.getAllTimeEntries();
-        const allEmployees = await db.getActiveEmployees();
-        
-        // Pobierz wszystkie assignments
+        // Pobierz zapisane raporty miesięczne z monthlyEmployeeReports
+        // To zapewnia, że raporty nie zmienią się gdy zmienią się ustawienia pracownika
         const database = await db.getDb();
         if (!database) throw new Error("Database not available");
-        const allAssignments = await database.select().from(employeeProjectAssignments);
         
-        // Utwórz mapy dla szybkiego dostępu
-        const assignmentMap = new Map(allAssignments.map((a: any) => [a.id, a]));
-        const employeeMap = new Map(allEmployees.map(e => [e.id, e]));
+        const { monthlyEmployeeReports } = await import("../drizzle/schema");
+        const allReports = await database.select().from(monthlyEmployeeReports);
         
         // Grupuj po miesiącu i roku
         const reportMap = new Map<string, {
@@ -687,75 +797,50 @@ export const appRouter = router({
           employeeCount: Set<number>;
         }>();
         
-        for (const entry of entries) {
-          // workDate może być stringiem (YYYY-MM-DD) lub obiektem Date
-          const date = entry.workDate instanceof Date 
-            ? entry.workDate 
-            : new Date(entry.workDate);
+        for (const report of allReports) {
+          const key = `${report.year}-${report.month}`;
           
-          if (isNaN(date.getTime())) {
-            console.warn('[monthlyReports] Invalid date:', entry.workDate);
-            continue;
+          if (!reportMap.has(key)) {
+            reportMap.set(key, {
+              month: report.month,
+              year: report.year,
+              totalHours: 0,
+              totalRevenue: 0,
+              totalCost: 0,
+              totalProfit: 0,
+              employeeCount: new Set(),
+            });
           }
           
-          const month = date.getMonth() + 1;
-          const year = date.getFullYear();
-          const key = `${year}-${month}`;
+          const monthReport = reportMap.get(key)!;
           
-          const assignment = assignmentMap.get(entry.assignmentId);
-          if (!assignment) continue;
+          // Użyj zapisanych wartości z momentu zapisu raportu (snapshot)
+          const hours = report.hoursWorked / 100; // Konwersja z groszy na godziny (13100 -> 131h)
+          const revenue = report.revenue; // Już zapisane w groszach
+          const cost = report.actualCost ?? report.cost; // Użyj actualCost jeśli istnieje, w przeciwnym razie cost
+          const profit = report.profit; // Już zapisane w groszach
           
-          const employee = employeeMap.get(assignment.employeeId);
-          if (!employee) continue;
+          monthReport.totalHours += hours;
+          monthReport.totalRevenue += revenue;
+          monthReport.totalCost += cost;
+          monthReport.employeeCount.add(report.employeeId);
+        }
         
-        if (!reportMap.has(key)) {
-          reportMap.set(key, {
-            month,
-            year,
-            totalHours: 0,
-            totalRevenue: 0,
-            totalCost: 0,
-            totalProfit: 0,
-            employeeCount: new Set(),
+        // Oblicz totalProfit dla każdego miesiąca (revenue - cost)
+        for (const [key, report] of Array.from(reportMap.entries())) {
+          report.totalProfit = report.totalRevenue - report.totalCost;
+        }
+        
+        // Konwertuj na tablicę i sortuj
+        return Array.from(reportMap.values())
+          .map(r => ({
+            ...r,
+            employeeCount: r.employeeCount.size,
+          }))
+          .sort((a, b) => {
+            if (a.year !== b.year) return b.year - a.year;
+            return b.month - a.month;
           });
-        }
-        
-        const report = reportMap.get(key)!;
-        const hours = entry.hoursWorked / 100; // Konwersja z groszy na godziny (13100 -> 131h)
-        const revenue = Math.round(hours * assignment.hourlyRateClient); // godziny × stawka w groszach
-        
-        report.totalHours += hours; // Sumuj godziny (nie grosze)
-        report.totalRevenue += revenue;
-        report.employeeCount.add(assignment.employeeId);
-      }
-      
-      // Oblicz pełne miesięczne koszty pracowników dla każdego miesiąca
-      for (const [key, report] of Array.from(reportMap.entries())) {
-        let totalMonthlyCost = 0;
-        
-        // Dla każdego pracownika który miał wpisy w tym miesiącu, dodaj pełny miesięczny koszt
-        for (const employeeId of Array.from(report.employeeCount)) {
-          const employee = employeeMap.get(employeeId);
-          if (!employee) continue;
-          
-          // Użyj zapisanego kosztu miesięcznego (już zawiera urlopy)
-          totalMonthlyCost += employee.monthlyCostTotal;
-        }
-        
-        report.totalCost = totalMonthlyCost;
-        report.totalProfit = report.totalRevenue - totalMonthlyCost;
-      }
-      
-      // Konwertuj na tablicę i sortuj
-      return Array.from(reportMap.values())
-        .map(r => ({
-          ...r,
-          employeeCount: r.employeeCount.size,
-        }))
-        .sort((a, b) => {
-          if (a.year !== b.year) return b.year - a.year;
-          return b.month - a.month;
-        });
       } catch (error: any) {
         console.error('[monthlyReports] Error:', error);
         throw new Error(`Failed to fetch monthly reports: ${error.message}`);
@@ -1038,26 +1123,61 @@ export const appRouter = router({
       
       // Dla każdego pracownika pobierz godziny z time_entries
       for (const employee of employees) {
-        // Pobierz wszystkie wpisy godzinowe dla pracownika w bieżącym miesiącu
-        const entries = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
+        // Pobierz zapisany raport miesięczny (jeśli istnieje)
+        const savedReport = await db.getMonthlyReport(employee.id, year, month);
         
-        // Jeśli brak wpisów, pomiń pracownika
-        if (entries.length === 0) continue;
-        
-                // Zsumuj godziny (godziny są zapisane jako grosze, np. 13100 = 131h)
-        const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0) / 100; // Konwersja z groszy na godziny
-        
-        // Oblicz przychód: godziny × stawka klienta (w groszach)
-        const revenue = Math.round(totalHours * employee.hourlyRateClient);
-        totalRevenue += revenue;
-        
-        // Sprawdź czy jest custom koszt w monthlyEmployeeReports
-        const customReport = await db.getMonthlyReport(employee.id, year, month);
-        const employeeCost = customReport?.actualCost 
-          ? customReport.actualCost 
-          : employee.monthlyCostTotal;
-        
-        totalEmployeeCosts += employeeCost;
+        // Jeśli istnieje zapisany raport, użyj zapisanych wartości (snapshot)
+        if (savedReport && savedReport.hoursWorked > 0) {
+          // Użyj zapisanych wartości z momentu zapisu raportu
+          const revenue = savedReport.revenue; // Zapisany przychód
+          const employeeCost = savedReport.actualCost ?? savedReport.cost; // Użyj actualCost jeśli istnieje, w przeciwnym razie zapisany cost
+          
+          totalRevenue += revenue;
+          totalEmployeeCosts += employeeCost;
+        } else {
+          // Brak zapisanego raportu - użyj aktualnych danych
+          // Pobierz wszystkie wpisy godzinowe dla pracownika w bieżącym miesiącu z informacją o assignment
+          const database = await db.getDb();
+          if (!database) continue;
+          
+          const { timeEntries, employeeProjectAssignments } = await import("../drizzle/schema");
+          const { sql, eq, and } = await import("drizzle-orm");
+          
+          const entries = await database
+            .select({
+              hoursWorked: timeEntries.hoursWorked,
+              assignmentId: timeEntries.assignmentId,
+              hourlyRateClient: employeeProjectAssignments.hourlyRateClient,
+            })
+            .from(timeEntries)
+            .innerJoin(
+              employeeProjectAssignments,
+              eq(timeEntries.assignmentId, employeeProjectAssignments.id)
+            )
+            .where(
+              and(
+                eq(employeeProjectAssignments.employeeId, employee.id),
+                sql`YEAR(${timeEntries.workDate}) = ${year}`,
+                sql`MONTH(${timeEntries.workDate}) = ${month}`
+              )
+            );
+          
+          // Jeśli brak wpisów, pomiń pracownika
+          if (entries.length === 0) continue;
+          
+          // Oblicz przychód używając stawki z assignment dla każdego wpisu
+          let revenue = 0;
+          for (const entry of entries) {
+            const hours = entry.hoursWorked / 100; // Konwersja z groszy na godziny
+            const hourlyRate = entry.hourlyRateClient || employee.hourlyRateClient || 0;
+            revenue += Math.round(hours * hourlyRate);
+          }
+          
+          totalRevenue += revenue;
+          
+          // Użyj aktualnego kosztu pracownika
+          totalEmployeeCosts += employee.monthlyCostTotal;
+        }
       }
       
       // Pobierz koszty stałe
@@ -1084,6 +1204,15 @@ export const appRouter = router({
       
       const operatingProfit = totalRevenue - totalEmployeeCosts - totalFixedCosts;
       const operatingMargin = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0;
+      
+      // Debug log
+      console.log('[dashboard.kpi] Calculations:', {
+        totalRevenue: totalRevenue,
+        totalEmployeeCosts: totalEmployeeCosts,
+        totalFixedCosts: totalFixedCosts,
+        operatingProfit: operatingProfit,
+        operatingMargin: operatingMargin,
+      });
       
       return {
         totalRevenue: Math.round(totalRevenue), // Już w groszach z bazy (hourlyRateClient jest w groszach)
@@ -1112,26 +1241,60 @@ export const appRouter = router({
         
         // Dla każdego pracownika pobierz godziny z time_entries
         for (const employee of employees) {
-          // Pobierz wszystkie wpisy godzinowe dla pracownika w danym miesiącu
-          const entries = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
+          // Pobierz zapisany raport miesięczny (jeśli istnieje)
+          const savedReport = await db.getMonthlyReport(employee.id, year, month);
           
-          // Jeśli brak wpisów, pomiń pracownika
-          if (entries.length === 0) continue;
-          
-          // Zsumuj godziny (godziny są zapisane jako grosze, np. 13100 = 131h)
-          const totalHours = entries.reduce((sum: number, entry: any) => sum + entry.hoursWorked, 0) / 100; // Konwersja z groszy na godziny
-          
-          // Oblicz przychód: godziny × stawka klienta (w groszach)
-          const revenue = Math.round(totalHours * employee.hourlyRateClient);
-          totalRevenue += revenue;
-          
-          // Sprawdź czy jest custom koszt w monthlyEmployeeReports
-          const customReport = await db.getMonthlyReport(employee.id, year, month);
-          const employeeCost = customReport?.actualCost 
-            ? customReport.actualCost 
-            : employee.monthlyCostTotal;
-          
-          totalEmployeeCosts += employeeCost;
+          // Jeśli istnieje zapisany raport, użyj zapisanych wartości (snapshot)
+          if (savedReport && savedReport.hoursWorked > 0) {
+            // Użyj zapisanych wartości z momentu zapisu raportu
+            const revenue = savedReport.revenue; // Zapisany przychód
+            const employeeCost = savedReport.actualCost ?? savedReport.cost; // Użyj actualCost jeśli istnieje, w przeciwnym razie zapisany cost
+            
+            totalRevenue += revenue;
+            totalEmployeeCosts += employeeCost;
+          } else {
+            // Brak zapisanego raportu - użyj aktualnych danych
+            // Pobierz wszystkie wpisy godzinowe dla pracownika w danym miesiącu z informacją o assignment
+            const database = await db.getDb();
+            if (!database) continue;
+            
+            const { timeEntries, employeeProjectAssignments } = await import("../drizzle/schema");
+            const { sql, eq, and } = await import("drizzle-orm");
+            
+            const entries = await database
+              .select({
+                hoursWorked: timeEntries.hoursWorked,
+                hourlyRateClient: employeeProjectAssignments.hourlyRateClient,
+              })
+              .from(timeEntries)
+              .innerJoin(
+                employeeProjectAssignments,
+                eq(timeEntries.assignmentId, employeeProjectAssignments.id)
+              )
+              .where(
+                and(
+                  eq(employeeProjectAssignments.employeeId, employee.id),
+                  sql`YEAR(${timeEntries.workDate}) = ${year}`,
+                  sql`MONTH(${timeEntries.workDate}) = ${month}`
+                )
+              );
+            
+            // Jeśli brak wpisów, pomiń pracownika
+            if (entries.length === 0) continue;
+            
+            // Oblicz przychód używając stawki z assignment dla każdego wpisu
+            let revenue = 0;
+            for (const entry of entries) {
+              const hours = entry.hoursWorked / 100; // Konwersja z groszy na godziny
+              const hourlyRate = entry.hourlyRateClient || employee.hourlyRateClient || 0;
+              revenue += Math.round(hours * hourlyRate);
+            }
+            
+            totalRevenue += revenue;
+            
+            // Użyj aktualnego kosztu pracownika
+            totalEmployeeCosts += employee.monthlyCostTotal;
+          }
         }
         
         // Pobierz koszty stałe
@@ -1159,14 +1322,263 @@ export const appRouter = router({
         const operatingMargin = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0;
         
         return {
-          totalRevenue,
-          employeeCosts: totalEmployeeCosts,
-          fixedCosts: totalFixedCosts,
-          operatingProfit,
+          totalRevenue: Math.round(totalRevenue), // Zaokrąglij dla spójności z dashboard.kpi
+          employeeCosts: Math.round(totalEmployeeCosts), // Zaokrąglij dla spójności z dashboard.kpi
+          fixedCosts: totalFixedCosts, // Już zaokrąglone w reduce (monthlyCost)
+          operatingProfit: Math.round(operatingProfit), // Zaokrąglij dla spójności z dashboard.kpi
           operatingMargin: Math.round(operatingMargin * 100) / 100,
         };
       }),
-
+    
+    // Ranking pracowników według rentowności (cały rok)
+    getTopEmployeesByYear: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(20).default(10),
+        year: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const now = new Date();
+        const year = input?.year ?? now.getFullYear();
+        const limit = input?.limit ?? 10;
+        
+        const employees = await db.getActiveEmployees();
+        const employeeStats = [];
+        
+        for (const employee of employees) {
+          // Pobierz wszystkie zapisane raporty miesięczne dla tego pracownika w danym roku
+          const savedReports = await db.getMonthlyReportsByEmployeeAndYear(employee.id, year);
+          
+          let totalRevenue = 0;
+          let totalCost = 0;
+          let totalHours = 0;
+          
+          // Sumuj dane ze wszystkich miesięcy
+          for (const savedReport of savedReports) {
+            if (savedReport.hoursWorked > 0) {
+              totalRevenue += savedReport.revenue;
+              totalCost += savedReport.actualCost ?? savedReport.cost;
+              totalHours += savedReport.hoursWorked / 100; // Konwersja z groszy na godziny
+            }
+          }
+          
+          // Jeśli brak zapisanych raportów, spróbuj pobrać z timeEntries
+          if (totalHours === 0) {
+            const entries = await db.getTimeEntriesByEmployeeAndYear(employee.id, year);
+            if (entries.length > 0) {
+              // Grupuj godziny per miesiąc i oblicz dla każdego miesiąca
+              const monthlyHours: Record<number, number> = {};
+              for (const entry of entries) {
+                const entryDate = new Date(entry.workDate);
+                const month = entryDate.getMonth() + 1;
+                if (!monthlyHours[month]) {
+                  monthlyHours[month] = 0;
+                }
+                monthlyHours[month] += entry.hoursWorked;
+              }
+              
+              // Dla każdego miesiąca oblicz przychód i koszt
+              for (let month = 1; month <= 12; month++) {
+                const hours = (monthlyHours[month] || 0) / 100;
+                if (hours > 0) {
+                  const revenue = Math.round(hours * employee.hourlyRateClient);
+                  const cost = employee.monthlyCostTotal;
+                  totalRevenue += revenue;
+                  totalCost += cost;
+                  totalHours += hours;
+                }
+              }
+            }
+          }
+          
+          if (totalHours > 0) {
+            const totalProfit = totalRevenue - totalCost;
+            const margin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+            employeeStats.push({
+              employeeId: employee.id,
+              firstName: employee.firstName,
+              lastName: employee.lastName,
+              position: employee.position,
+              revenue: totalRevenue,
+              cost: totalCost,
+              profit: totalProfit,
+              hours: totalHours,
+              margin: Math.round(margin * 100) / 100,
+            });
+          }
+        }
+        
+        // Sortuj po zysku (malejąco) i zwróć top N
+        return employeeStats
+          .sort((a, b) => b.profit - a.profit)
+          .slice(0, limit);
+      }),
+    
+    // Ranking pracowników według rentowności (bieżący miesiąc)
+    getTopEmployees: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(20).default(10),
+        year: z.number().optional(),
+        month: z.number().min(1).max(12).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const now = new Date();
+        const year = input?.year ?? now.getFullYear();
+        const month = input?.month ?? now.getMonth() + 1;
+        const limit = input?.limit ?? 10;
+        
+        const employees = await db.getActiveEmployees();
+        const employeeStats = [];
+        
+        for (const employee of employees) {
+          // Pobierz zapisany raport miesięczny (jeśli istnieje)
+          const savedReport = await db.getMonthlyReport(employee.id, year, month);
+          
+          let revenue = 0;
+          let cost = 0;
+          let profit = 0;
+          let hours = 0;
+          
+          if (savedReport && savedReport.hoursWorked > 0) {
+            // Użyj zapisanych wartości
+            revenue = savedReport.revenue;
+            cost = savedReport.actualCost ?? savedReport.cost;
+            profit = savedReport.profit;
+            hours = savedReport.hoursWorked / 100;
+          } else {
+            // Brak zapisanego raportu - użyj aktualnych danych
+            const database = await db.getDb();
+            if (!database) continue;
+            
+            const { timeEntries, employeeProjectAssignments } = await import("../drizzle/schema");
+            const { sql, eq, and } = await import("drizzle-orm");
+            
+            const entries = await database
+              .select({
+                hoursWorked: timeEntries.hoursWorked,
+                hourlyRateClient: employeeProjectAssignments.hourlyRateClient,
+              })
+              .from(timeEntries)
+              .innerJoin(
+                employeeProjectAssignments,
+                eq(timeEntries.assignmentId, employeeProjectAssignments.id)
+              )
+              .where(
+                and(
+                  eq(employeeProjectAssignments.employeeId, employee.id),
+                  sql`YEAR(${timeEntries.workDate}) = ${year}`,
+                  sql`MONTH(${timeEntries.workDate}) = ${month}`
+                )
+              );
+            
+            if (entries.length === 0) continue;
+            
+            // Oblicz godziny i przychód używając stawki z assignment
+            hours = entries.reduce((sum, entry) => sum + entry.hoursWorked, 0) / 100;
+            revenue = 0;
+            for (const entry of entries) {
+              const entryHours = entry.hoursWorked / 100;
+              const hourlyRate = entry.hourlyRateClient || employee.hourlyRateClient || 0;
+              revenue += Math.round(entryHours * hourlyRate);
+            }
+            cost = employee.monthlyCostTotal;
+            profit = revenue - cost;
+          }
+          
+          if (hours > 0) {
+            const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+            employeeStats.push({
+              employeeId: employee.id,
+              firstName: employee.firstName,
+              lastName: employee.lastName,
+              position: employee.position,
+              revenue,
+              cost,
+              profit,
+              hours,
+              margin: Math.round(margin * 100) / 100,
+            });
+          }
+        }
+        
+        // Sortuj po zysku (malejąco) i zwróć top N
+        return employeeStats
+          .sort((a, b) => b.profit - a.profit)
+          .slice(0, limit);
+      }),
+    
+    // Analiza rentowności projektów
+    getProjectProfitability: protectedProcedure
+      .input(z.object({
+        year: z.number().optional(),
+        month: z.number().min(1).max(12).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const now = new Date();
+        const year = input?.year ?? now.getFullYear();
+        const month = input?.month ?? now.getMonth() + 1;
+        
+        const projects = await db.getAllProjects();
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
+        
+        const { employeeProjectAssignments, timeEntries } = await import("../drizzle/schema");
+        const { sql, eq, and } = await import("drizzle-orm");
+        
+        const projectStats = [];
+        
+        for (const project of projects) {
+          // Pobierz wszystkie assignments dla tego projektu
+          const assignments = await database
+            .select()
+            .from(employeeProjectAssignments)
+            .where(eq(employeeProjectAssignments.projectId, project.id));
+          
+          let totalRevenue = 0;
+          let totalCost = 0;
+          let totalHours = 0;
+          
+          for (const assignment of assignments) {
+            // Pobierz wpisy godzinowe dla tego assignment w danym miesiącu
+            const entries = await database
+              .select()
+              .from(timeEntries)
+              .where(
+                and(
+                  eq(timeEntries.assignmentId, assignment.id),
+                  sql`YEAR(${timeEntries.workDate}) = ${year}`,
+                  sql`MONTH(${timeEntries.workDate}) = ${month}`
+                )
+              );
+            
+            const hours = entries.reduce((sum, entry) => sum + entry.hoursWorked, 0) / 100;
+            const revenue = Math.round(hours * assignment.hourlyRateClient);
+            const cost = Math.round(hours * assignment.hourlyRateCost);
+            
+            totalRevenue += revenue;
+            totalCost += cost;
+            totalHours += hours;
+          }
+          
+          const profit = totalRevenue - totalCost;
+          const margin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+          
+          projectStats.push({
+            projectId: project.id,
+            projectName: project.name,
+            clientId: project.clientId,
+            status: project.status,
+            revenue: totalRevenue,
+            cost: totalCost,
+            profit,
+            hours: totalHours,
+            margin: Math.round(margin * 100) / 100,
+          });
+        }
+        
+        // Sortuj po zysku (malejąco)
+        return projectStats.sort((a, b) => b.profit - a.profit);
+      }),
+    
     // Trendy zysków/strat (ostatnie N miesięcy)
     getProfitTrends: protectedProcedure
       .input(z.object({

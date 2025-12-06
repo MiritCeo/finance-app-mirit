@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -17,11 +17,122 @@ export default function Employees() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isAssignmentDialogOpen, setIsAssignmentDialogOpen] = useState(false);
+  const [isManageProjectsDialogOpen, setIsManageProjectsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
+  const [assigningEmployee, setAssigningEmployee] = useState<any>(null);
+  const [managingEmployee, setManagingEmployee] = useState<any>(null);
+  const [editingAssignment, setEditingAssignment] = useState<any>(null);
+  
+  // Filtry i wyszukiwanie
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterEmploymentType, setFilterEmploymentType] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   
   const { data: employees, isLoading, refetch } = trpc.employees.list.useQuery(undefined, {
     enabled: !!user,
   });
+  
+  const { data: projects } = trpc.projects.list.useQuery(undefined, {
+    enabled: !!user,
+  });
+  
+  const createAssignmentMutation = trpc.assignments.create.useMutation({
+    onSuccess: () => {
+      toast.success("Pracownik przypisany do projektu");
+      setIsAssignmentDialogOpen(false);
+      setAssigningEmployee(null);
+      resetAssignmentForm();
+      if (managingEmployee) {
+        utils.assignments.byEmployee.invalidate({ employeeId: managingEmployee.id });
+      }
+    },
+    onError: (error) => {
+      toast.error("Błąd: " + error.message);
+    },
+  });
+  
+  const updateAssignmentMutation = trpc.assignments.update.useMutation({
+    onSuccess: () => {
+      toast.success("Przypisanie zaktualizowane");
+      setIsAssignmentDialogOpen(false);
+      setAssigningEmployee(null);
+      resetAssignmentForm();
+      if (managingEmployee) {
+        utils.assignments.byEmployee.invalidate({ employeeId: managingEmployee.id });
+      }
+    },
+    onError: (error) => {
+      toast.error("Błąd: " + error.message);
+    },
+  });
+  
+  const deleteAssignmentMutation = trpc.assignments.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Pracownik wypisany z projektu");
+      if (managingEmployee) {
+        utils.assignments.byEmployee.invalidate({ employeeId: managingEmployee.id });
+      }
+    },
+    onError: (error) => {
+      toast.error("Błąd: " + error.message);
+    },
+  });
+  
+  const { data: employeeAssignments } = trpc.assignments.byEmployee.useQuery(
+    { employeeId: managingEmployee?.id || 0 },
+    { enabled: !!managingEmployee && !!user }
+  );
+  
+  const [assignmentFormData, setAssignmentFormData] = useState({
+    projectId: "",
+  });
+  
+  const resetAssignmentForm = () => {
+    setAssignmentFormData({
+      projectId: "",
+    });
+    setEditingAssignment(null);
+  };
+  
+  const handleAssign = (employee: any) => {
+    setAssigningEmployee(employee);
+    setAssignmentFormData({
+      projectId: "",
+    });
+    setIsAssignmentDialogOpen(true);
+  };
+  
+  const handleManageProjects = (employee: any) => {
+    setManagingEmployee(employee);
+    setIsManageProjectsDialogOpen(true);
+  };
+  
+  const handleDeleteAssignment = (assignmentId: number) => {
+    if (confirm("Czy na pewno chcesz wypisać pracownika z tego projektu?")) {
+      deleteAssignmentMutation.mutate({ id: assignmentId });
+    }
+  };
+  
+  const handleAssignmentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assigningEmployee) return;
+    
+    if (editingAssignment) {
+      // Edycja nie jest potrzebna - tylko usuwanie
+      return;
+    } else {
+      // Tworzenie nowego przypisania - użyj domyślnych stawek z profilu pracownika
+      createAssignmentMutation.mutate({
+        employeeId: assigningEmployee.id,
+        projectId: parseInt(assignmentFormData.projectId),
+        hourlyRateClient: assigningEmployee.hourlyRateClient || 0,
+        hourlyRateCost: assigningEmployee.hourlyRateCost || 0,
+      });
+    }
+  };
   
   const createMutation = trpc.employees.create.useMutation({
     onSuccess: () => {
@@ -215,6 +326,59 @@ export default function Employees() {
     zlecenie_studenckie: "Zlecenie studenckie",
   };
 
+  // Filtrowanie i sortowanie pracowników
+  const filteredAndSortedEmployees = employees?.filter(employee => {
+    // Wyszukiwanie
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = !searchTerm || 
+      employee.firstName.toLowerCase().includes(searchLower) ||
+      employee.lastName.toLowerCase().includes(searchLower) ||
+      (employee.position?.toLowerCase().includes(searchLower) ?? false);
+    
+    // Filtr typu umowy
+    const matchesEmploymentType = filterEmploymentType === "all" || employee.employmentType === filterEmploymentType;
+    
+    // Filtr statusu
+    const matchesStatus = filterStatus === "all" || 
+      (filterStatus === "active" && employee.isActive === true) ||
+      (filterStatus === "inactive" && employee.isActive === false);
+    
+    return matchesSearch && matchesEmploymentType && matchesStatus;
+  }).sort((a, b) => {
+    let comparison = 0;
+    
+    switch (sortBy) {
+      case "name":
+        comparison = `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+        break;
+      case "position":
+        comparison = (a.position || "").localeCompare(b.position || "");
+        break;
+      case "employmentType":
+        comparison = a.employmentType.localeCompare(b.employmentType);
+        break;
+      case "netSalary":
+        comparison = a.monthlySalaryNet - b.monthlySalaryNet;
+        break;
+      case "totalCost":
+        comparison = a.monthlyCostTotal - b.monthlyCostTotal;
+        break;
+      case "monthlyProfit": {
+        const profitA = (168 * a.hourlyRateClient) / 100 - a.monthlyCostTotal / 100;
+        const profitB = (168 * b.hourlyRateClient) / 100 - b.monthlyCostTotal / 100;
+        comparison = profitA - profitB;
+        break;
+      }
+      case "status":
+        comparison = (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0);
+        break;
+      default:
+        comparison = 0;
+    }
+    
+    return sortOrder === "asc" ? comparison : -comparison;
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -224,23 +388,18 @@ export default function Employees() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <Button
-        variant="ghost"
-        onClick={() => setLocation("/")}
-        className="mb-4"
-      >
-        <ArrowLeft className="w-4 h-4 mr-2" />
-        Wróć do dashboardu
-      </Button>
+    <div className="container mx-auto max-w-7xl space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Pracownicy</h1>
-          <p className="text-muted-foreground">Zarządzaj zespołem</p>
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Users className="h-6 w-6" />
+            Pracownicy
+          </h1>
+          <p className="text-muted-foreground">Zarządzaj pracownikami i ich kosztami</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => { setEditingEmployee(null); resetForm(); }}>
+            <Button onClick={() => { setEditingEmployee(null); resetForm(); }} className="shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
               <Plus className="w-4 h-4 mr-2" />
               Dodaj pracownika
             </Button>
@@ -423,10 +582,80 @@ export default function Employees() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Filtry i wyszukiwanie */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Szukaj po imieniu, nazwisku, stanowisku..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-10"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Select value={filterEmploymentType} onValueChange={setFilterEmploymentType}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Typ umowy" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Wszystkie typy</SelectItem>
+                <SelectItem value="uop">Umowa o pracę</SelectItem>
+                <SelectItem value="b2b">B2B</SelectItem>
+                <SelectItem value="zlecenie">Zlecenie</SelectItem>
+                <SelectItem value="zlecenie_studenckie">Zlecenie studenckie</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Wszystkie</SelectItem>
+                <SelectItem value="active">Aktywni</SelectItem>
+                <SelectItem value="inactive">Nieaktywni</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={`${sortBy}-${sortOrder}`} onValueChange={(v) => {
+              const [by, order] = v.split("-");
+              setSortBy(by);
+              setSortOrder(order as "asc" | "desc");
+            }}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="Sortuj" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name-asc">Imię A-Z</SelectItem>
+                <SelectItem value="name-desc">Imię Z-A</SelectItem>
+                <SelectItem value="position-asc">Stanowisko A-Z</SelectItem>
+                <SelectItem value="position-desc">Stanowisko Z-A</SelectItem>
+                <SelectItem value="netSalary-desc">Wynagrodzenie ↓</SelectItem>
+                <SelectItem value="netSalary-asc">Wynagrodzenie ↑</SelectItem>
+                <SelectItem value="totalCost-desc">Koszt ↓</SelectItem>
+                <SelectItem value="totalCost-asc">Koszt ↑</SelectItem>
+                <SelectItem value="monthlyProfit-desc">Zysk ↓</SelectItem>
+                <SelectItem value="monthlyProfit-asc">Zysk ↑</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {filteredAndSortedEmployees && filteredAndSortedEmployees.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              Brak pracowników spełniających kryteria wyszukiwania
+            </div>
+          )}
+          
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Imię i nazwisko</TableHead>
+              <TableRow className="bg-muted/50">
+                <TableHead className="font-semibold">Imię i nazwisko</TableHead>
                 <TableHead>Stanowisko</TableHead>
                 <TableHead>Typ umowy</TableHead>
                 <TableHead className="text-right">Netto</TableHead>
@@ -444,7 +673,7 @@ export default function Employees() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees?.map((employee) => {
+              {filteredAndSortedEmployees?.map((employee, idx) => {
                 // Używamy zapisanych wartości z bazy danych
                 const vacationCostMonthly = employee.vacationCostMonthly / 100;
                 const vacationCostAnnual = employee.vacationCostAnnual / 100;
@@ -528,9 +757,18 @@ export default function Employees() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => handleManageProjects(employee)}
+                          title="Zarządzaj projektami"
+                          className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 transition-all duration-200 hover:scale-110"
+                        >
+                          <Briefcase className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => setLocation(`/employee/${employee.id}/annual-report`)}
                           title="Raport roczny godzinowy"
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-all duration-200 hover:scale-110"
                         >
                           <Calendar className="w-4 h-4 mr-1" />
                           <span className="text-xs">Raport</span>
@@ -540,6 +778,7 @@ export default function Employees() {
                           size="sm"
                           onClick={() => handleEdit(employee)}
                           title="Edytuj pracownika"
+                          className="hover:bg-primary/10 transition-all duration-200 hover:scale-110"
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
@@ -552,7 +791,7 @@ export default function Employees() {
                             }
                           }}
                           title="Usuń pracownika"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200 hover:scale-110"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -572,6 +811,120 @@ export default function Employees() {
           </Table>
         </CardContent>
       </Card>
+      
+      {/* Dialog przypisania do projektu */}
+      <Dialog open={isAssignmentDialogOpen} onOpenChange={(open) => {
+        setIsAssignmentDialogOpen(open);
+        if (!open) {
+          resetAssignmentForm();
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <form onSubmit={handleAssignmentSubmit}>
+            <DialogHeader>
+              <DialogTitle>Przypisz pracownika do projektu</DialogTitle>
+              <DialogDescription>
+                {assigningEmployee && `Przypisz ${assigningEmployee.firstName} ${assigningEmployee.lastName} do projektu`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="projectId">Projekt</Label>
+                <Select
+                  value={assignmentFormData.projectId}
+                  onValueChange={(value) => setAssignmentFormData({ ...assignmentFormData, projectId: value })}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Wybierz projekt" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects?.map((project) => (
+                      <SelectItem key={project.id} value={project.id.toString()}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={createAssignmentMutation.isPending}>
+                {createAssignmentMutation.isPending && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
+                Przypisz
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Dialog zarządzania projektami */}
+      <Dialog open={isManageProjectsDialogOpen} onOpenChange={setIsManageProjectsDialogOpen}>
+        <DialogContent className="sm:max-w-[700px]">
+          <DialogHeader>
+            <DialogTitle>Zarządzaj projektami - {managingEmployee?.firstName} {managingEmployee?.lastName}</DialogTitle>
+            <DialogDescription>
+              Przypisania pracownika do projektów z możliwością edycji stawki lub wypisania
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Lista przypisań */}
+            {employeeAssignments && employeeAssignments.length > 0 ? (
+              <div className="space-y-3">
+                {employeeAssignments.map((assignment: any) => {
+                  const project = projects?.find(p => p.id === assignment.projectId);
+                  return (
+                    <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex-1">
+                        <p className="font-medium">{project?.name || `Projekt #${assignment.projectId}`}</p>
+                        <span className={`inline-block mt-2 px-2 py-1 rounded text-xs ${
+                          assignment.isActive 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {assignment.isActive ? 'Aktywne' : 'Nieaktywne'}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteAssignment(assignment.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Wypisz
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Brak przypisań do projektów
+              </p>
+            )}
+            
+            {/* Przycisk dodania nowego projektu */}
+            <div className="border-t pt-4">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setIsManageProjectsDialogOpen(false);
+                  handleAssign(managingEmployee);
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Dodaj nowy projekt
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

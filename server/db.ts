@@ -211,6 +211,12 @@ export async function updateProject(id: number, project: Partial<InsertProject>)
   await db.update(projects).set(project).where(eq(projects.id, id));
 }
 
+export async function deleteProject(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(projects).where(eq(projects.id, id));
+}
+
 // ============ ASSIGNMENT HELPERS ============
 
 export async function getAssignmentsByProject(projectId: number) {
@@ -230,6 +236,18 @@ export async function createAssignment(assignment: InsertEmployeeProjectAssignme
   if (!db) throw new Error("Database not available");
   const result = await db.insert(employeeProjectAssignments).values(assignment);
   return Number(result[0].insertId);
+}
+
+export async function updateAssignment(id: number, assignment: Partial<InsertEmployeeProjectAssignment>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(employeeProjectAssignments).set(assignment).where(eq(employeeProjectAssignments.id, id));
+}
+
+export async function deleteAssignment(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(employeeProjectAssignments).where(eq(employeeProjectAssignments.id, id));
 }
 
 export async function getAssignmentById(id: number) {
@@ -478,9 +496,17 @@ export async function upsertMonthlyReport(data: {
   );
   
   if (existing.length > 0) {
-    // Update
+    // Update tylko actualCost i przelicz profit (nie nadpisuj zapisanych wartości)
+    const report = existing[0];
+    const cost = data.actualCost ?? report.cost; // Użyj actualCost jeśli istnieje, w przeciwnym razie cost
+    const profit = report.revenue - cost; // Przelicz profit
+    
     await database.update(monthlyEmployeeReports)
-      .set({ actualCost: data.actualCost, updatedAt: new Date() })
+      .set({ 
+        actualCost: data.actualCost, 
+        profit: profit,
+        updatedAt: new Date() 
+      })
       .where(sql`${monthlyEmployeeReports.id} = ${existing[0].id}`);
     return existing[0].id;
   } else {
@@ -495,6 +521,76 @@ export async function upsertMonthlyReport(data: {
       revenue: 0,
       cost: 0,
       profit: 0,
+    });
+    return result[0].insertId;
+  }
+}
+
+// Zapisz pełny raport miesięczny z wartościami z momentu zapisu (snapshot)
+export async function saveMonthlyReportSnapshot(data: {
+  employeeId: number;
+  year: number;
+  month: number;
+  hoursWorked: number; // w groszach (13100 = 131h)
+  hourlyRateClient: number; // w groszach
+  monthlyCostTotal: number; // w groszach
+}) {
+  const database = await getDb();
+  if (!database) return 0;
+  
+  const revenue = Math.round((data.hoursWorked / 100) * data.hourlyRateClient); // godziny × stawka
+  const profit = revenue - data.monthlyCostTotal;
+  
+  const existing = await database.select().from(monthlyEmployeeReports).where(
+    sql`${monthlyEmployeeReports.employeeId} = ${data.employeeId} AND ${monthlyEmployeeReports.year} = ${data.year} AND ${monthlyEmployeeReports.month} = ${data.month}`
+  );
+  
+  if (existing.length > 0) {
+    // Update - SUMUJ godziny i przychody zamiast nadpisywać
+    // ZAWSZE zachowaj zapisany cost (wartość historyczna z momentu pierwszego zapisu)
+    const existingReport = existing[0];
+    
+    // Sumuj godziny (oba są w groszach)
+    const totalHoursWorked = existingReport.hoursWorked + data.hoursWorked;
+    
+    // Sumuj przychody (oba są w groszach)
+    const existingRevenue = existingReport.revenue || 0;
+    const totalRevenue = existingRevenue + revenue;
+    
+    // Oblicz średnią ważoną stawki
+    // totalRevenue jest w groszach, totalHoursWorked jest w groszach (godziny * 100)
+    const totalHours = totalHoursWorked / 100; // Konwersja na godziny
+    const averageHourlyRate = totalHours > 0 
+      ? Math.round(totalRevenue / totalHours) // Przychód w groszach / godziny = stawka w groszach
+      : existingReport.hourlyRateClient || data.hourlyRateClient;
+    
+    // Przelicz zysk na podstawie sumy przychodów
+    const totalProfit = totalRevenue - existingReport.cost;
+    
+    await database.update(monthlyEmployeeReports)
+      .set({
+        hoursWorked: totalHoursWorked, // Suma godzin (w groszach)
+        hourlyRateClient: averageHourlyRate, // Średnia ważona stawka w groszach (już obliczona)
+        revenue: totalRevenue, // Suma przychodów (w groszach)
+        // ZACHOWAJ zapisaną wartość cost (nie nadpisuj wartości historycznej)
+        cost: existingReport.cost, // Użyj istniejącej wartości, nie nadpisuj
+        profit: totalProfit, // Przeliczony zysk
+        updatedAt: new Date(),
+      })
+      .where(sql`${monthlyEmployeeReports.id} = ${existing[0].id}`);
+    return existing[0].id;
+  } else {
+    // Insert
+    const result = await database.insert(monthlyEmployeeReports).values({
+      employeeId: data.employeeId,
+      year: data.year,
+      month: data.month,
+      hoursWorked: data.hoursWorked,
+      hourlyRateClient: data.hourlyRateClient,
+      revenue: revenue,
+      cost: data.monthlyCostTotal,
+      actualCost: null,
+      profit: profit,
     });
     return result[0].insertId;
   }

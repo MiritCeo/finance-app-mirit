@@ -126,18 +126,16 @@ export default function Clients() {
   }
 
   return (
-    <div className="container py-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Building2 className="h-8 w-8" />
+    <div className="container mx-auto max-w-7xl space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Building2 className="h-6 w-6" />
             Klienci
           </h1>
-          <p className="text-muted-foreground mt-2">
-            Zarządzaj bazą klientów firmy
-          </p>
+          <p className="text-muted-foreground">Zarządzaj bazą klientów firmy</p>
         </div>
-        <Button onClick={() => openDialog()} size="lg">
+        <Button onClick={() => openDialog()} size="lg" className="shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
           <Plus className="mr-2 h-4 w-4" />
           Dodaj klienta
         </Button>
@@ -166,18 +164,18 @@ export default function Clients() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Nazwa</TableHead>
-                  <TableHead>Osoba kontaktowa</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Telefon</TableHead>
-                  <TableHead>Adres</TableHead>
-                  <TableHead className="text-right">Akcje</TableHead>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold">Nazwa</TableHead>
+                  <TableHead className="font-semibold">Osoba kontaktowa</TableHead>
+                  <TableHead className="font-semibold">Email</TableHead>
+                  <TableHead className="font-semibold">Telefon</TableHead>
+                  <TableHead className="font-semibold">Adres</TableHead>
+                  <TableHead className="text-right font-semibold">Akcje</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {clients.map((client) => (
-                  <TableRow key={client.id}>
+                  <TableRow key={client.id} className="hover:bg-primary/5 transition-colors duration-200">
                     <TableCell className="font-medium">{client.name}</TableCell>
                     <TableCell>{client.contactPerson || "-"}</TableCell>
                     <TableCell>{client.email || "-"}</TableCell>
@@ -189,6 +187,7 @@ export default function Clients() {
                           variant="ghost"
                           size="sm"
                           onClick={() => openDialog(client)}
+                          className="hover:bg-primary/10 transition-all duration-200 hover:scale-110"
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
