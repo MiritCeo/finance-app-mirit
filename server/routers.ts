@@ -464,6 +464,107 @@ export const appRouter = router({
         await db.deleteProject(input.id);
         return { success: true };
       }),
+    
+    getStats: protectedProcedure
+      .input(z.object({
+        year: z.number().optional(),
+        month: z.number().min(1).max(12).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const now = new Date();
+        const year = input?.year ?? now.getFullYear();
+        const month = input?.month ?? now.getMonth() + 1;
+        
+        const projects = await db.getAllProjects();
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
+        
+        const { employeeProjectAssignments, timeEntries } = await import("../drizzle/schema");
+        const { sql, eq, and } = await import("drizzle-orm");
+        
+        // Pobierz wszystkich aktywnych pracowników dla weryfikacji
+        const activeEmployees = await db.getActiveEmployees();
+        const activeEmployeeIds = new Set(activeEmployees.map(emp => emp.id));
+        
+        const projectStats = [];
+        
+        for (const project of projects) {
+          // Pobierz tylko aktywne assignments dla tego projektu
+          const assignments = await database
+            .select({
+              id: employeeProjectAssignments.id,
+              employeeId: employeeProjectAssignments.employeeId,
+              hourlyRateClient: employeeProjectAssignments.hourlyRateClient,
+              hourlyRateCost: employeeProjectAssignments.hourlyRateCost,
+            })
+            .from(employeeProjectAssignments)
+            .where(
+              and(
+                eq(employeeProjectAssignments.projectId, project.id),
+                eq(employeeProjectAssignments.isActive, true)
+              )
+            );
+          
+          // Filtruj tylko assignments z aktywnymi pracownikami
+          const activeAssignments = assignments.filter(a => activeEmployeeIds.has(a.employeeId));
+          
+          // Policz unikalnych aktywnych pracowników
+          const uniqueEmployees = new Set(activeAssignments.map(a => a.employeeId));
+          const employeeCount = uniqueEmployees.size;
+          
+          let totalRevenue = 0;
+          let totalCost = 0;
+          let totalHours = 0;
+          
+          // Używaj tylko aktywnych assignments do obliczeń
+          for (const assignment of activeAssignments) {
+            // Pobierz wpisy godzinowe dla tego assignment w danym miesiącu
+            const entries = await database
+              .select()
+              .from(timeEntries)
+              .where(
+                and(
+                  eq(timeEntries.assignmentId, assignment.id),
+                  sql`YEAR(${timeEntries.workDate}) = ${year}`,
+                  sql`MONTH(${timeEntries.workDate}) = ${month}`
+                )
+              );
+            
+            const hours = entries.reduce((sum, entry) => sum + entry.hoursWorked, 0) / 100;
+            const revenue = Math.round(hours * assignment.hourlyRateClient);
+            const cost = Math.round(hours * assignment.hourlyRateCost);
+            
+            totalRevenue += revenue;
+            totalCost += cost;
+            totalHours += hours;
+          }
+          
+          const profit = totalRevenue - totalCost;
+          const margin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+          
+          // Oblicz średnią stawkę godzinową (dla klienta) na podstawie aktywnych assignments
+          let totalRateSum = 0;
+          let rateCount = 0;
+          for (const assignment of activeAssignments) {
+            totalRateSum += assignment.hourlyRateClient;
+            rateCount++;
+          }
+          const averageHourlyRate = rateCount > 0 ? Math.round(totalRateSum / rateCount) : 0;
+          
+          projectStats.push({
+            projectId: project.id,
+            employeeCount: employeeCount,
+            revenue: totalRevenue,
+            cost: totalCost,
+            profit,
+            hours: totalHours,
+            margin: Math.round(margin * 100) / 100,
+            averageHourlyRate: averageHourlyRate,
+          });
+        }
+        
+        return projectStats;
+      }),
   }),
 
   // ============ ASSIGNMENTS ============
@@ -1110,10 +1211,15 @@ export const appRouter = router({
 
   // ============ DASHBOARD / REPORTS ============
   dashboard: router({
-    kpi: protectedProcedure.query(async () => {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth() + 1;
+    kpi: protectedProcedure
+      .input(z.object({
+        year: z.number().optional(),
+        month: z.number().min(1).max(12).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const now = new Date();
+        const year = input?.year ?? now.getFullYear();
+        const month = input?.month ?? (now.getMonth() + 1);
       
       // Pobierz wszystkich aktywnych pracowników
       const employees = await db.getActiveEmployees();
@@ -1529,9 +1635,18 @@ export const appRouter = router({
         for (const project of projects) {
           // Pobierz wszystkie assignments dla tego projektu
           const assignments = await database
-            .select()
+            .select({
+              id: employeeProjectAssignments.id,
+              employeeId: employeeProjectAssignments.employeeId,
+              hourlyRateClient: employeeProjectAssignments.hourlyRateClient,
+              hourlyRateCost: employeeProjectAssignments.hourlyRateCost,
+            })
             .from(employeeProjectAssignments)
             .where(eq(employeeProjectAssignments.projectId, project.id));
+          
+          // Policz unikalnych pracowników
+          const uniqueEmployees = new Set(assignments.map(a => a.employeeId));
+          const employeeCount = uniqueEmployees.size;
           
           let totalRevenue = 0;
           let totalCost = 0;
@@ -1562,6 +1677,15 @@ export const appRouter = router({
           const profit = totalRevenue - totalCost;
           const margin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
           
+          // Oblicz średnią stawkę godzinową (dla klienta) na podstawie wszystkich assignments
+          let totalRateSum = 0;
+          let rateCount = 0;
+          for (const assignment of assignments) {
+            totalRateSum += assignment.hourlyRateClient;
+            rateCount++;
+          }
+          const averageHourlyRate = rateCount > 0 ? Math.round(totalRateSum / rateCount) : 0;
+          
           projectStats.push({
             projectId: project.id,
             projectName: project.name,
@@ -1572,6 +1696,8 @@ export const appRouter = router({
             profit,
             hours: totalHours,
             margin: Math.round(margin * 100) / 100,
+            employeeCount: employeeCount,
+            averageHourlyRate: averageHourlyRate,
           });
         }
         
@@ -1828,6 +1954,7 @@ export const appRouter = router({
           startDate: z.string().optional(),
           endDate: z.string().optional(),
           technologies: z.string().optional(),
+          keywords: z.string().optional(), // Słowa kluczowe dla projektu (pomocne dla AI)
         })).optional(),
       }))
       .mutation(async ({ input }) => {
@@ -1866,10 +1993,11 @@ export const appRouter = router({
     generateHTML: protectedProcedure
       .input(z.object({
         employeeId: z.number(),
+        language: z.enum(["pl", "en"]).default("pl"), // Język CV: pl = polski, en = angielski
       }))
       .mutation(async ({ input }) => {
         const { generateCVHTML } = await import("./cvGenerator");
-        const result = await generateCVHTML(input.employeeId);
+        const result = await generateCVHTML(input.employeeId, input.language);
         return result;
       }),
     
@@ -1891,6 +2019,19 @@ export const appRouter = router({
           throw new Error("CV history not found");
         }
         return history;
+      }),
+    
+    deleteHistory: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        const history = await db.getCVHistoryById(input.id);
+        if (!history) {
+          throw new Error("CV history not found");
+        }
+        await db.deleteCVHistory(input.id);
+        return { success: true };
       }),
   }),
 });

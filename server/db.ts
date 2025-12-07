@@ -228,7 +228,15 @@ export async function deleteProject(id: number) {
 export async function getAssignmentsByProject(projectId: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(employeeProjectAssignments).where(eq(employeeProjectAssignments.projectId, projectId));
+  return await db
+    .select()
+    .from(employeeProjectAssignments)
+    .where(
+      and(
+        eq(employeeProjectAssignments.projectId, projectId),
+        eq(employeeProjectAssignments.isActive, true)
+      )
+    );
 }
 
 export async function getAssignmentsByEmployee(employeeId: number) {
@@ -928,6 +936,7 @@ export async function createOrUpdateEmployeeCV(data: {
           startDate: project.startDate ? new Date(project.startDate) : null,
           endDate: project.endDate ? new Date(project.endDate) : null,
           technologies: project.technologies || null,
+          keywords: project.keywords || null,
         }))
       );
     } catch (error: any) {
@@ -960,7 +969,7 @@ export async function getEmployeeCVProjects(cvId: number) {
     .where(eq(employeeCVProjects.cvId, cvId));
 }
 
-export async function saveCVHistory(employeeId: number, cvId: number, htmlContent: string) {
+export async function saveCVHistory(employeeId: number, cvId: number, htmlContent: string, language: "pl" | "en" = "pl") {
   const database = await getDb();
   if (!database) throw new Error("Database not available");
   
@@ -969,6 +978,7 @@ export async function saveCVHistory(employeeId: number, cvId: number, htmlConten
     employeeId,
     cvId,
     htmlContent,
+    language,
   });
   
   // Pobierz wszystkie wersje dla tego pracownika
@@ -1014,4 +1024,15 @@ export async function getCVHistoryById(id: number) {
     .limit(1);
   
   return result[0] || null;
+}
+
+export async function deleteCVHistory(id: number) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  
+  const result = await database
+    .delete(employeeCVHistory)
+    .where(eq(employeeCVHistory.id, id));
+  
+  return { success: true };
 }

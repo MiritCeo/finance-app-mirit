@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Plus, BookOpen, Trash2, Edit } from "lucide-react";
+import { Loader2, Plus, BookOpen, Trash2, Edit, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 const labelColors: Record<string, string> = {
   "Finanse": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
@@ -21,6 +22,7 @@ const labelColors: Record<string, string> = {
 const labelOptions = Object.keys(labelColors);
 
 export default function KnowledgeBasePage() {
+  const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<{ id: number; title: string; content: string; label: string | null } | null>(null);
@@ -96,6 +98,10 @@ export default function KnowledgeBasePage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      <Button onClick={() => setLocation("/")} variant="outline" className="mb-4">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Powrót do dashboardu
+      </Button>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">📚 Baza Wiedzy</h1>

@@ -389,6 +389,10 @@ export default function Employees() {
 
   return (
     <div className="container mx-auto max-w-7xl space-y-6">
+      <Button onClick={() => setLocation("/")} variant="outline" className="mb-4">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Powrót do dashboardu
+      </Button>
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold flex items-center gap-2">

@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 export default function Simulator() {
   const { user } = useAuth();
@@ -65,6 +66,10 @@ export default function Simulator() {
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-4xl">
+      <Button onClick={() => setLocation("/")} variant="outline" className="mb-4">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Powrót do dashboardu
+      </Button>
       <div>
         <h1 className="text-3xl font-bold">Symulator wypłaty właściciela</h1>
         <p className="text-muted-foreground">

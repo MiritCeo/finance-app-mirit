@@ -307,6 +307,7 @@ export const employeeCVProjects = mysqlTable("employeeCVProjects", {
   startDate: date("startDate"),
   endDate: date("endDate"),
   technologies: text("technologies"), // Technologie użyte w projekcie (JSON lub tekst oddzielony przecinkami)
+  keywords: text("keywords"), // Słowa kluczowe dla projektu (np. "architektura, optymalizacja, zespół, skalowalność") - pomocne dla AI przy generowaniu opisów
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -338,6 +339,7 @@ export const employeeCVHistory = mysqlTable("employeeCVHistory", {
   employeeId: int("employeeId").notNull(),
   cvId: int("cvId").notNull(), // Wersja CV na podstawie której wygenerowano
   htmlContent: text("htmlContent").notNull(), // Wygenerowany HTML
+  language: mysqlEnum("language", ["pl", "en"]).default("pl").notNull(), // Język CV (pl = polski, en = angielski)
   generatedAt: timestamp("generatedAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

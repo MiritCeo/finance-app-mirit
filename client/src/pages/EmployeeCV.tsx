@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Edit, Plus, Trash2, FileCheck } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowLeft, Loader2, Edit, Plus, Trash2, FileCheck, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { CV_TECHNOLOGIES, TECHNOLOGY_CATEGORIES, type Technology } from "../../../shared/cvTechnologies";
@@ -23,6 +23,8 @@ export default function EmployeeCV() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
+  const [isLanguageDialogOpen, setIsLanguageDialogOpen] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState<"pl" | "en">("pl");
   
   const { data: cvData, isLoading, refetch } = trpc.employeeCV.get.useQuery(
     { employeeId },
@@ -78,6 +80,7 @@ export default function EmployeeCV() {
     startDate: "",
     endDate: "",
     technologies: "",
+    keywords: "", // Słowa kluczowe dla projektu (np. "architektura, optymalizacja, zespół")
   });
   
   const resetForm = () => {
@@ -214,6 +217,7 @@ export default function EmployeeCV() {
           startDate: projectForm.startDate || undefined,
           endDate: projectForm.endDate || undefined,
           technologies: projectForm.technologies || undefined,
+          keywords: projectForm.keywords || undefined,
         }],
       });
       setProjectForm({
@@ -292,9 +296,33 @@ export default function EmployeeCV() {
   });
   
   const handleGenerateNewVersion = () => {
-    if (confirm("Czy na pewno chcesz wygenerować nową wersję CV HTML na podstawie aktualnych danych pracownika? To wygeneruje profesjonalne CV z pomocą AI.")) {
-      setIsGenerating(true);
-      generateHTMLMutation.mutate({ employeeId });
+    // Otwórz dialog wyboru języka
+    setIsLanguageDialogOpen(true);
+  };
+  
+  const handleConfirmGenerate = () => {
+    setIsLanguageDialogOpen(false);
+    setIsGenerating(true);
+    generateHTMLMutation.mutate({ 
+      employeeId,
+      language: selectedLanguage
+    });
+  };
+  
+  const deleteHistoryMutation = trpc.employeeCV.deleteHistory.useMutation({
+    onSuccess: () => {
+      toast.success("CV usunięte z historii");
+      utils.employeeCV.getHistory.invalidate({ employeeId });
+    },
+    onError: (error) => {
+      console.error('[EmployeeCV] Delete history error:', error);
+      toast.error(`Błąd podczas usuwania CV: ${error.message || 'Nie udało się usunąć CV'}`);
+    },
+  });
+  
+  const handleDeleteHistory = (historyId: number) => {
+    if (confirm("Czy na pewno chcesz usunąć to CV z historii? Ta operacja jest nieodwracalna.")) {
+      deleteHistoryMutation.mutate({ id: historyId });
     }
   };
   
@@ -501,31 +529,55 @@ export default function EmployeeCV() {
                     >
                       <div className="flex items-center gap-3">
                         <FileCheck className="w-5 h-5 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">
-                            CV wygenerowane {new Date(history.generatedAt).toLocaleString('pl-PL', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Wersja CV: {history.cvId}
-                          </p>
+                        <div className="flex items-center gap-2">
+                          {/* Flaga języka */}
+                          {history.language === "pl" ? (
+                            <span className="text-xl" title="Polski">🇵🇱</span>
+                          ) : (
+                            <span className="text-xl" title="English">🇬🇧</span>
+                          )}
+                          <div>
+                            <p className="font-medium">
+                              CV wygenerowane {new Date(history.generatedAt).toLocaleString('pl-PL', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Wersja CV: {history.cvId} • {history.language === "pl" ? "Polski" : "English"}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          window.open(`/cv/${history.id}`, '_blank');
-                        }}
-                      >
-                        <FileCheck className="w-4 h-4 mr-2" />
-                        Otwórz w nowej zakładce
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            window.open(`/cv/${history.id}`, '_blank');
+                          }}
+                        >
+                          <FileCheck className="w-4 h-4 mr-2" />
+                          Otwórz w nowej zakładce
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteHistory(history.id)}
+                          disabled={deleteHistoryMutation.isPending}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          title="Usuń CV z historii"
+                        >
+                          {deleteHistoryMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -960,6 +1012,21 @@ export default function EmployeeCV() {
                 placeholder="React, TypeScript, Node.js"
               />
             </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="keywords">Słowa kluczowe (opcjonalne)</Label>
+              <Textarea
+                id="keywords"
+                value={projectForm.keywords}
+                onChange={(e) => setProjectForm({ ...projectForm, keywords: e.target.value })}
+                placeholder="np. architektura, optymalizacja, zespół, skalowalność, bezpieczeństwo"
+                rows={2}
+              />
+              <p className="text-xs text-muted-foreground">
+                Dodaj słowa kluczowe, które pomogą AI lepiej opisać projekt i rolę pracownika. 
+                Oddziel przecinkami (np. "architektura, optymalizacja, zespół").
+              </p>
+            </div>
           </div>
           
           <DialogFooter>
@@ -968,6 +1035,57 @@ export default function EmployeeCV() {
             </Button>
             <Button type="button" onClick={handleAddProject}>
               Dodaj
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Dialog wyboru języka */}
+      <Dialog open={isLanguageDialogOpen} onOpenChange={setIsLanguageDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Wybierz język CV</DialogTitle>
+            <DialogDescription>
+              Wybierz język, w którym ma zostać wygenerowane CV. Wszystkie opisy będą przygotowane w wybranym języku.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Język CV</label>
+              <Select value={selectedLanguage} onValueChange={(value: "pl" | "en") => setSelectedLanguage(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Wybierz język" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pl">
+                    <div className="flex items-center gap-2">
+                      <span>🇵🇱</span>
+                      <span>Polski</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="en">
+                    <div className="flex items-center gap-2">
+                      <span>🇬🇧</span>
+                      <span>English</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsLanguageDialogOpen(false)}>
+              Anuluj
+            </Button>
+            <Button type="button" onClick={handleConfirmGenerate} disabled={isGenerating}>
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generowanie...
+                </>
+              ) : (
+                "Wygeneruj CV"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

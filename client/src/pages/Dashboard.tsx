@@ -72,10 +72,6 @@ function UrgentTasksList() {
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { data: kpi, isLoading, error: kpiError } = trpc.dashboard.kpi.useQuery(undefined, {
-    enabled: !!user,
-  });
-  
   // Pobierz bieżący miesiąc i rok
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -84,6 +80,11 @@ export default function Dashboard() {
   // Dla porównania - poprzedni miesiąc
   const currentYear = selectedYear;
   const currentMonth = selectedMonth;
+  
+  const { data: kpi, isLoading, error: kpiError } = trpc.dashboard.kpi.useQuery(
+    { year: currentYear, month: currentMonth },
+    { enabled: !!user }
+  );
   
   // Funkcja pomocnicza do obliczania poprzedniego miesiąca
   const getPreviousMonth = (year: number, month: number, monthsBack: number) => {

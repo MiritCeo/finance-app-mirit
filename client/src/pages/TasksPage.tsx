@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Plus, CheckCircle2, Circle, Clock, AlertCircle, Trash2 } from "lucide-react";
+import { Loader2, Plus, CheckCircle2, Circle, Clock, AlertCircle, Trash2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 type TaskStatus = "planned" | "in_progress" | "urgent" | "done";
 
@@ -41,6 +42,7 @@ const statusConfig: Record<TaskStatus, { label: string; icon: React.ReactNode; c
 };
 
 export default function TasksPage() {
+  const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<TaskStatus | "all">("urgent");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newTask, setNewTask] = useState({ title: "", description: "", status: "planned" as TaskStatus });
@@ -109,6 +111,10 @@ export default function TasksPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      <Button onClick={() => setLocation("/")} variant="outline" className="mb-4">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Powrót do dashboardu
+      </Button>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Zadania</h1>
