@@ -5,8 +5,8 @@ module.exports = {
     {
       name: 'profitflow',
       script: './dist/index.js',
-      instances: 'max', // Wykorzystaj wszystkie rdzenie CPU
-      exec_mode: 'cluster',
+      instances: 1, // Użyj 1 instancji dla ES modules (cluster mode może mieć problemy)
+      exec_mode: 'fork', // Fork mode działa lepiej z ES modules
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
@@ -18,11 +18,13 @@ module.exports = {
       min_uptime: '10s',
       // Restart przy przekroczeniu limitu pamięci
       max_memory_restart: '500M',
-      // Logi
+      // Logi (katalog logs zostanie utworzony automatycznie)
       error_file: './logs/pm2-error.log',
       out_file: './logs/pm2-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
+      // Wyłącz wait_ready jeśli nie używasz cluster mode
+      wait_ready: false,
       // Graceful shutdown
       kill_timeout: 5000,
       wait_ready: true,

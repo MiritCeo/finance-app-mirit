@@ -204,7 +204,23 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    // Wyślij sygnał ready do PM2 jeśli jest dostępny
+    if (process.send) {
+      process.send('ready');
+    }
+  });
+  
+  // Obsługa błędów serwera
+  server.on('error', (error: any) => {
+    console.error('[Server] Error:', error);
+    if (error.code === 'EADDRINUSE') {
+      console.error(`Port ${port} is already in use`);
+    }
+    process.exit(1);
   });
 }
 
-startServer().catch(console.error);
+startServer().catch((error) => {
+  console.error('[Startup] Fatal error:', error);
+  process.exit(1);
+});
