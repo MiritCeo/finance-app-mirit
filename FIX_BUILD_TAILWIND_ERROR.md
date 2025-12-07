@@ -35,9 +35,11 @@ Zaktualizowano skrypt build w `package.json`, aby wykluczyć wszystkie moduły z
 
 ```json
 {
-  "build": "vite build && esbuild server/_core/index.ts --platform=node --bundle --format=esm --outdir=dist --external:express --external:mysql2 --external:@trpc/server --external:vite --external:@tailwindcss/* --external:lightningcss --external:@babel/* --external:@vitejs/* --external:@builder.io/* --external:postcss --external:autoprefixer --external:./vite.config* --external:./client/** --external:./dist/**"
+  "build": "vite build && esbuild server/_core/index.ts --platform=node --bundle --format=esm --outdir=dist --external:express --external:mysql2 --external:@trpc/server --external:vite --external:@tailwindcss/* --external:lightningcss --external:@babel/* --external:@vitejs/* --external:@builder.io/* --external:postcss --external:autoprefixer --external:./vite.config*"
 }
 ```
+
+**Uwaga:** Esbuild nie obsługuje `**` w ścieżkach external, więc nie można używać `./client/**` ani `./dist/**`. Te katalogi i tak nie są bundlowane przez esbuild, więc nie są potrzebne.
 
 ## Instrukcje dla produkcji
 
