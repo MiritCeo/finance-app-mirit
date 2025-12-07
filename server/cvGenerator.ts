@@ -40,18 +40,10 @@ export interface CVData {
       project?: {
         name: string;
         clientId: number | null;
+        description?: string | null;
       } | null;
     }>;
   };
-}
-
-interface ImprovedDescriptions {
-  tagline?: string; // Krótki opis (2-3 zdania)
-  summary?: string; // Opis profilu (3-4 zdania)
-  projectDescriptions?: Array<{ // Opisy projektów
-    projectName: string;
-    description: string;
-  }>;
 }
 
 function formatDate(date: Date | null): string {
@@ -119,6 +111,7 @@ function loadCVDraftTemplate(): string {
 interface ImprovedDescriptions {
   tagline?: string; // Krótki opis (2-3 zdania)
   summary?: string; // Opis profilu (3-4 zdania)
+  softSkills?: string; // Ulepszony tekst umiejętności miękkich (2-3 zdania)
   projectDescriptions?: Array<{ // Opisy projektów
     projectName: string;
     description: string;
@@ -128,7 +121,7 @@ interface ImprovedDescriptions {
 function buildCVDataForAI(cvData: CVData): string {
   const { employee, cv } = cvData;
   
-  const fullName = `${employee.firstName} ${employee.lastName}`;
+  const firstName = employee.firstName;
   const position = employee.position || "Pracownik";
   const seniorityLevel = cv.seniorityLevel || (cv.yearsOfExperience >= 5 ? "Senior" : cv.yearsOfExperience >= 2 ? "Mid" : "Junior");
   
@@ -166,7 +159,8 @@ function buildCVDataForAI(cvData: CVData): string {
   const projectsText = cv.projects.map((proj, idx) => {
     const projectName = proj.project?.name || `Projekt ${idx + 1}`;
     const role = proj.role || "Developer";
-    const description = proj.projectDescription || "";
+    // Opis z CV jest ignorowany - używamy tylko opisu z bazy danych
+    const projectDescription = (proj as any).project?.description || ""; // Opis z głównej tabeli projects
     const dates = proj.startDate && proj.endDate
       ? `${formatDate(proj.startDate)} - ${formatDate(proj.endDate)}`
       : proj.startDate
@@ -174,26 +168,47 @@ function buildCVDataForAI(cvData: CVData): string {
       : "obecnie";
     const techs = proj.technologies || "";
     
-    return `Projekt: ${projectName}
+    // Zbuduj informacje o projekcie dla AI
+    let projectInfo = `Projekt: ${projectName}
 Rola: ${role}
-Okres: ${dates}
-${description ? `Obecny opis: ${description}` : "Brak opisu"}
-${techs ? `Technologie: ${techs}` : ""}`;
+Okres: ${dates}`;
+    
+    // Dodaj opis projektu z głównej tabeli projects (jeśli istnieje) - JEDYNE źródło informacji
+    if (projectDescription) {
+      projectInfo += `\n\nOpis projektu z bazy danych (użyj jako źródła informacji o projekcie):
+${projectDescription}
+
+ZADANIE: Na podstawie powyższego opisu projektu, wygeneruj szczegółowy, atrakcyjny opis (3-4 zdania) o ROLI PRACOWNIKA w tym projekcie.
+- Opis powyżej jest o PROJEKCIE - Ty musisz napisać o ROLI PRACOWNIKA w tym projekcie
+- Użyj informacji z opisu projektu jako kontekstu, aby zrozumieć o czym jest projekt
+- Napisz CAŁKOWICIE NOWY opis o tym, co pracownik robił w projekcie, jakie miał zadania i odpowiedzialności
+- Skup się na roli, odpowiedzialności i osiągnięciach pracownika, nie na ogólnym opisie projektu
+- NIE kopiuj słowo w słowo opisu projektu - przekształć go w opis roli pracownika
+- Użyj innych słów i konstrukcji zdań niż w opisie projektu`;
+    } else {
+      projectInfo += `\n\nBrak opisu projektu w bazie danych - wygeneruj szczegółowy, atrakcyjny opis (3-4 zdania) o roli pracownika na podstawie roli i technologii.`;
+    }
+    
+    if (techs) {
+      projectInfo += `\nTechnologie używane w projekcie: ${techs}`;
+    }
+    
+    return projectInfo;
   }).join("\n\n");
   
   const softSkills = cv.skills.map(s => s.skillName).join(", ");
   
   return `DANE PRACOWNIKA:
-- Imię i nazwisko: ${fullName}
+- Imię: ${firstName}
 - Stanowisko: ${position}
 - Poziom: ${seniorityLevel}
 - Lata doświadczenia: ${cv.yearsOfExperience}
 
-${cv.tagline ? `OBECNY TAGLINE (krótki opis 2-3 zdania):\n${cv.tagline}` : "TAGLINE: Brak - wygeneruj krótki opis (2-3 zdania) na podstawie stanowiska, poziomu i technologii"}
+${cv.tagline ? `OBECNY TAGLINE (do ulepszenia - NIE KOPIUJ, stwórz NOWY, lepszy):\n${cv.tagline}\n\nZADANIE: Wygeneruj NOWY, bardziej atrakcyjny tagline (2-3 zdania) - nie kopiuj starego!` : "TAGLINE: Brak - wygeneruj krótki, zachęcający opis (2-3 zdania) na podstawie stanowiska, poziomu i technologii"}
 
-${cv.summary ? `OBECNY OPIS PROFILU:\n${cv.summary}` : "OPIS PROFILU: Brak - wygeneruj opis profilu (3-4 zdania)"}
+${cv.summary ? `OBECNY OPIS PROFILU (do ulepszenia - NIE KOPIUJ, stwórz NOWY, lepszy):\n${cv.summary}\n\n${cv.tagline ? `UWAGA: Masz również dostęp do tagline pracownika, który zawiera kluczowe informacje:\n${cv.tagline}\n\nUżyj tych informacji, aby stworzyć spójny i bardziej szczegółowy opis profilu.` : ""}\n\nZADANIE: Wygeneruj NOWY, bardziej atrakcyjny opis profilu (3-4 zdania) - nie kopiuj starego!` : `OPIS PROFILU: Brak - wygeneruj atrakcyjny opis profilu (3-4 zdania)${cv.tagline ? `\n\nUWAGA: Masz dostęp do tagline pracownika, który zawiera kluczowe informacje:\n${cv.tagline}\n\nUżyj tych informacji, aby stworzyć spójny i szczegółowy opis profilu.` : ""}`}
 
-UMIEJĘTNOŚCI MIĘKKIE:
+UMIEJĘTNOŚCI MIĘKKIE (obecna lista - przekształć w atrakcyjny tekst 2-3 zdania):
 ${softSkills || "Brak"}
 
 TECHNOLOGIE:
@@ -209,32 +224,76 @@ ${projectsText || "Brak projektów"}`;
 function buildCVPrompt(cvData: CVData): string {
   const dataForAI = buildCVDataForAI(cvData);
   
-  return `Jesteś ekspertem w tworzeniu profesjonalnych opisów do CV. Twoim zadaniem jest wygenerowanie ulepszonych opisów tekstowych na podstawie danych pracownika.
+  return `Jesteś ekspertem w tworzeniu profesjonalnych, atrakcyjnych opisów do CV dla firm bodyleasingowych. Twoim zadaniem jest wygenerowanie ulepszonych opisów tekstowych, które zachęcają klientów do współpracy z pracownikiem.
 
 DANE PRACOWNIKA:
 ${dataForAI}
 
 ZADANIE:
-Wygeneruj ulepszone opisy tekstowe w formacie JSON. Zwróć TYLKO JSON bez dodatkowych komentarzy.
+Wygeneruj ulepszone, atrakcyjne opisy tekstowe w formacie JSON. Zwróć TYLKO JSON bez dodatkowych komentarzy.
 
 Format odpowiedzi (JSON):
 {
-  "tagline": "Krótki opis pracownika (2-3 zdania) - główny stack, typ projektów, kluczowe kompetencje",
-  "summary": "Opis profilu pracownika (3-4 zdania) - doświadczenie, specjalizacja, umiejętności",
+  "tagline": "Krótki, zachęcający opis pracownika (2-3 zdania) - główny stack, typ projektów, kluczowe kompetencje, wartość biznesowa",
+  "summary": "Atrakcyjny opis profilu pracownika (3-4 zdania) - doświadczenie, specjalizacja, umiejętności, korzyści dla klienta",
+  "softSkills": "Ulepszona lista umiejętności miękkich - sformatowana jako naturalny tekst (2-3 zdania) zamiast suchej listy",
   "projectDescriptions": [
     {
       "projectName": "Nazwa projektu",
-      "description": "Ulepszony opis projektu z rolą i osiągnięciami (2-3 zdania)"
+      "description": "Atrakcyjny, szczegółowy opis projektu (3-4 zdania) - rola, osiągnięcia, wartość biznesowa, technologie, wpływ na projekt"
     }
   ]
 }
 
-INSTRUKCJE:
-1. Jeśli tagline jest zbyt krótki lub brakuje - wygeneruj profesjonalny tagline (2-3 zdania)
-2. Jeśli summary jest zbyt krótkie lub brakuje - wygeneruj profesjonalny opis profilu (3-4 zdania)
-3. Dla każdego projektu bez opisu lub z krótkim opisem - wygeneruj profesjonalny opis (2-3 zdania) z rolą i osiągnięciami
-4. Używaj profesjonalnego języka biznesowego
-5. Opisy powinny być konkretne i merytoryczne
+INSTRUKCJE (WAŻNE - CZYTAJ UWAŻNIE):
+1. TAGLINE: ZAWSZE wygeneruj NOWY, krótki, zachęcający opis (2-3 zdania), który podkreśla wartość pracownika dla klienta. NIE KOPIUJ istniejącego tagline - stwórz lepszy! Użyj dynamicznego języka, który pokazuje kompetencje i gotowość do pracy.
+
+2. SUMMARY: ZAWSZE stwórz NOWY, atrakcyjny opis profilu (3-4 zdania). NIE KOPIUJ istniejącego opisu - stwórz lepszy! 
+   - Jeśli masz dostęp do tagline pracownika - użyj go jako źródła informacji, aby stworzyć spójny i bardziej szczegółowy opis profilu
+   - Opis powinien podkreślać doświadczenie i specjalizację
+   - Wskazywać na korzyści dla klienta
+   - Pokazywać gotowość do wyzwań
+   - Używać profesjonalnego, ale przystępnego języka
+   - Opis profilu powinien być rozwinięciem i uzupełnieniem tagline, ale nie jego kopią
+
+3. SOFT SKILLS: ZAWSZE przekształć listę umiejętności miękkich w NOWY, naturalny, atrakcyjny tekst (2-3 zdania), który pokazuje jak te umiejętności przekładają się na wartość dla klienta. Np. zamiast "Komunikacja, Praca zespołowa" napisz "Doskonale komunikuje się z zespołem i klientami, skutecznie zarządza czasem i priorytetami, co przekłada się na terminowe realizowanie projektów."
+
+4. PROJECT DESCRIPTIONS: Dla każdego projektu ZAWSZE wygeneruj NOWY, szczegółowy, atrakcyjny opis (3-4 zdania) o ROLI PRACOWNIKA w projekcie.
+   
+   WAŻNE - RÓŻNICA:
+   - "Opis projektu z bazy danych" = ogólny opis PROJEKTU (co to za projekt, co robi, jakie ma funkcjonalności)
+   - Twoje zadanie = napisać opis ROLI PRACOWNIKA w tym projekcie (co pracownik robił, jakie miał zadania, odpowiedzialności, osiągnięcia)
+   
+   INSTRUKCJE:
+   - Użyj "Opisu projektu z bazy danych" TYLKO jako kontekstu, aby zrozumieć o czym jest projekt
+   - NIE kopiuj słowo w słowo opisu projektu - on jest o projekcie, a Ty piszesz o roli pracownika!
+   - Przekształć informacje z opisu projektu w opis roli pracownika
+   - Opis powinien podkreślać rolę i odpowiedzialność pracownika w kontekście całego projektu
+   - Wskazywać na konkretne osiągnięcia i wartości dodane
+   - Pokazywać użyte technologie i ich zastosowanie
+   - Demonstrować wpływ na sukces projektu
+   - Używać dynamicznego języka biznesowego
+   - Skup się na tym, co pracownik robił, nie na ogólnym opisie projektu
+   
+   PRZYKŁADY:
+   - Jeśli opis projektu z bazy to "Working on the entire architecture of the portal, responsibility for implementing commission mechanisms..."
+   - NIE kopiuj tego!
+   - Zamiast tego napisz np. "Odpowiedzialny za projektowanie i implementację architektury portalu, w tym mechanizmów rozliczeniowych dla kupujących i sprzedających zintegrowanych z modułem Stripe. Zarządzał zespołem junior developerów, odpowiadał za budowę mechanizmu kont użytkowników z wykorzystaniem technologii WebSocket oraz przygotowanie warstwy komunikacyjnej API umożliwiającej pełną współpracę backendu z frontendem opartym na Vue3."
+   - Pokazuj ROLĘ i ODPOWIEDZIALNOŚĆ pracownika, nie ogólny opis projektu!
+
+5. STYL PISANIA:
+   - Używaj aktywnego języka (np. "Zrealizował", "Zoptymalizował", "Wprowadził")
+   - Podkreślaj wartość biznesową i konkretne rezultaty
+   - Używaj profesjonalnego, ale przystępnego języka
+   - Unikaj ogólników - bądź konkretny
+   - Pisz z perspektywy korzyści dla klienta
+
+6. WAŻNE - OBOWIĄZKOWE: 
+   - ZAWSZE generuj NOWE opisy - NIE KOPIUJ istniejących!
+   - Jeśli widzisz "OBECNY TAGLINE" lub "OBECNY OPIS PROFILU" lub "Obecny opis" - to są stare opisy do ulepszenia, NIE do kopiowania!
+   - Każde wygenerowanie CV powinno tworzyć NOWE, lepsze opisy niż poprzednie
+   - Wszystkie opisy powinny być atrakcyjne, profesjonalne i zachęcające do współpracy
+   - Pokazuj wartość pracownika, nie tylko listę technologii
 
 Zwróć TYLKO JSON, bez dodatkowych komentarzy ani wyjaśnień.`;
 }
@@ -242,7 +301,7 @@ Zwróć TYLKO JSON, bez dodatkowych komentarzy ani wyjaśnień.`;
 function buildCVPromptLegacy(cvData: CVData): string {
   const { employee, cv } = cvData;
   
-  const fullName = `${employee.firstName} ${employee.lastName}`;
+  const firstName = employee.firstName;
   const position = employee.position || "Pracownik";
   
   // Formatuj technologie według kategorii
@@ -294,7 +353,7 @@ function buildCVPromptLegacy(cvData: CVData): string {
   return `Wygeneruj profesjonalne CV w formacie HTML dla następującego pracownika:
 
 DANE OSOBOWE:
-- Imię i nazwisko: ${fullName}
+- Imię: ${firstName}
 - Stanowisko: ${position}
 
 DOŚWIADCZENIE:
@@ -387,9 +446,9 @@ export async function generateCVHTML(employeeId: number): Promise<{ html: string
           content: prompt,
         },
       ],
-      temperature: 0.7,
+      temperature: 1.0, // Maksymalna temperatura = najbardziej kreatywne i różnorodne opisy (zapobiega kopiowaniu)
       response_format: { type: "json_object" },
-      max_tokens: 2000,
+      max_tokens: 2500, // Więcej tokenów dla dłuższych opisów
     });
     
     const responseContent = completion.choices[0]?.message?.content;
@@ -399,43 +458,129 @@ export async function generateCVHTML(employeeId: number): Promise<{ html: string
     }
     
     console.log('[generateCVHTML] Descriptions generated, tokens used:', completion.usage?.total_tokens);
+    console.log('[generateCVHTML] AI Response:', responseContent.substring(0, 500)); // Loguj pierwsze 500 znaków odpowiedzi
     
     // Parsuj odpowiedź JSON
     let improvedDescriptions: ImprovedDescriptions;
     try {
       improvedDescriptions = JSON.parse(responseContent);
+      console.log('[generateCVHTML] Parsed descriptions:', {
+        hasTagline: !!improvedDescriptions.tagline,
+        hasSummary: !!improvedDescriptions.summary,
+        hasSoftSkills: !!improvedDescriptions.softSkills,
+        projectCount: improvedDescriptions.projectDescriptions?.length || 0
+      });
     } catch (parseError) {
       console.error('[generateCVHTML] Error parsing JSON response:', parseError);
-      // Jeśli nie udało się sparsować, użyj oryginalnych opisów
-      improvedDescriptions = {};
+      console.error('[generateCVHTML] Raw response:', responseContent);
+      throw new Error(`Błąd parsowania odpowiedzi AI: ${parseError instanceof Error ? parseError.message : 'Nieznany błąd'}`);
     }
     
-    // KROK 3: Wstaw ulepszone opisy do szablonu
+    // KROK 3: Wstaw ulepszone opisy do szablonu (OBOWIĄZKOWE - zawsze muszą być nowe opisy)
     let finalHTML = filledTemplate;
     
+    // Tagline - zawsze wymagany
     if (improvedDescriptions.tagline) {
       finalHTML = finalHTML.replace(/\{\{TAGLINE\}\}/g, improvedDescriptions.tagline);
+      console.log('[generateCVHTML] Użyto nowego tagline z AI');
+    } else {
+      console.warn('[generateCVHTML] Brak tagline z AI - używam fallback');
+      finalHTML = finalHTML.replace(/\{\{TAGLINE\}\}/g, cvDataWithProjects.cv.tagline || "Specjalista z doświadczeniem w nowoczesnych technologiach.");
     }
     
+    // Summary - zawsze wymagany
     if (improvedDescriptions.summary) {
       finalHTML = finalHTML.replace(/\{\{SUMMARY\}\}/g, improvedDescriptions.summary);
+      console.log('[generateCVHTML] Użyto nowego summary z AI');
+    } else {
+      console.warn('[generateCVHTML] Brak summary z AI - używam fallback');
+      finalHTML = finalHTML.replace(/\{\{SUMMARY\}\}/g, cvDataWithProjects.cv.summary || "Doświadczony specjalista gotowy do wyzwań.");
     }
     
+    // Soft Skills - zawsze wymagany
+    if (improvedDescriptions.softSkills) {
+      finalHTML = finalHTML.replace(/\{\{SOFT_SKILLS\}\}/g, improvedDescriptions.softSkills);
+      // Usuń warunkowe znaczniki jeśli były
+      finalHTML = finalHTML.replace(/\{\{#IF_SOFT_SKILLS\}\}/g, "");
+      finalHTML = finalHTML.replace(/\{\{\/IF_SOFT_SKILLS\}\}/g, "");
+      console.log('[generateCVHTML] Użyto nowych softSkills z AI');
+    } else {
+      console.warn('[generateCVHTML] Brak softSkills z AI - używam fallback');
+      const fallbackSoftSkills = cvDataWithProjects.cv.skills.map((s: { skillName: string }) => s.skillName).join(", ");
+      finalHTML = finalHTML.replace(/\{\{SOFT_SKILLS\}\}/g, fallbackSoftSkills || "Komunikacja, praca zespołowa, zarządzanie czasem");
+      finalHTML = finalHTML.replace(/\{\{#IF_SOFT_SKILLS\}\}/g, "");
+      finalHTML = finalHTML.replace(/\{\{\/IF_SOFT_SKILLS\}\}/g, "");
+    }
+    
+    // Opisy projektów - zawsze wymagane
+    // Najpierw zbierz wszystkie nazwy projektów z CV, aby sprawdzić, które zostały przetworzone przez AI
+    const allProjectNames = cvDataWithProjects.cv.projects.map(p => (p.project?.name || "").trim()).filter(Boolean);
+    console.log('[generateCVHTML] Wszystkie projekty w CV:', allProjectNames);
+    
     if (improvedDescriptions.projectDescriptions && improvedDescriptions.projectDescriptions.length > 0) {
-      // Zaktualizuj opisy projektów w HTML
-      improvedDescriptions.projectDescriptions.forEach(improved => {
-        const projectRegex = new RegExp(
-          `(<article class="project">[\\s\\S]*?<div class="project-name">${improved.projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</div>[\\s\\S]*?<div class="project-role">[\\s\\S]*?)(<div class="project-desc">[\\s\\S]*?</div>)?([\\s\\S]*?</article>)`,
-          'i'
-        );
-        finalHTML = finalHTML.replace(projectRegex, (match, before, existingDesc, after) => {
-          const newDesc = `        <div class="project-desc">\n          ${improved.description}\n        </div>`;
-          return before + newDesc + after;
+      console.log('[generateCVHTML] AI zwróciło opisy dla projektów:', improvedDescriptions.projectDescriptions.map(p => p.projectName));
+      
+      improvedDescriptions.projectDescriptions.forEach((improved: { projectName: string; description: string }) => {
+        // Znajdź dokładną nazwę projektu z CV (case-insensitive, ignoruj białe znaki)
+        const matchingProject = cvDataWithProjects.cv.projects.find(p => {
+          const cvProjectName = (p.project?.name || "").trim();
+          const aiProjectName = improved.projectName.trim();
+          return cvProjectName.toLowerCase() === aiProjectName.toLowerCase();
         });
+        
+        if (matchingProject) {
+          const exactProjectName = matchingProject.project?.name || improved.projectName;
+          const placeholder = `{{PROJECT_DESC_${exactProjectName}}}`;
+          const escapedPlaceholder = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          finalHTML = finalHTML.replace(new RegExp(escapedPlaceholder, 'g'), improved.description);
+          console.log(`[generateCVHTML] Zastąpiono opis projektu z AI: "${exactProjectName}" (dopasowano z "${improved.projectName}")`);
+        } else {
+          console.warn(`[generateCVHTML] Nie znaleziono projektu w CV dla nazwy z AI: "${improved.projectName}"`);
+          // Spróbuj zastąpić bezpośrednio używając nazwy z AI
+          const placeholder = `{{PROJECT_DESC_${improved.projectName}}}`;
+          const escapedPlaceholder = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          finalHTML = finalHTML.replace(new RegExp(escapedPlaceholder, 'g'), improved.description);
+          console.log(`[generateCVHTML] Zastąpiono opis projektu z AI (bez dopasowania): "${improved.projectName}"`);
+        }
+      });
+    } else {
+      console.warn('[generateCVHTML] Brak projectDescriptions z AI - sprawdzam czy są projekty do przetworzenia');
+      console.log('[generateCVHTML] Liczba projektów w CV:', cvDataWithProjects.cv.projects.length);
+      cvDataWithProjects.cv.projects.forEach((proj, idx) => {
+        console.log(`[generateCVHTML] Projekt ${idx + 1}: "${proj.project?.name || 'Brak nazwy'}", opis z bazy: ${proj.project?.description ? 'TAK' : 'NIE'}, opis z CV: ${proj.projectDescription ? 'TAK' : 'NIE'}`);
       });
     }
     
-    // Usuń wszystkie pozostałe placeholder-y
+    // Usuń wszystkie pozostałe placeholdery projektów (jeśli AI nie zwróciło opisu dla jakiegoś projektu)
+    // Użyj opisu projektu z bazy danych jako fallback TYLKO jeśli AI nie zwróciło opisu
+    finalHTML = finalHTML.replace(/\{\{PROJECT_DESC_([^}]+)\}\}/g, (match, projectName) => {
+      console.warn(`[generateCVHTML] AI nie zwróciło opisu dla projektu: "${projectName}" - używam fallback`);
+      // Znajdź projekt w danych (case-insensitive)
+      const project = cvDataWithProjects.cv.projects.find(p => {
+        const cvProjectName = (p.project?.name || "").trim();
+        const placeholderName = projectName.trim();
+        return cvProjectName.toLowerCase() === placeholderName.toLowerCase();
+      });
+      
+      if (!project) {
+        console.warn(`[generateCVHTML] Fallback: Nie znaleziono projektu dla: "${projectName}"`);
+        return "Opis projektu w przygotowaniu.";
+      }
+      
+      // Priorytet: użyj opisu z CV (jeśli istnieje), potem z bazy danych
+      if (project.projectDescription) {
+        console.log(`[generateCVHTML] Fallback: Używam opisu z CV dla: "${projectName}"`);
+        return project.projectDescription;
+      }
+      if (project.project?.description) {
+        console.log(`[generateCVHTML] Fallback: Używam opisu projektu z bazy danych dla: "${projectName}"`);
+        return project.project.description;
+      }
+      console.warn(`[generateCVHTML] Fallback: Brak opisu dla projektu: "${projectName}"`);
+      return "Opis projektu w przygotowaniu.";
+    });
+    
+    // Usuń wszystkie pozostałe placeholder-y (jeśli jakieś zostały)
     finalHTML = finalHTML.replace(/\{\{[^}]+\}\}/g, "");
     
     console.log('[generateCVHTML] CV generated successfully');
@@ -455,7 +600,8 @@ export async function generateCVHTML(employeeId: number): Promise<{ html: string
 function fillCVTemplate(cvData: CVData): string {
   const { employee, cv } = cvData;
   
-  const fullName = `${employee.firstName} ${employee.lastName}`;
+  // Tylko imię, bez nazwiska
+  const firstName = employee.firstName;
   const position = employee.position || "Pracownik";
   const seniorityLevel = cv.seniorityLevel || (cv.yearsOfExperience >= 5 ? "Senior" : cv.yearsOfExperience >= 2 ? "Mid" : "Junior");
   
@@ -552,13 +698,14 @@ function fillCVTemplate(cvData: CVData): string {
         : "obecnie";
       const techs = proj.technologies || "";
       
+      // Zawsze używaj placeholder-a dla opisu projektu, aby AI mógł go zastąpić
       return `      <article class="project">
         <div class="project-top">
           <div class="project-name">${projectName}</div>
           <div class="project-period">${dates}</div>
         </div>
         <div class="project-role">Rola: ${role}</div>
-        ${description ? `<div class="project-desc">\n          ${description}\n        </div>` : `<div class="project-desc">\n          {{PROJECT_DESC_${projectName}}}\n        </div>`}
+        <div class="project-desc">{{PROJECT_DESC_${projectName}}}</div>
         ${techs ? `<div class="project-tech">\n          Technologie: ${techs}\n        </div>` : ""}
       </article>`;
     }).join("\n\n      ");
@@ -569,14 +716,15 @@ function fillCVTemplate(cvData: CVData): string {
   // Formatuj umiejętności miękkie
   const softSkills = cv.skills.map(s => s.skillName).join(", ");
   
-  // Wypełnij szablon danymi (zostaw placeholder-y dla opisów które będą ulepszone przez AI)
-  template = template.replace(/\{\{FULL_NAME\}\}/g, fullName);
+  // Wypełnij szablon danymi (ZAWSZE zostaw placeholder-y dla opisów które będą ulepszone przez AI)
+  template = template.replace(/\{\{FULL_NAME\}\}/g, firstName);
   template = template.replace(/\{\{POSITION\}\}/g, position);
   template = template.replace(/\{\{SENIORITY_LEVEL\}\}/g, seniorityLevel);
-  template = template.replace(/\{\{TAGLINE\}\}/g, cv.tagline || "{{TAGLINE}}"); // Placeholder jeśli brak
-  template = template.replace(/\{\{SUMMARY\}\}/g, cv.summary || "{{SUMMARY}}"); // Placeholder jeśli brak
+  // ZAWSZE zostaw placeholder-y dla opisów - AI je zastąpi
+  template = template.replace(/\{\{TAGLINE\}\}/g, "{{TAGLINE}}");
+  template = template.replace(/\{\{SUMMARY\}\}/g, "{{SUMMARY}}");
   template = template.replace(/\{\{TECHNOLOGIES_TABLE\}\}/g, technologiesTableRows.trim());
-  template = template.replace(/\{\{SOFT_SKILLS\}\}/g, softSkills || "Brak");
+  template = template.replace(/\{\{SOFT_SKILLS\}\}/g, "{{SOFT_SKILLS}}");
   template = template.replace(/\{\{LANGUAGES\}\}/g, languagesHTML);
   template = template.replace(/\{\{PROJECTS\}\}/g, projectsHTMLFormatted);
   

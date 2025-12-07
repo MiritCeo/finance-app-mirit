@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, or, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, users,
@@ -716,19 +716,25 @@ export async function getEmployeeCVWithDetails(employeeId: number) {
   const cv = await getEmployeeCV(employeeId);
   if (!cv) return null;
   
-  // Pobierz umiejętności
+  // Pobierz umiejętności - tylko z aktualnego CV
   const skills = await database
     .select()
     .from(employeeSkills)
-    .where(eq(employeeSkills.employeeId, employeeId));
+    .where(and(
+      eq(employeeSkills.employeeId, employeeId),
+      eq(employeeSkills.cvId, cv.id)
+    ));
   
-  // Pobierz technologie
+  // Pobierz technologie - tylko z aktualnego CV
   const technologies = await database
     .select()
     .from(employeeTechnologies)
-    .where(eq(employeeTechnologies.employeeId, employeeId));
+    .where(and(
+      eq(employeeTechnologies.employeeId, employeeId),
+      eq(employeeTechnologies.cvId, cv.id)
+    ));
   
-  // Pobierz projekty CV
+  // Pobierz projekty CV - tylko z aktualnego CV
   const cvProjects = await database
     .select()
     .from(employeeCVProjects)
@@ -737,11 +743,17 @@ export async function getEmployeeCVWithDetails(employeeId: number) {
       eq(employeeCVProjects.cvId, cv.id)
     ));
   
-  // Pobierz języki
+  // Pobierz języki - tylko z aktualnego CV (lub wszystkie jeśli cvId jest null)
   const languages = await database
     .select()
     .from(employeeLanguages)
-    .where(eq(employeeLanguages.employeeId, employeeId));
+    .where(and(
+      eq(employeeLanguages.employeeId, employeeId),
+      or(
+        eq(employeeLanguages.cvId, cv.id),
+        isNull(employeeLanguages.cvId)
+      )
+    ));
   
   return {
     ...cv,
@@ -815,6 +827,15 @@ export async function createOrUpdateEmployeeCV(data: {
     throw new Error(`Błąd podczas tworzenia CV: ${error.message}`);
   }
   
+  // Usuń stare umiejętności dla tego pracownika (z poprzednich wersji CV)
+  try {
+    await database
+      .delete(employeeSkills)
+      .where(eq(employeeSkills.employeeId, data.employeeId));
+  } catch (error: any) {
+    console.warn('[createOrUpdateEmployeeCV] Warning: Could not delete old skills:', error.message);
+  }
+  
   // Dodaj umiejętności miękkie
   if (data.skills && data.skills.length > 0) {
     try {
@@ -830,6 +851,15 @@ export async function createOrUpdateEmployeeCV(data: {
       console.error('[createOrUpdateEmployeeCV] Error inserting skills:', error);
       throw new Error(`Błąd podczas zapisywania umiejętności: ${error.message}`);
     }
+  }
+  
+  // Usuń stare technologie dla tego pracownika (z poprzednich wersji CV)
+  try {
+    await database
+      .delete(employeeTechnologies)
+      .where(eq(employeeTechnologies.employeeId, data.employeeId));
+  } catch (error: any) {
+    console.warn('[createOrUpdateEmployeeCV] Warning: Could not delete old technologies:', error.message);
   }
   
   // Dodaj technologie (umiejętności twarde)
@@ -848,6 +878,41 @@ export async function createOrUpdateEmployeeCV(data: {
       console.error('[createOrUpdateEmployeeCV] Error inserting technologies:', error);
       throw new Error(`Błąd podczas zapisywania technologii: ${error.message}`);
     }
+  }
+  
+  // Usuń stare języki dla tego pracownika (z poprzednich wersji CV)
+  try {
+    await database
+      .delete(employeeLanguages)
+      .where(eq(employeeLanguages.employeeId, data.employeeId));
+  } catch (error: any) {
+    console.warn('[createOrUpdateEmployeeCV] Warning: Could not delete old languages:', error.message);
+  }
+  
+  // Dodaj języki
+  if (data.languages && data.languages.length > 0) {
+    try {
+      await database.insert(employeeLanguages).values(
+        data.languages.map(lang => ({
+          employeeId: data.employeeId,
+          cvId,
+          languageName: lang.name,
+          level: lang.level || null,
+        }))
+      );
+    } catch (error: any) {
+      console.error('[createOrUpdateEmployeeCV] Error inserting languages:', error);
+      throw new Error(`Błąd podczas zapisywania języków: ${error.message}`);
+    }
+  }
+  
+  // Usuń stare projekty dla tego pracownika (z poprzednich wersji CV)
+  try {
+    await database
+      .delete(employeeCVProjects)
+      .where(eq(employeeCVProjects.employeeId, data.employeeId));
+  } catch (error: any) {
+    console.warn('[createOrUpdateEmployeeCV] Warning: Could not delete old projects:', error.message);
   }
   
   // Dodaj projekty
@@ -883,7 +948,12 @@ export async function getEmployeeCVProjects(cvId: number) {
   return await database
     .select({
       cvProject: employeeCVProjects,
-      project: projects,
+      project: {
+        id: projects.id,
+        name: projects.name,
+        clientId: projects.clientId,
+        description: projects.description, // Dodajemy opis projektu
+      },
     })
     .from(employeeCVProjects)
     .innerJoin(projects, eq(employeeCVProjects.projectId, projects.id))

@@ -424,23 +424,25 @@ export default function EmployeeCV() {
           )}
           
           {/* Języki */}
-          {cvData?.languages && Array.isArray(cvData.languages) && cvData.languages.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Języki</CardTitle>
-              </CardHeader>
-              <CardContent>
+          <Card>
+            <CardHeader>
+              <CardTitle>Języki</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {cvData?.languages && Array.isArray(cvData.languages) && cvData.languages.length > 0 ? (
                 <div className="space-y-2">
                   {cvData.languages.map((lang: any, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between p-2 border rounded-md">
+                    <div key={idx} className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
                       <span className="font-medium">{lang.languageName || lang.name || "Nieznany język"}</span>
-                      {lang.level && <span className="text-sm text-muted-foreground">{lang.level}</span>}
+                      {lang.level && <span className="text-sm text-muted-foreground font-medium">{lang.level}</span>}
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              ) : (
+                <p className="text-sm text-muted-foreground">Brak zapisanych języków</p>
+              )}
+            </CardContent>
+          </Card>
           
           {/* Technologie (umiejętności twarde) */}
           {cvData?.technologies && Array.isArray(cvData.technologies) && cvData.technologies.length > 0 && (
@@ -688,49 +690,58 @@ export default function EmployeeCV() {
                 <p className="text-xs text-muted-foreground">
                   Wybierz technologie z predefiniowanej listy
                 </p>
-                <div className="grid grid-cols-3 gap-2">
-                  <Select value={selectedCategory} onValueChange={(v) => {
-                    setSelectedCategory(v);
-                    setSelectedTechnology(""); // Resetuj wybór technologii przy zmianie kategorii
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Kategoria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TECHNOLOGY_CATEGORIES.map(cat => (
-                        <SelectItem key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select 
-                    value={selectedTechnology} 
-                    onValueChange={setSelectedTechnology}
-                    disabled={!CV_TECHNOLOGIES[selectedCategory]?.length}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Wybierz technologię" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CV_TECHNOLOGIES[selectedCategory]?.map(tech => (
-                        <SelectItem key={tech.name} value={tech.name}>
-                          {tech.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={technologyProficiency} onValueChange={setTechnologyProficiency}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="beginner">Początkujący</SelectItem>
-                      <SelectItem value="intermediate">Średnio zaawansowany</SelectItem>
-                      <SelectItem value="advanced">Zaawansowany</SelectItem>
-                      <SelectItem value="expert">Ekspert</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block">Kategoria</Label>
+                    <Select value={selectedCategory} onValueChange={(v) => {
+                      setSelectedCategory(v);
+                      setSelectedTechnology(""); // Resetuj wybór technologii przy zmianie kategorii
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wybierz kategorię" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TECHNOLOGY_CATEGORIES.map(cat => (
+                          <SelectItem key={cat.value} value={cat.value}>
+                            {cat.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block">Technologia</Label>
+                    <Select 
+                      value={selectedTechnology} 
+                      onValueChange={setSelectedTechnology}
+                      disabled={!CV_TECHNOLOGIES[selectedCategory]?.length}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wybierz technologię" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CV_TECHNOLOGIES[selectedCategory]?.map(tech => (
+                          <SelectItem key={tech.name} value={tech.name}>
+                            {tech.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block">Poziom zaawansowania</Label>
+                    <Select value={technologyProficiency} onValueChange={setTechnologyProficiency}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wybierz poziom" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="beginner">Początkujący</SelectItem>
+                        <SelectItem value="intermediate">Średnio zaawansowany</SelectItem>
+                        <SelectItem value="advanced">Zaawansowany</SelectItem>
+                        <SelectItem value="expert">Ekspert</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <Button 
                   type="button" 
