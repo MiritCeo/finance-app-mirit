@@ -1,4 +1,3 @@
-import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -28,6 +27,17 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Ładuj dotenv tylko w development - w produkcji używaj zmiennych środowiskowych systemowych
+  // Używamy dynamicznego importu, aby uniknąć bundlowania przez esbuild
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      const dotenv = await import("dotenv");
+      dotenv.config();
+    } catch (e) {
+      // Ignoruj błędy - zmienne środowiskowe mogą być już ustawione
+    }
+  }
+  
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
