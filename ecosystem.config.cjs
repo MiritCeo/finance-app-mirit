@@ -10,6 +10,10 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
+        // UWAGA: Pozostałe zmienne środowiskowe (DATABASE_URL, JWT_SECRET, itp.)
+        // powinny być ustawione w systemie lub w pliku .env w katalogu głównym projektu.
+        // PM2 automatycznie załaduje zmienne z systemu operacyjnego.
+        // Możesz też użyć: pm2 start ecosystem.config.cjs --update-env
       },
       // Auto restart przy crashu
       autorestart: true,
@@ -23,11 +27,8 @@ module.exports = {
       out_file: './logs/pm2-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
-      // Wyłącz wait_ready jeśli nie używasz cluster mode
-      wait_ready: false,
       // Graceful shutdown
       kill_timeout: 5000,
-      wait_ready: true,
       listen_timeout: 10000,
       // Watch (wyłączone w produkcji)
       watch: false,
