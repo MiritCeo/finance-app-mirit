@@ -1273,16 +1273,20 @@ export const appRouter = router({
           
           // Oblicz przychód używając stawki z assignment dla każdego wpisu
           let revenue = 0;
+          
+          // Oblicz przychód na podstawie godzin
           for (const entry of entries) {
             const hours = entry.hoursWorked / 100; // Konwersja z groszy na godziny
-            const hourlyRate = entry.hourlyRateClient || employee.hourlyRateClient || 0;
-            revenue += Math.round(hours * hourlyRate);
+            const hourlyRateClient = entry.hourlyRateClient || employee.hourlyRateClient || 0;
+            revenue += Math.round(hours * hourlyRateClient);
           }
           
-          totalRevenue += revenue;
+          // Dla WSZYSTKICH typów umów (UoP, B2B, zlecenie, zlecenie studenckie) 
+          // koszt jest stały miesięczny - niezależnie od liczby przepracowanych godzin
+          const employeeCost = employee.monthlyCostTotal;
           
-          // Użyj aktualnego kosztu pracownika
-          totalEmployeeCosts += employee.monthlyCostTotal;
+          totalRevenue += revenue;
+          totalEmployeeCosts += employeeCost;
         }
       }
       

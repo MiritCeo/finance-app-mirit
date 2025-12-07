@@ -324,6 +324,21 @@ pnpm db:push
 
 ### 3. Zbuduj aplikację
 
+**WAŻNE**: Przed budowaniem wyczyść poprzednie buildy, aby uniknąć problemów z cache:
+
+```bash
+# Wyczyść poprzednie buildy
+rm -rf dist/ client/dist/
+
+# Zbuduj aplikację
+chmod +x build.sh
+./build.sh
+
+# Sprawdź, czy build się powiódł
+ls -la dist/index.js
+# Plik powinien istnieć i mieć rozmiar kilku MB
+```
+
 ```bash
 # Nadaj uprawnienia wykonywania dla build.sh
 chmod +x build.sh
@@ -731,6 +746,50 @@ pm2 monit
 # Zwiększ limit pamięci w ecosystem.config.cjs
 # max_memory_restart: '1G'
 ```
+
+### Błąd "No procedure found on path" (dowolna procedura tRPC)
+
+Ten błąd oznacza, że router tRPC nie został poprawnie zbudowany. Może dotyczyć:
+- `employeeCV.get`
+- `dashboard.getTopEmployees`
+- `dashboard.getTopEmployeesByYear`
+- `dashboard.getProjectProfitability`
+- Inne procedury tRPC
+
+**Rozwiązanie:**
+
+```bash
+# 1. Zatrzymaj aplikację
+pm2 stop profitflow
+
+# 2. Wyczyść buildy (WAŻNE!)
+rm -rf dist/ client/dist/
+
+# 3. Zainstaluj zależności
+pnpm install --frozen-lockfile
+
+# 4. Zbuduj ponownie
+pnpm build
+
+# 5. Sprawdź rozmiar pliku (WAŻNE - powinien być 2-5 MB, nie 188KB!)
+du -sh dist/index.js
+
+# Jeśli plik ma mniej niż 1MB, problem jest w konfiguracji buildu
+# Zobacz: FIX_BUILD_SIZE.md
+
+# 6. Sprawdź, czy router został zbudowany
+grep -i "employeeCV\|getTopEmployees\|getProjectProfitability" dist/index.js | head -5
+
+# 7. Uruchom ponownie
+pm2 start ecosystem.config.cjs
+
+# 8. Sprawdź logi
+pm2 logs profitflow --lines 50
+
+# 9. Wyczyść cache przeglądarki (Ctrl+Shift+R lub Cmd+Shift+R)
+```
+
+**Szczegółowe instrukcje w pliku [FIX_PRODUCTION_CV.md](FIX_PRODUCTION_CV.md)**
 
 ### Problemy z uprawnieniami
 

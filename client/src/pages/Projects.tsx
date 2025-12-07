@@ -124,13 +124,13 @@ export default function Projects() {
         description: formData.description || undefined,
       });
     } else {
-      createMutation.mutate({
-        clientId: parseInt(formData.clientId),
-        name: formData.name,
-        billingModel: "time_material",
-        status: formData.status,
-        description: formData.description || undefined,
-      });
+    createMutation.mutate({
+      clientId: parseInt(formData.clientId),
+      name: formData.name,
+      billingModel: "time_material",
+      status: formData.status,
+      description: formData.description || undefined,
+    });
     }
   };
   
@@ -355,9 +355,9 @@ export default function Projects() {
           )}
           
           <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
+          <Table>
+            <TableHeader>
+              <TableRow>
                   <TableHead className="min-w-[200px]">Nazwa projektu</TableHead>
                   <TableHead className="w-[120px]">Status</TableHead>
                   <TableHead className="min-w-[250px]">Opis</TableHead>
@@ -366,8 +366,8 @@ export default function Projects() {
                   <TableHead className="w-[140px] text-right">Śr. stawka/h</TableHead>
                   <TableHead className="w-[140px] text-right">Rentowność</TableHead>
                   <TableHead className="text-right w-[120px]">Akcje</TableHead>
-                </TableRow>
-              </TableHeader>
+              </TableRow>
+            </TableHeader>
             <TableBody>
               {projects?.filter(project => {
                 const matchesSearch = !searchTerm || 
@@ -378,19 +378,19 @@ export default function Projects() {
                 return matchesSearch && matchesStatus && matchesClient;
               }).map((project) => (
                 <>
-                  <TableRow key={project.id}>
-                    <TableCell className="font-medium">{project.name}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        project.status === "active" 
+                <TableRow key={project.id}>
+                  <TableCell className="font-medium">{project.name}</TableCell>
+                  <TableCell>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      project.status === "active" 
                           ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                          : project.status === "completed"
+                        : project.status === "completed"
                           ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
                           : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
-                      }`}>
-                        {statusLabels[project.status]}
-                      </span>
-                    </TableCell>
+                    }`}>
+                      {statusLabels[project.status]}
+                    </span>
+                  </TableCell>
                     <TableCell className="max-w-md">
                       {project.description ? (
                         <div className="space-y-1">
@@ -549,7 +549,7 @@ export default function Projects() {
                           </button>
                         </div>
                       </TableCell>
-                    </TableRow>
+                </TableRow>
                   )}
                 </>
               ))}
@@ -561,7 +561,7 @@ export default function Projects() {
                 </TableRow>
               )}
             </TableBody>
-            </Table>
+          </Table>
           </div>
         </CardContent>
       </Card>
