@@ -81,10 +81,12 @@ export async function setupVite(app: Express, server: Server, port: number) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath =
-    process.env.NODE_ENV === "development"
-      ? path.resolve(import.meta.dirname, "../..", "dist", "public")
-      : path.resolve(import.meta.dirname, "public");
+  // W produkcji, po zbudowaniu przez esbuild, pliki są w dist/
+  // W development, pliki źródłowe są w server/_core/
+  // Używamy process.cwd() aby zawsze wskazywać na katalog główny projektu
+  const projectRoot = process.cwd();
+  const distPath = path.resolve(projectRoot, "dist", "public");
+  
   if (!fs.existsSync(distPath)) {
     console.error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
