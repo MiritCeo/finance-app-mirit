@@ -4,9 +4,11 @@ import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
 
 export async function setupVite(app: Express, server: Server, port: number) {
+  // Dynamiczny import vite.config tylko w development, aby uniknąć problemów z esbuild w produkcji
+  const viteConfig = await import("../../vite.config");
+  
   const serverOptions = {
     middlewareMode: true,
     hmr: { 
@@ -18,7 +20,7 @@ export async function setupVite(app: Express, server: Server, port: number) {
   };
 
   const vite = await createViteServer({
-    ...viteConfig,
+    ...viteConfig.default,
     configFile: false,
     server: serverOptions,
     appType: "custom",
