@@ -241,3 +241,107 @@ export const knowledgeBase = mysqlTable("knowledgeBase", {
 
 export type KnowledgeBase = typeof knowledgeBase.$inferSelect;
 export type InsertKnowledgeBase = typeof knowledgeBase.$inferInsert;
+
+/**
+ * Employee CV - stores CV data for employees
+ */
+export const employeeCV = mysqlTable("employeeCV", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  yearsOfExperience: int("yearsOfExperience").default(0).notNull(), // Lata doświadczenia
+  summary: text("summary"), // Opis profilu pracownika (długi opis)
+  tagline: text("tagline"), // Krótki opis pracownika (2-3 zdania)
+  seniorityLevel: varchar("seniorityLevel", { length: 50 }), // Poziom: Junior, Mid, Senior
+  version: int("version").default(1).notNull(), // Wersja CV (do śledzenia zmian)
+  isActive: boolean("isActive").default(true).notNull(), // Czy to aktualna wersja CV
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeCV = typeof employeeCV.$inferSelect;
+export type InsertEmployeeCV = typeof employeeCV.$inferInsert;
+
+/**
+ * Employee Skills - stores soft skills for employees (umiejętności miękkie)
+ */
+export const employeeSkills = mysqlTable("employeeSkills", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  cvId: int("cvId"), // Opcjonalne - jeśli przypisane do konkretnej wersji CV
+  skillName: varchar("skillName", { length: 200 }).notNull(), // Nazwa umiejętności miękkiej
+  skillType: mysqlEnum("skillType", ["soft"]).default("soft").notNull(), // Typ umiejętności (tylko miękkie)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeSkill = typeof employeeSkills.$inferSelect;
+export type InsertEmployeeSkill = typeof employeeSkills.$inferInsert;
+
+/**
+ * Employee Technologies - stores hard skills/technologies known by employees (umiejętności twarde)
+ */
+export const employeeTechnologies = mysqlTable("employeeTechnologies", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  cvId: int("cvId"), // Opcjonalne - jeśli przypisane do konkretnej wersji CV
+  technologyName: varchar("technologyName", { length: 200 }).notNull(), // Nazwa technologii
+  category: varchar("category", { length: 100 }), // Kategoria: backend, frontend, devops, database, mobile, tools, etc.
+  proficiency: mysqlEnum("proficiency", ["beginner", "intermediate", "advanced", "expert"]).default("intermediate").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeTechnology = typeof employeeTechnologies.$inferSelect;
+export type InsertEmployeeTechnology = typeof employeeTechnologies.$inferInsert;
+
+/**
+ * Employee CV Projects - links projects to employee CV
+ */
+export const employeeCVProjects = mysqlTable("employeeCVProjects", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  cvId: int("cvId").notNull(), // Wersja CV
+  projectId: int("projectId").notNull(), // Projekt z tabeli projects
+  projectDescription: text("projectDescription"), // Opis projektu dla CV (może różnić się od opisu w projects)
+  role: varchar("role", { length: 200 }), // Rola pracownika w projekcie (np. "Lead Developer", "Backend Developer")
+  startDate: date("startDate"),
+  endDate: date("endDate"),
+  technologies: text("technologies"), // Technologie użyte w projekcie (JSON lub tekst oddzielony przecinkami)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeCVProject = typeof employeeCVProjects.$inferSelect;
+export type InsertEmployeeCVProject = typeof employeeCVProjects.$inferInsert;
+
+/**
+ * Employee Languages - stores languages known by employees
+ */
+export const employeeLanguages = mysqlTable("employeeLanguages", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  cvId: int("cvId"), // Opcjonalne - jeśli przypisane do konkretnej wersji CV
+  languageName: varchar("languageName", { length: 100 }).notNull(), // Nazwa języka (np. "Polski", "Angielski")
+  level: varchar("level", { length: 100 }), // Poziom (np. "ojczysty", "B2", "C1", "B2 / C1 – swobodna komunikacja w projektach")
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeLanguage = typeof employeeLanguages.$inferSelect;
+export type InsertEmployeeLanguage = typeof employeeLanguages.$inferInsert;
+
+/**
+ * Employee CV History - stores generated CV HTML versions (last 5 per employee)
+ */
+export const employeeCVHistory = mysqlTable("employeeCVHistory", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  cvId: int("cvId").notNull(), // Wersja CV na podstawie której wygenerowano
+  htmlContent: text("htmlContent").notNull(), // Wygenerowany HTML
+  generatedAt: timestamp("generatedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeCVHistory = typeof employeeCVHistory.$inferSelect;
+export type InsertEmployeeCVHistory = typeof employeeCVHistory.$inferInsert;

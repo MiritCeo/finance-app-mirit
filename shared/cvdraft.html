@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <title>CV – {{FULL_NAME}} (wewnętrzne)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f5;
+      color: #171717;
+      padding: 32px 12px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .cv {
+      width: 100%;
+      max-width: 800px;
+      background: #ffffff;
+      padding: 32px 28px 36px;
+      border: 1px solid #e0e0e0;
+    }
+
+    /* GŁÓWKA */
+    .cv-header {
+      margin-bottom: 24px;
+    }
+
+    .cv-name {
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #171717;
+      margin-bottom: 4px;
+    }
+
+    .cv-role-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 13px;
+      color: #313131;
+      margin-bottom: 6px;
+    }
+
+    .cv-role {
+      font-weight: 500;
+      color: #750036;
+    }
+
+    .cv-seniority {
+      font-weight: 500;
+    }
+
+    .cv-tagline {
+      font-size: 13px;
+      color: #313131;
+    }
+
+    /* SEKCJE */
+    .section {
+      margin-top: 20px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: #313131;
+      white-space: nowrap;
+    }
+
+    .section-line {
+      height: 1px;
+      flex: 1;
+      background: rgba(23, 23, 23, 0.12);
+    }
+
+    .section-text {
+      font-size: 13px;
+      color: #444;
+      line-height: 1.5;
+    }
+
+    /* TECHNOLOGIE */
+    .tech-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .tech-table th,
+    .tech-table td {
+      padding: 4px 0;
+      vertical-align: top;
+    }
+
+    .tech-table th {
+      font-weight: 500;
+      color: #313131;
+      width: 32%;
+      padding-right: 12px;
+    }
+
+    .tech-table td {
+      color: #444;
+    }
+
+    .tech-level {
+      font-weight: 500;
+      color: #750036;
+    }
+
+    .tech-notes {
+      font-size: 12px;
+      color: #777;
+    }
+
+    /* JĘZYKI */
+    .lang-row {
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+
+    .lang-level {
+      color: #313131;
+    }
+
+    /* PROJEKTY */
+    .project {
+      font-size: 13px;
+      margin-bottom: 14px;
+    }
+
+    .project-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 2px;
+    }
+
+    .project-name {
+      font-weight: 500;
+      color: #171717;
+    }
+
+    .project-period {
+      font-size: 12px;
+      color: #777;
+      white-space: nowrap;
+    }
+
+    .project-role {
+      font-size: 12px;
+      color: #750036;
+      margin-bottom: 4px;
+    }
+
+    .project-desc {
+      color: #444;
+      line-height: 1.4;
+      margin-bottom: 2px;
+    }
+
+    .project-tech {
+      font-size: 12px;
+      color: #313131;
+    }
+
+    /* RESPONSYWNOŚĆ */
+    @media (max-width: 600px) {
+      .cv {
+        padding: 24px 18px 28px;
+      }
+
+      .project-top {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .project-period {
+        white-space: normal;
+      }
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+        padding: 0;
+      }
+      .cv {
+        border: none;
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="cv">
+    <!-- NAGŁÓWEK -->
+    <header class="cv-header">
+      <div class="cv-name">{{FULL_NAME}}</div>
+      <div class="cv-role-line">
+        <span class="cv-role">{{POSITION}}</span>
+        <span>•</span>
+        <span class="cv-seniority">{{SENIORITY_LEVEL}}</span>
+        <span>•</span>
+        <span>Bodyleasing – profil wewnętrzny</span>
+      </div>
+      <div class="cv-tagline">
+        {{TAGLINE}}
+      </div>
+    </header>
+
+    <!-- PROFIL -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">Profil</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-text">
+        {{SUMMARY}}
+      </p>
+    </section>
+
+    <!-- TECHNOLOGIE / STACK -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">Technologie</h2>
+        <div class="section-line"></div>
+      </div>
+
+      <table class="tech-table">
+        {{TECHNOLOGIES_TABLE}}
+      </table>
+    </section>
+
+    <!-- UMIEJĘTNOŚCI MIĘKKIE -->
+    {{#IF_SOFT_SKILLS}}
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">Umiejętności miękkie</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-text">
+        {{SOFT_SKILLS}}
+      </p>
+    </section>
+    {{/IF_SOFT_SKILLS}}
+
+    <!-- JĘZYKI -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">Języki</h2>
+        <div class="section-line"></div>
+      </div>
+
+      {{LANGUAGES}}
+    </section>
+
+    <!-- PROJEKTY I ROLE -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">Projekty i rola</h2>
+        <div class="section-line"></div>
+      </div>
+
+      {{PROJECTS}}
+    </section>
+  </div>
+</body>
+</html>

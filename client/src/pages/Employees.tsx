@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -772,6 +772,16 @@ export default function Employees() {
                         >
                           <Calendar className="w-4 h-4 mr-1" />
                           <span className="text-xs">Raport</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setLocation(`/employee/${employee.id}/cv`)}
+                          title="Pokaż Aktualne CV"
+                          className="text-green-600 hover:text-green-700 hover:bg-green-50 transition-all duration-200 hover:scale-110"
+                        >
+                          <FileCheck className="w-4 h-4 mr-1" />
+                          <span className="text-xs">CV</span>
                         </Button>
                         <Button
                           variant="ghost"

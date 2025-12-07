@@ -1,0 +1,15 @@
+-- Add new fields to employeeCV table
+ALTER TABLE employeeCV ADD COLUMN tagline TEXT NULL AFTER summary;
+ALTER TABLE employeeCV ADD COLUMN seniorityLevel VARCHAR(50) NULL AFTER tagline;
+
+-- Create employeeLanguages table
+CREATE TABLE IF NOT EXISTS employeeLanguages (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  employeeId INT NOT NULL,
+  cvId INT NULL,
+  languageName VARCHAR(100) NOT NULL,
+  level VARCHAR(100) NULL,
+  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+

@@ -13,7 +13,13 @@ import {
   ownerSalarySimulations, InsertOwnerSalarySimulation,
   monthlyEmployeeReports, InsertMonthlyEmployeeReport, MonthlyEmployeeReport,
   tasks, InsertTask, Task,
-  knowledgeBase, InsertKnowledgeBase, KnowledgeBase
+  knowledgeBase, InsertKnowledgeBase, KnowledgeBase,
+  employeeCV, InsertEmployeeCV, EmployeeCV,
+  employeeSkills, InsertEmployeeSkill, EmployeeSkill,
+  employeeTechnologies, InsertEmployeeTechnology, EmployeeTechnology,
+  employeeCVProjects, InsertEmployeeCVProject, EmployeeCVProject,
+  employeeCVHistory, InsertEmployeeCVHistory, EmployeeCVHistory,
+  employeeLanguages, InsertEmployeeLanguage, EmployeeLanguage
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -683,4 +689,259 @@ export async function deleteKnowledgeBase(id: number) {
   const database = await getDb();
   if (!database) return;
   await database.delete(knowledgeBase).where(eq(knowledgeBase.id, id));
+}
+
+// ============ EMPLOYEE CV HELPERS ============
+
+export async function getEmployeeCV(employeeId: number) {
+  const database = await getDb();
+  if (!database) return null;
+  
+  const cv = await database
+    .select()
+    .from(employeeCV)
+    .where(and(
+      eq(employeeCV.employeeId, employeeId),
+      eq(employeeCV.isActive, true)
+    ))
+    .limit(1);
+  
+  return cv[0] || null;
+}
+
+export async function getEmployeeCVWithDetails(employeeId: number) {
+  const database = await getDb();
+  if (!database) return null;
+  
+  const cv = await getEmployeeCV(employeeId);
+  if (!cv) return null;
+  
+  // Pobierz umiejętności
+  const skills = await database
+    .select()
+    .from(employeeSkills)
+    .where(eq(employeeSkills.employeeId, employeeId));
+  
+  // Pobierz technologie
+  const technologies = await database
+    .select()
+    .from(employeeTechnologies)
+    .where(eq(employeeTechnologies.employeeId, employeeId));
+  
+  // Pobierz projekty CV
+  const cvProjects = await database
+    .select()
+    .from(employeeCVProjects)
+    .where(and(
+      eq(employeeCVProjects.employeeId, employeeId),
+      eq(employeeCVProjects.cvId, cv.id)
+    ));
+  
+  // Pobierz języki
+  const languages = await database
+    .select()
+    .from(employeeLanguages)
+    .where(eq(employeeLanguages.employeeId, employeeId));
+  
+  return {
+    ...cv,
+    skills,
+    technologies,
+    projects: cvProjects,
+    languages,
+  };
+}
+
+export async function createOrUpdateEmployeeCV(data: {
+  employeeId: number;
+  yearsOfExperience: number;
+  summary?: string;
+  tagline?: string; // Krótki opis (2-3 zdania)
+  seniorityLevel?: string; // Junior, Mid, Senior
+  skills?: Array<{ name: string }>; // Umiejętności miękkie - bez poziomu
+  technologies?: Array<{ name: string; category?: string; proficiency: string }>; // Technologie z kategorią
+  languages?: Array<{ name: string; level?: string }>; // Języki z poziomami
+  projects?: Array<{
+    projectId: number;
+    description?: string;
+    role?: string;
+    startDate?: string;
+    endDate?: string;
+    technologies?: string;
+  }>;
+}) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  
+  // Pobierz najwyższą wersję i dezaktywuj poprzednie CV
+  const existingCVs = await database
+    .select()
+    .from(employeeCV)
+    .where(eq(employeeCV.employeeId, data.employeeId));
+  
+  // Dezaktywuj poprzednie CV (jeśli istnieją)
+  if (existingCVs.length > 0) {
+    try {
+      await database
+        .update(employeeCV)
+        .set({ isActive: false })
+        .where(eq(employeeCV.employeeId, data.employeeId));
+    } catch (error: any) {
+      console.warn('[createOrUpdateEmployeeCV] Warning: Could not deactivate previous CV:', error.message);
+      // Kontynuuj - nie jest to krytyczne
+    }
+  }
+  
+  const maxVersion = existingCVs.length > 0
+    ? Math.max(...existingCVs.map(cv => cv.version))
+    : 0;
+  
+  // Utwórz nowe CV
+  let cvId: number;
+  try {
+    const newCV = await database.insert(employeeCV).values({
+      employeeId: data.employeeId,
+      yearsOfExperience: data.yearsOfExperience,
+      summary: data.summary || null,
+      tagline: data.tagline || null,
+      seniorityLevel: data.seniorityLevel || null,
+      version: maxVersion + 1,
+      isActive: true,
+    });
+    cvId = Number(newCV[0].insertId);
+    console.log('[createOrUpdateEmployeeCV] Created CV with id:', cvId);
+  } catch (error: any) {
+    console.error('[createOrUpdateEmployeeCV] Error creating CV:', error);
+    throw new Error(`Błąd podczas tworzenia CV: ${error.message}`);
+  }
+  
+  // Dodaj umiejętności miękkie
+  if (data.skills && data.skills.length > 0) {
+    try {
+      await database.insert(employeeSkills).values(
+        data.skills.map(skill => ({
+          employeeId: data.employeeId,
+          cvId,
+          skillName: skill.name,
+          skillType: "soft" as "soft",
+        }))
+      );
+    } catch (error: any) {
+      console.error('[createOrUpdateEmployeeCV] Error inserting skills:', error);
+      throw new Error(`Błąd podczas zapisywania umiejętności: ${error.message}`);
+    }
+  }
+  
+  // Dodaj technologie (umiejętności twarde)
+  if (data.technologies && data.technologies.length > 0) {
+    try {
+      await database.insert(employeeTechnologies).values(
+        data.technologies.map(tech => ({
+          employeeId: data.employeeId,
+          cvId,
+          technologyName: tech.name,
+          category: tech.category || null,
+          proficiency: tech.proficiency as "beginner" | "intermediate" | "advanced" | "expert",
+        }))
+      );
+    } catch (error: any) {
+      console.error('[createOrUpdateEmployeeCV] Error inserting technologies:', error);
+      throw new Error(`Błąd podczas zapisywania technologii: ${error.message}`);
+    }
+  }
+  
+  // Dodaj projekty
+  if (data.projects && data.projects.length > 0) {
+    try {
+      await database.insert(employeeCVProjects).values(
+        data.projects.map(project => ({
+          employeeId: data.employeeId,
+          cvId,
+          projectId: project.projectId,
+          projectDescription: project.description || null,
+          role: project.role || null,
+          startDate: project.startDate ? new Date(project.startDate) : null,
+          endDate: project.endDate ? new Date(project.endDate) : null,
+          technologies: project.technologies || null,
+        }))
+      );
+    } catch (error: any) {
+      console.error('[createOrUpdateEmployeeCV] Error inserting projects:', error);
+      throw new Error(`Błąd podczas zapisywania projektów: ${error.message}`);
+    }
+  }
+  
+  return cvId;
+}
+
+export async function getEmployeeCVProjects(cvId: number) {
+  const database = await getDb();
+  if (!database) return [];
+  
+  const { projects } = await import("../drizzle/schema");
+  
+  return await database
+    .select({
+      cvProject: employeeCVProjects,
+      project: projects,
+    })
+    .from(employeeCVProjects)
+    .innerJoin(projects, eq(employeeCVProjects.projectId, projects.id))
+    .where(eq(employeeCVProjects.cvId, cvId));
+}
+
+export async function saveCVHistory(employeeId: number, cvId: number, htmlContent: string) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  
+  // Zapisz nową wersję
+  await database.insert(employeeCVHistory).values({
+    employeeId,
+    cvId,
+    htmlContent,
+  });
+  
+  // Pobierz wszystkie wersje dla tego pracownika
+  const allVersions = await database
+    .select()
+    .from(employeeCVHistory)
+    .where(eq(employeeCVHistory.employeeId, employeeId))
+    .orderBy(desc(employeeCVHistory.generatedAt));
+  
+  // Jeśli jest więcej niż 5, usuń najstarsze
+  if (allVersions.length > 5) {
+    const toDelete = allVersions.slice(5);
+    for (const version of toDelete) {
+      await database
+        .delete(employeeCVHistory)
+        .where(eq(employeeCVHistory.id, version.id));
+    }
+  }
+  
+  return allVersions[0].id;
+}
+
+export async function getCVHistory(employeeId: number) {
+  const database = await getDb();
+  if (!database) return [];
+  
+  return await database
+    .select()
+    .from(employeeCVHistory)
+    .where(eq(employeeCVHistory.employeeId, employeeId))
+    .orderBy(desc(employeeCVHistory.generatedAt))
+    .limit(5);
+}
+
+export async function getCVHistoryById(id: number) {
+  const database = await getDb();
+  if (!database) return null;
+  
+  const result = await database
+    .select()
+    .from(employeeCVHistory)
+    .where(eq(employeeCVHistory.id, id))
+    .limit(1);
+  
+  return result[0] || null;
 }

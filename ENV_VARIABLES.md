@@ -251,6 +251,30 @@ VITE_ANALYTICS_ENDPOINT="https://analytics.example.com/api"
 
 ---
 
+### OPENAI_API_KEY
+
+**Typ**: String  
+**Wymagane**: Nie (tylko jeśli używasz funkcji generowania CV HTML)  
+**Opis**: Klucz API OpenAI używany do generowania CV HTML z pomocą AI (model GPT-4o-mini)
+
+**Jak uzyskać klucz**:
+1. Zarejestruj się na [platform.openai.com](https://platform.openai.com)
+2. Przejdź do sekcji API Keys
+3. Utwórz nowy klucz API
+4. Skopiuj klucz i dodaj do pliku `.env`
+
+**Przykład**:
+```bash
+OPENAI_API_KEY="sk-proj-..."
+```
+
+**Uwagi**:
+- Klucz API jest poufny - nie udostępniaj go publicznie
+- Używany model: `gpt-4o-mini` (najtańszy i najlepszy do generowania tekstu)
+- Koszt: ~$0.15/$0.60 per 1M tokens (input/output)
+
+---
+
 ### VITE_FRONTEND_FORGE_API_URL
 
 **Typ**: String  

@@ -1790,6 +1790,109 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+
+  // ============ EMPLOYEE CV ============
+  employeeCV: router({
+    get: protectedProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const cv = await db.getEmployeeCVWithDetails(input.employeeId);
+        return cv;
+      }),
+    
+    createOrUpdate: protectedProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        yearsOfExperience: z.number().min(0),
+        summary: z.string().optional(), // Opis profilu (długi opis)
+        tagline: z.string().optional(), // Krótki opis (2-3 zdania)
+        seniorityLevel: z.string().optional(), // Poziom: Junior, Mid, Senior
+        skills: z.array(z.object({
+          name: z.string(), // Umiejętności miękkie - wpisywane ręcznie
+        })).optional(),
+        technologies: z.array(z.object({
+          name: z.string(), // Technologie - wybierane z listy
+          category: z.string().optional(), // Kategoria technologii
+          proficiency: z.enum(["beginner", "intermediate", "advanced", "expert"]),
+        })).optional(),
+        languages: z.array(z.object({
+          name: z.string(), // Nazwa języka (np. "Polski", "Angielski")
+          level: z.string().optional(), // Poziom (np. "ojczysty", "B2", "C1", "B2 / C1 – swobodna komunikacja w projektach")
+        })).optional(),
+        projects: z.array(z.object({
+          projectId: z.number(),
+          description: z.string().optional(),
+          role: z.string().optional(),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
+          technologies: z.string().optional(),
+        })).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const cvId = await db.createOrUpdateEmployeeCV(input);
+        return { cvId, success: true };
+      }),
+    
+    generate: protectedProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const cv = await db.getEmployeeCVWithDetails(input.employeeId);
+        if (!cv) {
+          throw new Error("CV not found");
+        }
+        
+        const employee = await db.getEmployeeById(input.employeeId);
+        if (!employee) {
+          throw new Error("Employee not found");
+        }
+        
+        // Pobierz projekty z pełnymi danymi
+        const cvProjects = await db.getEmployeeCVProjects(cv.id);
+        
+        return {
+          employee,
+          cv,
+          projects: cvProjects.map(p => ({
+            ...p.cvProject,
+            project: p.project,
+          })),
+        };
+      }),
+    
+    generateHTML: protectedProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        const { generateCVHTML } = await import("./cvGenerator");
+        const result = await generateCVHTML(input.employeeId);
+        return result;
+      }),
+    
+    getHistory: protectedProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getCVHistory(input.employeeId);
+      }),
+    
+    getHistoryById: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const history = await db.getCVHistoryById(input.id);
+        if (!history) {
+          throw new Error("CV history not found");
+        }
+        return history;
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
