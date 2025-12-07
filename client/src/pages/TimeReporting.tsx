@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Save, Calendar, TrendingUp, ArrowLeft, Edit, Trash2, Clock, Briefcase } from "lucide-react";
+import { Loader2, Save, Calendar, TrendingUp, ArrowLeft, Edit, Trash2, Clock, Briefcase, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Komponent karty pracownika z projektami
 function EmployeeCard({ 
@@ -148,6 +149,11 @@ export default function TimeReporting() {
   const [hoursData, setHoursData] = useState<Record<number, Record<number, string>>>({});
   // Cache assignments dla obliczeń przychodu: { assignmentId: assignment }
   const [assignmentsCache, setAssignmentsCache] = useState<Record<number, any>>({});
+  // Cache assignments per pracownik: { employeeId: assignments[] }
+  const [employeeAssignmentsCache, setEmployeeAssignmentsCache] = useState<Record<number, any[]>>({});
+  // Wyszukiwarka i filtry
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
 
   const { data: employees, isLoading: employeesLoading } = trpc.employees.list.useQuery(undefined, { enabled: !!user });
   const { data: monthlyReports, isLoading: reportsLoading } = trpc.timeEntries.monthlyReports.useQuery(
@@ -164,6 +170,8 @@ export default function TimeReporting() {
       newCache[assignment.id] = assignment;
     });
     setAssignmentsCache(prev => ({ ...prev, ...newCache }));
+    // Zapisz również assignments per pracownik dla filtrowania
+    setEmployeeAssignmentsCache(prev => ({ ...prev, [employeeId]: assignments }));
   };
 
   const saveMutation = trpc.timeEntries.saveMonthlyHours.useMutation({
@@ -277,6 +285,36 @@ export default function TimeReporting() {
   
   const totalRevenue = calculateTotalRevenue(); // w groszach
 
+  // Filtrowanie pracowników
+  const filteredEmployees = React.useMemo(() => {
+    if (!employees) return [];
+    
+    return employees.filter(employee => {
+      // Filtrowanie po wyszukiwarce
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
+        if (!fullName.includes(searchLower)) {
+          return false;
+        }
+      }
+      
+      // Filtrowanie po projekcie
+      if (selectedProjectId !== "all") {
+        const projectIdNum = parseInt(selectedProjectId);
+        const employeeAssignments = employeeAssignmentsCache[employee.id] || [];
+        const hasActiveAssignment = employeeAssignments.some(
+          (assignment: any) => assignment.isActive && assignment.projectId === projectIdNum
+        );
+        if (!hasActiveAssignment) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  }, [employees, searchTerm, selectedProjectId, employeeAssignmentsCache]);
+
   return (
     <div className="container mx-auto max-w-7xl space-y-6">
       <Button onClick={() => setLocation("/")} variant="outline" className="mb-4">
@@ -339,15 +377,58 @@ export default function TimeReporting() {
                 </div>
               </div>
 
+              {/* Wyszukiwarka i filtry */}
+              <div className="space-y-4">
+                <div className="flex gap-4">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Szukaj pracownika..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 pr-10"
+                    />
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm("")}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="w-64">
+                    <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wszystkie projekty" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Wszystkie projekty</SelectItem>
+                        {projects?.map((project) => (
+                          <SelectItem key={project.id} value={project.id.toString()}>
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {(searchTerm || selectedProjectId !== "all") && employees && (
+                  <div className="text-sm text-muted-foreground">
+                    Znaleziono {filteredEmployees.length} z {employees.length} pracowników
+                  </div>
+                )}
+              </div>
+
               {/* Lista pracowników */}
               {employeesLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                 </div>
-              ) : employees && employees.length > 0 ? (
+              ) : filteredEmployees && filteredEmployees.length > 0 ? (
                 <div className="space-y-4">
                   <div className="space-y-4">
-                    {employees.map((employee) => (
+                    {filteredEmployees.map((employee) => (
                       <EmployeeCard
                         key={employee.id}
                         employee={employee}
@@ -381,6 +462,10 @@ export default function TimeReporting() {
                       )}
                     </Button>
                   </div>
+                </div>
+              ) : employees && employees.length > 0 ? (
+                <div className="text-center text-muted-foreground py-12">
+                  Brak pracowników spełniających kryteria wyszukiwania
                 </div>
               ) : (
                 <div className="text-center text-muted-foreground py-12">

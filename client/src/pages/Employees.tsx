@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck, Download, Upload } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -38,6 +38,78 @@ export default function Employees() {
   const { data: projects } = trpc.projects.list.useQuery(undefined, {
     enabled: !!user,
   });
+  
+  const utils = trpc.useUtils();
+  
+  const exportMutation = trpc.employees.exportEmployees.useMutation();
+  const importMutation = trpc.employees.importEmployees.useMutation({
+    onSuccess: (result) => {
+      toast.success(`Import zakończony: ${result.created} utworzonych, ${result.updated} zaktualizowanych${result.errors.length > 0 ? `, ${result.errors.length} błędów` : ''}`);
+      if (result.errors.length > 0) {
+        console.error('Błędy importu:', result.errors);
+      }
+      refetch();
+    },
+    onError: (error) => {
+      toast.error("Błąd importu: " + error.message);
+    },
+  });
+  
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  
+  const handleExport = async () => {
+    try {
+      const result = await exportMutation.mutateAsync();
+      
+      // Konwertuj base64 na blob
+      const byteCharacters = atob(result.data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: result.mimeType });
+      
+      // Pobierz plik
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Eksport zakończony pomyślnie");
+    } catch (error: any) {
+      toast.error("Błąd eksportu: " + error.message);
+    }
+  };
+  
+  const handleImport = async () => {
+    if (!importFile) {
+      toast.error("Wybierz plik do importu");
+      return;
+    }
+    
+    try {
+      // Konwertuj plik na base64
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = (e.target?.result as string).split(',')[1] || '';
+        await importMutation.mutateAsync({
+          filename: importFile.name,
+          data: base64,
+        });
+        setIsImportDialogOpen(false);
+        setImportFile(null);
+      };
+      reader.readAsDataURL(importFile);
+    } catch (error: any) {
+      toast.error("Błąd importu: " + error.message);
+    }
+  };
   
   const createAssignmentMutation = trpc.assignments.create.useMutation({
     onSuccess: () => {
@@ -178,9 +250,6 @@ export default function Employees() {
     vacationCostAnnual: "",
     vacationDaysPerYear: "21",
   });
-
-  // Automatyczne obliczanie kosztów
-  const utils = trpc.useUtils();
 
   // Automatyczne przeliczanie kosztów gdy zmieni się netto lub dni urlopu
   useEffect(() => {
@@ -401,13 +470,82 @@ export default function Employees() {
           </h1>
           <p className="text-muted-foreground">Zarządzaj pracownikami i ich kosztami</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => { setEditingEmployee(null); resetForm(); }} className="shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
-              <Plus className="w-4 h-4 mr-2" />
-              Dodaj pracownika
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleExport} 
+            variant="outline"
+            disabled={exportMutation.isPending}
+            className="shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+          >
+            {exportMutation.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            Eksportuj
+          </Button>
+          <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button 
+                variant="outline"
+                className="shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Importuj
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Import pracowników z Excel</DialogTitle>
+                <DialogDescription>
+                  Wybierz plik Excel z danymi pracowników. Jeśli pracownik ma ID, zostanie zaktualizowany, w przeciwnym razie zostanie utworzony nowy.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="importFile">Plik Excel (.xlsx)</Label>
+                  <Input
+                    id="importFile"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+                {importFile && (
+                  <p className="text-sm text-muted-foreground">
+                    Wybrany plik: {importFile.name}
+                  </p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsImportDialogOpen(false);
+                    setImportFile(null);
+                  }}
+                >
+                  Anuluj
+                </Button>
+                <Button
+                  onClick={handleImport}
+                  disabled={!importFile || importMutation.isPending}
+                >
+                  {importMutation.isPending && (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  )}
+                  Importuj
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => { setEditingEmployee(null); resetForm(); }} className="shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
+                <Plus className="w-4 h-4 mr-2" />
+                Dodaj pracownika
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <form onSubmit={handleSubmit}>
               <DialogHeader>
@@ -576,6 +714,7 @@ export default function Employees() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>

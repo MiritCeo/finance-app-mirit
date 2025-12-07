@@ -35,7 +35,7 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
-  // tRPC API
+  // tRPC API - przed Vite middleware
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -43,7 +43,7 @@ async function startServer() {
       createContext,
     })
   );
-  // CV View endpoint - wyświetlanie CV z możliwością edycji
+  // CV View endpoint - przed Vite middleware
   app.get("/cv/:id", async (req, res) => {
     try {
       const cvId = parseInt(req.params.id);
@@ -188,18 +188,18 @@ async function startServer() {
       res.status(500).send("Error loading CV");
     }
   });
-  // development mode uses Vite, production mode uses static files
-  if (process.env.NODE_ENV === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
-
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+  }
+
+  // development mode uses Vite, production mode uses static files
+  if (process.env.NODE_ENV === "development") {
+    await setupVite(app, server, port);
+  } else {
+    serveStatic(app);
   }
 
   server.listen(port, () => {
