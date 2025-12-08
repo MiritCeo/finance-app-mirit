@@ -4,7 +4,9 @@ module.exports = {
   apps: [
     {
       name: 'profitflow',
-      script: './dist/index.js',
+      script: './server/_core/index.ts',
+      interpreter: 'pnpm',
+      interpreter_args: 'exec tsx',
       instances: 1, // Użyj 1 instancji dla ES modules (cluster mode może mieć problemy)
       exec_mode: 'fork', // Fork mode działa lepiej z ES modules
       env: {

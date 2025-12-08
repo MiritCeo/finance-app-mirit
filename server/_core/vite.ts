@@ -87,16 +87,64 @@ export function serveStatic(app: Express) {
   const projectRoot = process.cwd();
   const distPath = path.resolve(projectRoot, "dist", "public");
   
+  console.log(`[serveStatic] Looking for build directory at: ${distPath}`);
+  console.log(`[serveStatic] Current working directory: ${projectRoot}`);
+  
   if (!fs.existsSync(distPath)) {
     console.error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`
+      `[serveStatic] ERROR: Could not find the build directory: ${distPath}`
     );
+    console.error(
+      `[serveStatic] Make sure to run 'pnpm build' to build the client first`
+    );
+    console.error(
+      `[serveStatic] Expected structure: dist/public/index.html`
+    );
+    
+    // Zwróć błąd zamiast kontynuować
+    app.use("*", (_req, res) => {
+      res.status(500).send(`
+        <html>
+          <head><title>Build Error</title></head>
+          <body>
+            <h1>Build Directory Not Found</h1>
+            <p>The build directory was not found at: <code>${distPath}</code></p>
+            <p>Please run <code>pnpm build</code> to build the client first.</p>
+            <p>Current working directory: <code>${projectRoot}</code></p>
+          </body>
+        </html>
+      `);
+    });
+    return;
   }
+  
+  const indexHtmlPath = path.resolve(distPath, "index.html");
+  if (!fs.existsSync(indexHtmlPath)) {
+    console.error(
+      `[serveStatic] ERROR: index.html not found at: ${indexHtmlPath}`
+    );
+    app.use("*", (_req, res) => {
+      res.status(500).send(`
+        <html>
+          <head><title>Build Error</title></head>
+          <body>
+            <h1>index.html Not Found</h1>
+            <p>The index.html file was not found at: <code>${indexHtmlPath}</code></p>
+            <p>Please run <code>pnpm build</code> to build the client first.</p>
+          </body>
+        </html>
+      `);
+    });
+    return;
+  }
+  
+  console.log(`[serveStatic] Serving static files from: ${distPath}`);
+  console.log(`[serveStatic] index.html found at: ${indexHtmlPath}`);
 
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+    res.sendFile(indexHtmlPath);
   });
 }
