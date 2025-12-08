@@ -10,11 +10,23 @@ const envResult = dotenv.config({ path: envPath });
 
 if (envResult.error) {
   console.warn('[PM2] Błąd ładowania .env:', envResult.error.message);
+  console.warn('[PM2] Sprawdzana ścieżka:', envPath);
 } else {
   console.log('[PM2] Załadowano .env z:', envPath);
-  console.log('[PM2] DATABASE_URL:', process.env.DATABASE_URL ? 'ustawiony' : 'BRAK');
-  console.log('[PM2] OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'ustawiony' : 'BRAK');
+  console.log('[PM2] DATABASE_URL:', process.env.DATABASE_URL ? `ustawiony (${process.env.DATABASE_URL.substring(0, 20)}...)` : 'BRAK');
+  console.log('[PM2] OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? `ustawiony (${process.env.OPENAI_API_KEY.substring(0, 10)}...)` : 'BRAK');
+  console.log('[PM2] Wszystkie zmienne z .env:', Object.keys(envResult.parsed || {}).join(', '));
 }
+
+// Funkcja pomocnicza do bezpiecznego pobierania zmiennych
+// Użyj wartości z envResult.parsed (z .env) lub process.env (zmienne systemowe)
+const getEnv = (key, defaultValue = undefined) => {
+  // Najpierw sprawdź envResult.parsed (z .env), potem process.env (zmienne systemowe)
+  if (envResult.parsed && envResult.parsed[key]) {
+    return envResult.parsed[key];
+  }
+  return process.env[key] || defaultValue;
+};
 
 module.exports = {
   apps: [
@@ -29,24 +41,25 @@ module.exports = {
       env: {
         NODE_ENV: process.env.NODE_ENV || 'production',
         PORT: process.env.PORT || 3000,
-        DATABASE_URL: process.env.DATABASE_URL,
-        JWT_SECRET: process.env.JWT_SECRET,
-        OWNER_NAME: process.env.OWNER_NAME,
-        OWNER_OPEN_ID: process.env.OWNER_OPEN_ID,
-        VITE_APP_ID: process.env.VITE_APP_ID,
-        VITE_APP_TITLE: process.env.VITE_APP_TITLE,
-        VITE_APP_LOGO: process.env.VITE_APP_LOGO,
-        OAUTH_SERVER_URL: process.env.OAUTH_SERVER_URL,
-        VITE_OAUTH_PORTAL_URL: process.env.VITE_OAUTH_PORTAL_URL,
-        SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME,
-        SESSION_COOKIE_MAX_AGE: process.env.SESSION_COOKIE_MAX_AGE,
-        VITE_ANALYTICS_ENDPOINT: process.env.VITE_ANALYTICS_ENDPOINT,
-        VITE_ANALYTICS_WEBSITE_ID: process.env.VITE_ANALYTICS_WEBSITE_ID,
-        BUILT_IN_FORGE_API_URL: process.env.BUILT_IN_FORGE_API_URL,
-        BUILT_IN_FORGE_API_KEY: process.env.BUILT_IN_FORGE_API_KEY,
-        VITE_FRONTEND_FORGE_API_KEY: process.env.VITE_FRONTEND_FORGE_API_KEY,
-        VITE_FRONTEND_FORGE_API_URL: process.env.VITE_FRONTEND_FORGE_API_URL,
-        OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+        // Przekaż wszystkie zmienne z .env (po załadowaniu przez dotenv.config powyżej)
+        DATABASE_URL: getEnv('DATABASE_URL'),
+        JWT_SECRET: getEnv('JWT_SECRET'),
+        OWNER_NAME: getEnv('OWNER_NAME'),
+        OWNER_OPEN_ID: getEnv('OWNER_OPEN_ID'),
+        VITE_APP_ID: getEnv('VITE_APP_ID'),
+        VITE_APP_TITLE: getEnv('VITE_APP_TITLE'),
+        VITE_APP_LOGO: getEnv('VITE_APP_LOGO'),
+        OAUTH_SERVER_URL: getEnv('OAUTH_SERVER_URL'),
+        VITE_OAUTH_PORTAL_URL: getEnv('VITE_OAUTH_PORTAL_URL'),
+        SESSION_COOKIE_NAME: getEnv('SESSION_COOKIE_NAME'),
+        SESSION_COOKIE_MAX_AGE: getEnv('SESSION_COOKIE_MAX_AGE'),
+        VITE_ANALYTICS_ENDPOINT: getEnv('VITE_ANALYTICS_ENDPOINT'),
+        VITE_ANALYTICS_WEBSITE_ID: getEnv('VITE_ANALYTICS_WEBSITE_ID'),
+        BUILT_IN_FORGE_API_URL: getEnv('BUILT_IN_FORGE_API_URL'),
+        BUILT_IN_FORGE_API_KEY: getEnv('BUILT_IN_FORGE_API_KEY'),
+        VITE_FRONTEND_FORGE_API_KEY: getEnv('VITE_FRONTEND_FORGE_API_KEY'),
+        VITE_FRONTEND_FORGE_API_URL: getEnv('VITE_FRONTEND_FORGE_API_URL'),
+        OPENAI_API_KEY: getEnv('OPENAI_API_KEY'),
       },
       // Auto restart przy crashu
       autorestart: true,
