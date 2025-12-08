@@ -28,33 +28,34 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   // WAŻNE: Załaduj .env PRZED użyciem ENV w innych modułach
-  // Używamy dynamicznego importu, aby uniknąć bundlowania przez esbuild
-  if (process.env.NODE_ENV !== "production") {
-    try {
-      const dotenv = await import("dotenv");
-      const path = await import("path");
-      // Ładuj .env z katalogu głównego projektu
-      const envPath = path.resolve(process.cwd(), ".env");
-      const result = dotenv.config({ path: envPath });
-      if (result.error) {
-        console.warn("[Env] Błąd ładowania .env:", result.error.message);
+  // W produkcji też ładujemy .env (jeśli nie są ustawione zmienne środowiskowe systemowe)
+  try {
+    const dotenv = await import("dotenv");
+    const path = await import("path");
+    // Ładuj .env z katalogu głównego projektu
+    const envPath = path.resolve(process.cwd(), ".env");
+    console.log("[Env] Próba załadowania .env z:", envPath);
+    console.log("[Env] process.cwd():", process.cwd());
+    const result = dotenv.config({ path: envPath });
+    if (result.error) {
+      console.warn("[Env] Błąd ładowania .env:", result.error.message);
+    } else {
+      console.log("[Env] Załadowano plik .env z:", envPath);
+      // Sprawdź kluczowe zmienne
+      console.log("[Env] DATABASE_URL:", process.env.DATABASE_URL ? "ustawiony" : "BRAK");
+      if (process.env.OPENAI_API_KEY) {
+        console.log("[Env] OPENAI_API_KEY jest ustawiony (długość:", process.env.OPENAI_API_KEY.length, "znaków)");
       } else {
-        console.log("[Env] Załadowano plik .env z:", envPath);
-        // Sprawdź czy klucze API są dostępne
-        if (process.env.OPENAI_API_KEY) {
-          console.log("[Env] OPENAI_API_KEY jest ustawiony (długość:", process.env.OPENAI_API_KEY.length, "znaków)");
-        } else {
-          console.warn("[Env] OPENAI_API_KEY NIE jest ustawiony");
-        }
-        if (process.env.BUILT_IN_FORGE_API_KEY) {
-          console.log("[Env] BUILT_IN_FORGE_API_KEY jest ustawiony (długość:", process.env.BUILT_IN_FORGE_API_KEY.length, "znaków)");
-        } else {
-          console.warn("[Env] BUILT_IN_FORGE_API_KEY NIE jest ustawiony");
-        }
+        console.warn("[Env] OPENAI_API_KEY NIE jest ustawiony");
       }
-    } catch (e) {
-      console.warn("[Env] Błąd podczas ładowania dotenv:", e);
+      if (process.env.BUILT_IN_FORGE_API_KEY) {
+        console.log("[Env] BUILT_IN_FORGE_API_KEY jest ustawiony (długość:", process.env.BUILT_IN_FORGE_API_KEY.length, "znaków)");
+      } else {
+        console.warn("[Env] BUILT_IN_FORGE_API_KEY NIE jest ustawiony");
+      }
     }
+  } catch (e) {
+    console.warn("[Env] Błąd podczas ładowania dotenv:", e);
   }
   
   const app = express();

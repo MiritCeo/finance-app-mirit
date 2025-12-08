@@ -1,7 +1,20 @@
 // PM2 Ecosystem Configuration dla ProfitFlow
 
-// Załaduj zmienne z .env
-require('dotenv').config();
+// Załaduj zmienne z .env - użyj absolutnej ścieżki
+const path = require('path');
+const dotenv = require('dotenv');
+
+// Załaduj .env z katalogu głównego projektu (gdzie jest ecosystem.config.cjs)
+const envPath = path.resolve(__dirname, '.env');
+const envResult = dotenv.config({ path: envPath });
+
+if (envResult.error) {
+  console.warn('[PM2] Błąd ładowania .env:', envResult.error.message);
+} else {
+  console.log('[PM2] Załadowano .env z:', envPath);
+  console.log('[PM2] DATABASE_URL:', process.env.DATABASE_URL ? 'ustawiony' : 'BRAK');
+  console.log('[PM2] OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'ustawiony' : 'BRAK');
+}
 
 module.exports = {
   apps: [
@@ -12,6 +25,7 @@ module.exports = {
       interpreter_args: 'exec tsx',
       instances: 1, // Użyj 1 instancji dla ES modules (cluster mode może mieć problemy)
       exec_mode: 'fork', // Fork mode działa lepiej z ES modules
+      cwd: __dirname, // Ustaw katalog roboczy na katalog z ecosystem.config.cjs
       env: {
         NODE_ENV: process.env.NODE_ENV || 'production',
         PORT: process.env.PORT || 3000,
