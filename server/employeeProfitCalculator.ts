@@ -3,6 +3,8 @@
  * Oblicza zysk z pracownika uwzględniając płatne urlopy i rzeczywiste koszty
  */
 
+import { calculateZlecenieFromNet, calculateZlecenieStudenckieFromNet } from "./salaryCalculator";
+
 const MONTHLY_WORKING_HOURS = 168; // Standardowe godziny miesięcznie
 const WORKING_DAYS_PER_MONTH = 21; // Dni robocze w miesiącu
 const HOURS_PER_DAY = 8; // Godziny pracy dziennie
@@ -210,24 +212,22 @@ export function simulateNegotiation(
     }
     
     case "zlecenie": {
-      // Zlecenie: Składki ~29.19%
-      const grossAmount = Math.round(monthlySalaryNet / 0.68);
-      const zusEmployee = Math.round(grossAmount * 0.2919);
-      const taxBase = grossAmount - zusEmployee;
-      const healthInsurance = Math.round(taxBase * 0.09);
-      const tax = Math.round(taxBase * 0.12);
+      // Używamy tej samej metody iteracyjnej co w calculateSalary
+      const result = calculateZlecenieFromNet(monthlySalaryNet);
+      const grossAmount = result.employerCost; // employerCost to brutto dla zlecenie
       
-      monthlyCostTotal = grossAmount;
-      
-      // Koszt urlopów
-      const vacationCostMonthly = Math.round(monthlyCostTotal * vacationCostPercentage);
+      // Koszt urlopów jako procent brutto (252 dni robocze w roku)
+      const vacationCostMonthly = Math.round(grossAmount * vacationCostPercentage);
       const vacationCostAnnual = vacationCostMonthly * 12;
+      
+      // Koszt całkowity = brutto + koszt urlopów
+      monthlyCostTotal = grossAmount + vacationCostMonthly;
       
       breakdown = {
         grossSalary: grossAmount,
-        zusEmployee,
-        healthInsurance,
-        tax,
+        zusEmployee: result.breakdown.zusEmployee,
+        healthInsurance: result.breakdown.healthInsurance,
+        tax: result.breakdown.tax,
         vacationCostMonthly,
         vacationCostAnnual,
       };
@@ -235,19 +235,20 @@ export function simulateNegotiation(
     }
     
     case "zlecenie_studenckie": {
-      // Zlecenie studenckie: Brak składek ZUS i zdrowotnej
-      const grossAmount = Math.round(monthlySalaryNet / 0.88); // Tylko podatek 12%
-      const tax = Math.round(grossAmount * 0.12);
+      // Używamy tej samej metody co w calculateSalary
+      const result = calculateZlecenieStudenckieFromNet(monthlySalaryNet);
+      const grossAmount = result.employerCost; // employerCost to brutto dla zlecenie studenckie
       
-      monthlyCostTotal = grossAmount;
-      
-      // Koszt urlopów
-      const vacationCostMonthly = Math.round(monthlyCostTotal * vacationCostPercentage);
+      // Koszt urlopów jako procent brutto (252 dni robocze w roku)
+      const vacationCostMonthly = Math.round(grossAmount * vacationCostPercentage);
       const vacationCostAnnual = vacationCostMonthly * 12;
+      
+      // Koszt całkowity = brutto + koszt urlopów
+      monthlyCostTotal = grossAmount + vacationCostMonthly;
       
       breakdown = {
         grossSalary: grossAmount,
-        tax,
+        tax: result.breakdown.tax,
         vacationCostMonthly,
         vacationCostAnnual,
       };

@@ -177,14 +177,17 @@ export function calculateZlecenie(grossAmount: number) {
   // Składki ZUS (29.19%)
   const zusEmployee = Math.round(grossAmount * 0.2919);
   
-  // Podstawa opodatkowania
+  // Podstawa opodatkowania (brutto - ZUS)
   const taxBase = grossAmount - zusEmployee;
   
-  // Podatek 12%
+  // Składka zdrowotna (9% podstawy wymiaru)
+  const healthInsurance = Math.round(taxBase * 0.09);
+  
+  // Podatek 12% od podstawy opodatkowania
   const tax = Math.round(taxBase * 0.12);
   
-  // Netto
-  const netSalary = grossAmount - zusEmployee - tax;
+  // Netto = brutto - ZUS - składka zdrowotna - podatek
+  const netSalary = grossAmount - zusEmployee - healthInsurance - tax;
   
   return {
     netSalary,
@@ -193,6 +196,7 @@ export function calculateZlecenie(grossAmount: number) {
       grossAmount,
       zusEmployee,
       taxBase,
+      healthInsurance,
       tax,
     }
   };
