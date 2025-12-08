@@ -209,15 +209,35 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+const resolveApiUrl = () => {
+  // Jeśli mamy własny URL Forge, użyj go
+  if (ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0) {
+    return `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`;
+  }
+  
+  // Jeśli mamy klucz OpenAI, użyj bezpośrednio OpenAI API
+  if (ENV.openaiApiKey && ENV.openaiApiKey.trim().length > 0) {
+    return "https://api.openai.com/v1/chat/completions";
+  }
+  
+  // Fallback do Forge (jeśli nie ma klucza OpenAI)
+  return "https://forge.manus.im/v1/chat/completions";
+};
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+  // Sprawdź czy mamy jakikolwiek klucz API
+  if (!ENV.forgeApiKey && !ENV.openaiApiKey) {
+    console.error("[LLM] forgeApiKey is empty");
+    console.error("[LLM] openaiApiKey is empty");
+    console.error("[LLM] BUILT_IN_FORGE_API_KEY:", process.env.BUILT_IN_FORGE_API_KEY ? "ustawiony" : "BRAK");
+    console.error("[LLM] OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "ustawiony" : "BRAK");
+    throw new Error("OPENAI_API_KEY is not configured. Sprawdź czy klucz API jest ustawiony w pliku .env jako OPENAI_API_KEY lub BUILT_IN_FORGE_API_KEY");
   }
+};
+
+const getApiKey = () => {
+  // Użyj klucza OpenAI jeśli jest dostępny, w przeciwnym razie użyj Forge
+  return ENV.openaiApiKey || ENV.forgeApiKey || "";
 };
 
 const normalizeResponseFormat = ({
@@ -279,10 +299,17 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     response_format,
   } = params;
 
+  // Wybierz model w zależności od używanego API
+  const apiUrl = resolveApiUrl();
+  const isOpenAI = apiUrl.includes("api.openai.com");
+  const model = isOpenAI ? "gpt-4o-mini" : "gemini-2.5-flash";
+  
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    model: model,
     messages: messages.map(normalizeMessage),
   };
+  
+  console.log("[LLM] Używany model:", model);
 
   if (tools && tools.length > 0) {
     payload.tools = tools;
@@ -296,9 +323,16 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
+  // Różne limity dla różnych API
+  if (isOpenAI) {
+    // gpt-4o-mini obsługuje maksymalnie 16384 tokenów
+    payload.max_tokens = 16384;
+  } else {
+    // Forge API może obsługiwać więcej
+    payload.max_tokens = 32768;
+    payload.thinking = {
+      "budget_tokens": 128
+    };
   }
 
   const normalizedResponseFormat = normalizeResponseFormat({
@@ -312,21 +346,44 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetch(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  // apiUrl został już zdefiniowany wcześniej
+  const apiKey = getApiKey();
+  
+  console.log("[LLM] Wywołanie API:", apiUrl);
+  console.log("[LLM] Klucz API dostępny:", apiKey ? `Tak (${apiKey.substring(0, 10)}...)` : "Nie");
+  console.log("[LLM] Używany klucz:", ENV.openaiApiKey ? "OPENAI_API_KEY" : "BUILT_IN_FORGE_API_KEY");
+  
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
-    );
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[LLM] Błąd odpowiedzi:", response.status, response.statusText);
+      console.error("[LLM] Szczegóły błędu:", errorText);
+      throw new Error(
+        `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+      );
+    }
+
+    const result = await response.json() as InvokeResult;
+    console.log("[LLM] Sukces - otrzymano odpowiedź");
+    return result;
+  } catch (error) {
+    console.error("[LLM] Błąd fetch:", error);
+    if (error instanceof Error) {
+      // Jeśli to błąd sieciowy, dodaj więcej informacji
+      if (error.message.includes("fetch failed") || error.message.includes("ECONNREFUSED")) {
+        throw new Error(`Nie można połączyć się z API. Sprawdź czy URL jest poprawny: ${apiUrl}`);
+      }
+      throw error;
+    }
+    throw new Error(`Nieznany błąd podczas wywołania LLM: ${String(error)}`);
   }
-
-  return (await response.json()) as InvokeResult;
 }

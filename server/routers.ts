@@ -2184,6 +2184,525 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+
+  // ============ AI FINANCIAL ANALYTICS ============
+  aiFinancial: router({
+    /**
+     * Analizuje rentowność projektów i zwraca insights z AI
+     */
+    analyzeProjects: protectedProcedure
+      .input(z.object({
+        year: z.number().optional(),
+        month: z.number().min(1).max(12).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const now = new Date();
+        const year = input?.year ?? now.getFullYear();
+        const month = input?.month ?? (now.getMonth() + 1);
+        
+        // Pobierz statystyki projektów - użyj bezpośrednio logiki z projects.getStats
+        const projects = await db.getAllProjects();
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
+        
+        const { employeeProjectAssignments, timeEntries } = await import("../drizzle/schema");
+        const { sql, eq, and } = await import("drizzle-orm");
+        
+        const activeEmployees = await db.getActiveEmployees();
+        const activeEmployeeIds = new Set(activeEmployees.map(emp => emp.id));
+        
+        const projectStats = [];
+        
+        for (const project of projects) {
+          const assignments = await database
+            .select({
+              id: employeeProjectAssignments.id,
+              employeeId: employeeProjectAssignments.employeeId,
+              hourlyRateClient: employeeProjectAssignments.hourlyRateClient,
+              hourlyRateCost: employeeProjectAssignments.hourlyRateCost,
+            })
+            .from(employeeProjectAssignments)
+            .where(
+              and(
+                eq(employeeProjectAssignments.projectId, project.id),
+                eq(employeeProjectAssignments.isActive, true)
+              )
+            );
+          
+          const activeAssignments = assignments.filter(a => activeEmployeeIds.has(a.employeeId));
+          const uniqueEmployees = new Set(activeAssignments.map(a => a.employeeId));
+          const employeeCount = uniqueEmployees.size;
+          
+          let totalRevenue = 0;
+          let totalCost = 0;
+          let totalHours = 0;
+          
+          for (const assignment of activeAssignments) {
+            const entries = await database
+              .select()
+              .from(timeEntries)
+              .where(
+                and(
+                  eq(timeEntries.assignmentId, assignment.id),
+                  sql`YEAR(${timeEntries.workDate}) = ${year}`,
+                  sql`MONTH(${timeEntries.workDate}) = ${month}`
+                )
+              );
+            
+            const hours = entries.reduce((sum, entry) => sum + entry.hoursWorked, 0) / 100;
+            const revenue = Math.round(hours * assignment.hourlyRateClient);
+            const cost = Math.round(hours * assignment.hourlyRateCost);
+            
+            totalRevenue += revenue;
+            totalCost += cost;
+            totalHours += hours;
+          }
+          
+          const profit = totalRevenue - totalCost;
+          const margin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+          
+          let totalRateSum = 0;
+          let rateCount = 0;
+          for (const assignment of activeAssignments) {
+            totalRateSum += assignment.hourlyRateClient;
+            rateCount++;
+          }
+          const averageHourlyRate = rateCount > 0 ? Math.round(totalRateSum / rateCount) : 0;
+          
+          projectStats.push({
+            projectId: project.id,
+            name: project.name,
+            employeeCount,
+            revenue: totalRevenue,
+            cost: totalCost,
+            profit,
+            hours: totalHours,
+            margin: Math.round(margin * 100) / 100,
+            averageHourlyRate,
+          });
+        }
+        
+        if (projectStats.length === 0) {
+          return {
+            insights: "Brak danych o projektach do analizy.",
+            recommendations: [],
+            topProjects: [],
+            lowMarginProjects: [],
+          };
+        }
+        
+        // Przygotuj dane dla AI
+        const projectsData = projectStats.map(p => ({
+          name: p.name || `Projekt ${p.projectId}`,
+          revenue: p.revenue / 100, // Konwersja z groszy na PLN
+          cost: p.cost / 100,
+          profit: p.profit / 100,
+          margin: p.margin,
+          hours: p.hours,
+          employeeCount: p.employeeCount,
+          averageHourlyRate: p.averageHourlyRate / 100,
+        }));
+        
+        // Wywołaj AI
+        const { invokeLLM } = await import("./_core/llm");
+        const { ENV } = await import("./_core/env");
+        
+        // Debug: sprawdź czy klucz API jest dostępny
+        console.log("[AI] Sprawdzanie klucza API przed wywołaniem:");
+        console.log("[AI] ENV.forgeApiKey:", ENV.forgeApiKey ? `ustawiony (${ENV.forgeApiKey.substring(0, 10)}...)` : "BRAK");
+        console.log("[AI] process.env.OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? `ustawiony (${process.env.OPENAI_API_KEY.substring(0, 10)}...)` : "BRAK");
+        
+        const prompt = `Jesteś ekspertem finansowym analizującym rentowność projektów w firmie IT.
+
+Dane o projektach:
+${JSON.stringify(projectsData, null, 2)}
+
+Przeanalizuj te projekty i odpowiedz w formacie JSON:
+{
+  "insights": "Główne wnioski z analizy (2-3 zdania)",
+  "recommendations": ["Rekomendacja 1", "Rekomendacja 2", "Rekomendacja 3"],
+  "topProjects": ["Nazwa projektu 1", "Nazwa projektu 2"],
+  "lowMarginProjects": ["Nazwa projektu z niską marżą"],
+  "trends": "Obserwowane trendy (1-2 zdania)"
+}
+
+Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
+
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: "Jesteś ekspertem finansowym. Odpowiadaj zawsze w formacie JSON." },
+              { role: "user", content: prompt }
+            ],
+          });
+          
+          const content = response.choices[0]?.message?.content || "{}";
+          console.log("[AI] Raw response:", content);
+          
+          // Spróbuj wyciągnąć JSON z odpowiedzi (może być otoczony markdown)
+          let jsonContent = content.trim();
+          if (jsonContent.startsWith("```json")) {
+            jsonContent = jsonContent.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+          } else if (jsonContent.startsWith("```")) {
+            jsonContent = jsonContent.replace(/^```\s*/, "").replace(/\s*```$/, "");
+          }
+          
+          const analysis = JSON.parse(jsonContent);
+          
+          return {
+            insights: analysis.insights || "Analiza zakończona.",
+            recommendations: analysis.recommendations || [],
+            topProjects: analysis.topProjects || [],
+            lowMarginProjects: analysis.lowMarginProjects || [],
+            trends: analysis.trends || "",
+            rawData: projectsData,
+          };
+        } catch (error) {
+          console.error("[AI] Error analyzing projects:", error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return {
+            insights: `Nie udało się przeprowadzić analizy AI: ${errorMessage}. Sprawdź dane ręcznie.`,
+            recommendations: [],
+            topProjects: [],
+            lowMarginProjects: [],
+            rawData: projectsData,
+          };
+        }
+      }),
+
+    /**
+     * Analizuje efektywność pracowników
+     */
+    analyzeEmployees: protectedProcedure
+      .input(z.object({
+        year: z.number().optional(),
+        month: z.number().min(1).max(12).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const now = new Date();
+        const year = input?.year ?? now.getFullYear();
+        const month = input?.month ?? (now.getMonth() + 1);
+        
+        // Pobierz pracowników i ich dane
+        const employees = await db.getActiveEmployees();
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
+        
+        const { timeEntries, employeeProjectAssignments } = await import("../drizzle/schema");
+        const { sql, eq, and } = await import("drizzle-orm");
+        
+        const employeesData = [];
+        
+        for (const employee of employees) {
+          // Pobierz wpisy godzinowe
+          const entries = await database
+            .select({
+              hoursWorked: timeEntries.hoursWorked,
+              assignmentId: timeEntries.assignmentId,
+              hourlyRateClient: employeeProjectAssignments.hourlyRateClient,
+            })
+            .from(timeEntries)
+            .innerJoin(
+              employeeProjectAssignments,
+              eq(timeEntries.assignmentId, employeeProjectAssignments.id)
+            )
+            .where(
+              and(
+                eq(employeeProjectAssignments.employeeId, employee.id),
+                sql`YEAR(${timeEntries.workDate}) = ${year}`,
+                sql`MONTH(${timeEntries.workDate}) = ${month}`
+              )
+            );
+          
+          const totalHours = entries.reduce((sum, e) => sum + e.hoursWorked, 0) / 100;
+          const totalRevenue = entries.reduce((sum, e) => {
+            const hours = e.hoursWorked / 100;
+            return sum + Math.round(hours * (e.hourlyRateClient || 0));
+          }, 0);
+          
+          const monthlyCost = employee.monthlyCostTotal;
+          const costToValueRatio = totalRevenue > 0 ? monthlyCost / totalRevenue : 0;
+          const efficiency = totalRevenue > 0 ? (totalRevenue / monthlyCost) : 0;
+          
+          employeesData.push({
+            name: `${employee.firstName} ${employee.lastName}`,
+            position: employee.position || "",
+            monthlyCost: monthlyCost / 100,
+            totalRevenue: totalRevenue / 100,
+            totalHours,
+            costToValueRatio: Math.round(costToValueRatio * 100) / 100,
+            efficiency: Math.round(efficiency * 100) / 100,
+            employmentType: employee.employmentType,
+          });
+        }
+        
+        if (employeesData.length === 0) {
+          return {
+            insights: "Brak danych o pracownikach do analizy.",
+            recommendations: [],
+            topPerformers: [],
+            lowEfficiencyEmployees: [],
+          };
+        }
+        
+        // Wywołaj AI
+        const { invokeLLM } = await import("./_core/llm");
+        
+        const prompt = `Jesteś ekspertem HR i finansowym analizującym efektywność pracowników.
+
+Dane o pracownikach:
+${JSON.stringify(employeesData, null, 2)}
+
+Przeanalizuj efektywność pracowników i odpowiedz w formacie JSON:
+{
+  "insights": "Główne wnioski z analizy (2-3 zdania)",
+  "recommendations": ["Rekomendacja 1", "Rekomendacja 2", "Rekomendacja 3"],
+  "topPerformers": ["Imię Nazwisko 1", "Imię Nazwisko 2"],
+  "lowEfficiencyEmployees": ["Imię Nazwisko z niską efektywnością"],
+  "costOptimization": "Sugestie optymalizacji kosztów (1-2 zdania)"
+}
+
+Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
+
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: "Jesteś ekspertem HR i finansowym. Odpowiadaj zawsze w formacie JSON." },
+              { role: "user", content: prompt }
+            ],
+          });
+          
+          const content = response.choices[0]?.message?.content || "{}";
+          console.log("[AI] Raw response:", content);
+          
+          // Spróbuj wyciągnąć JSON z odpowiedzi (może być otoczony markdown)
+          let jsonContent = content.trim();
+          if (jsonContent.startsWith("```json")) {
+            jsonContent = jsonContent.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+          } else if (jsonContent.startsWith("```")) {
+            jsonContent = jsonContent.replace(/^```\s*/, "").replace(/\s*```$/, "");
+          }
+          
+          const analysis = JSON.parse(jsonContent);
+          
+          return {
+            insights: analysis.insights || "Analiza zakończona.",
+            recommendations: analysis.recommendations || [],
+            topPerformers: analysis.topPerformers || [],
+            lowEfficiencyEmployees: analysis.lowEfficiencyEmployees || [],
+            costOptimization: analysis.costOptimization || "",
+            rawData: employeesData,
+          };
+        } catch (error) {
+          console.error("[AI] Error analyzing employees:", error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return {
+            insights: `Nie udało się przeprowadzić analizy AI: ${errorMessage}. Sprawdź dane ręcznie.`,
+            recommendations: [],
+            topPerformers: [],
+            lowEfficiencyEmployees: [],
+            rawData: employeesData,
+          };
+        }
+      }),
+
+    /**
+     * Chat finansowy - odpowiada na pytania o finanse firmy
+     */
+    chat: protectedProcedure
+      .input(z.object({
+        message: z.string(),
+        context: z.object({
+          year: z.number().optional(),
+          month: z.number().min(1).max(12).optional(),
+        }).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { message, context } = input;
+        const now = new Date();
+        const year = context?.year ?? now.getFullYear();
+        const month = context?.month ?? (now.getMonth() + 1);
+        
+        // Pobierz podstawowe dane finansowe - użyj bezpośrednio logiki z dashboard.kpi
+        const employees = await db.getActiveEmployees();
+        let totalRevenue = 0;
+        let totalEmployeeCosts = 0;
+        
+        for (const employee of employees) {
+          const savedReport = await db.getMonthlyReport(employee.id, year, month);
+          
+          if (savedReport && savedReport.hoursWorked > 0) {
+            totalRevenue += savedReport.revenue;
+            totalEmployeeCosts += savedReport.actualCost ?? savedReport.cost;
+          } else {
+            totalEmployeeCosts += employee.monthlyCostTotal;
+            
+            const database = await db.getDb();
+            if (database) {
+              const { timeEntries, employeeProjectAssignments } = await import("../drizzle/schema");
+              const { sql, eq, and } = await import("drizzle-orm");
+              
+              const entries = await database
+                .select({
+                  hoursWorked: timeEntries.hoursWorked,
+                  assignmentId: timeEntries.assignmentId,
+                  hourlyRateClient: employeeProjectAssignments.hourlyRateClient,
+                })
+                .from(timeEntries)
+                .innerJoin(
+                  employeeProjectAssignments,
+                  eq(timeEntries.assignmentId, employeeProjectAssignments.id)
+                )
+                .where(
+                  and(
+                    eq(employeeProjectAssignments.employeeId, employee.id),
+                    sql`YEAR(${timeEntries.workDate}) = ${year}`,
+                    sql`MONTH(${timeEntries.workDate}) = ${month}`
+                  )
+                );
+              
+              if (entries.length > 0) {
+                let revenue = 0;
+                for (const entry of entries) {
+                  const hours = entry.hoursWorked / 100;
+                  const hourlyRateClient = entry.hourlyRateClient || employee.hourlyRateClient || 0;
+                  revenue += Math.round(hours * hourlyRateClient);
+                }
+                totalRevenue += revenue;
+              }
+            }
+          }
+        }
+        
+        const fixedCosts = await db.getActiveFixedCosts();
+        const totalFixedCosts = fixedCosts.reduce((sum, cost) => {
+          let monthlyCost = 0;
+          switch (cost.frequency) {
+            case 'monthly': monthlyCost = cost.amount; break;
+            case 'quarterly': monthlyCost = Math.round(cost.amount / 3); break;
+            case 'yearly': monthlyCost = Math.round(cost.amount / 12); break;
+            case 'one_time': monthlyCost = 0; break;
+          }
+          return sum + monthlyCost;
+        }, 0);
+        
+        const totalCosts = totalEmployeeCosts + totalFixedCosts;
+        const totalProfit = totalRevenue - totalCosts;
+        const margin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+        
+        // Pobierz statystyki projektów
+        const projects = await db.getAllProjects();
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
+        
+        const { employeeProjectAssignments, timeEntries } = await import("../drizzle/schema");
+        const { sql, eq, and } = await import("drizzle-orm");
+        
+        const activeEmployees = await db.getActiveEmployees();
+        const activeEmployeeIds = new Set(activeEmployees.map(emp => emp.id));
+        
+        const projectStats = [];
+        
+        for (const project of projects) {
+          const assignments = await database
+            .select({
+              id: employeeProjectAssignments.id,
+              employeeId: employeeProjectAssignments.employeeId,
+              hourlyRateClient: employeeProjectAssignments.hourlyRateClient,
+              hourlyRateCost: employeeProjectAssignments.hourlyRateCost,
+            })
+            .from(employeeProjectAssignments)
+            .where(
+              and(
+                eq(employeeProjectAssignments.projectId, project.id),
+                eq(employeeProjectAssignments.isActive, true)
+              )
+            );
+          
+          const activeAssignments = assignments.filter(a => activeEmployeeIds.has(a.employeeId));
+          
+          let totalRevenueProj = 0;
+          let totalCostProj = 0;
+          
+          for (const assignment of activeAssignments) {
+            const entries = await database
+              .select()
+              .from(timeEntries)
+              .where(
+                and(
+                  eq(timeEntries.assignmentId, assignment.id),
+                  sql`YEAR(${timeEntries.workDate}) = ${year}`,
+                  sql`MONTH(${timeEntries.workDate}) = ${month}`
+                )
+              );
+            
+            const hours = entries.reduce((sum, entry) => sum + entry.hoursWorked, 0) / 100;
+            const revenue = Math.round(hours * assignment.hourlyRateClient);
+            const cost = Math.round(hours * assignment.hourlyRateCost);
+            
+            totalRevenueProj += revenue;
+            totalCostProj += cost;
+          }
+          
+          const profit = totalRevenueProj - totalCostProj;
+          const marginProj = totalRevenueProj > 0 ? (profit / totalRevenueProj) * 100 : 0;
+          
+          projectStats.push({
+            name: project.name,
+            revenue: totalRevenueProj,
+            profit,
+            margin: marginProj,
+          });
+        }
+        
+        // Przygotuj kontekst dla AI
+        const financialContext = {
+          kpi: {
+            totalRevenue: totalRevenue / 100,
+            totalCosts: totalCosts / 100,
+            totalProfit: totalProfit / 100,
+            margin: Math.round(margin * 100) / 100,
+          },
+          projects: {
+            count: projectStats.length,
+            totalRevenue: projectStats.reduce((sum, p) => sum + p.revenue, 0) / 100,
+            totalProfit: projectStats.reduce((sum, p) => sum + p.profit, 0) / 100,
+            averageMargin: projectStats.length > 0 
+              ? projectStats.reduce((sum, p) => sum + p.margin, 0) / projectStats.length 
+              : 0,
+          },
+          period: { year, month },
+        };
+        
+        const { invokeLLM } = await import("./_core/llm");
+        
+        const systemPrompt = `Jesteś asystentem finansowym dla firmy IT. Pomagasz właścicielowi firmy analizować finanse i podejmować decyzje biznesowe.
+
+Dostępne dane finansowe:
+${JSON.stringify(financialContext, null, 2)}
+
+Odpowiadaj na pytania w sposób zwięzły, profesjonalny i pomocny. Jeśli pytanie wymaga dodatkowych danych, które nie są dostępne, poinformuj o tym użytkownika.`;
+
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: message }
+            ],
+          });
+          
+          return {
+            response: response.choices[0]?.message?.content || "Przepraszam, nie mogę odpowiedzieć na to pytanie.",
+          };
+        } catch (error) {
+          console.error("[AI] Error in financial chat:", error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return {
+            response: `Przepraszam, wystąpił błąd podczas przetwarzania pytania: ${errorMessage}. Sprawdź czy klucz API jest ustawiony (BUILT_IN_FORGE_API_KEY).`,
+          };
+        }
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

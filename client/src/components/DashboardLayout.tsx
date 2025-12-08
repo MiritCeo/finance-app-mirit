@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, CheckSquare, BookOpen, DollarSign, Calendar, Briefcase, UserCircle, Building2, Clock, Receipt, Plus, Zap, Moon, Sun } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, CheckSquare, BookOpen, DollarSign, Calendar, Briefcase, UserCircle, Building2, Clock, Receipt, Plus, Zap, Moon, Sun, Sparkles } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -30,6 +30,7 @@ import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/", color: "text-blue-600" },
+  { icon: Sparkles, label: "AI Insights", path: "/ai-insights", color: "text-purple-600" },
   { icon: CheckSquare, label: "Zadania", path: "/tasks", color: "text-purple-600" },
   { icon: BookOpen, label: "Baza Wiedzy", path: "/knowledge", color: "text-indigo-600" },
   { icon: Users, label: "Pracownicy", path: "/employees", color: "text-green-600" },

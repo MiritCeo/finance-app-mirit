@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, DollarSign, Users, TrendingUp, TrendingDown, Calendar, ArrowUp, ArrowDown, Minus, Plus, Trophy, Briefcase, Award, Medal, TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon, Zap, Clock, Building2, Calculator, Receipt, Moon, Sun, Filter, Target, Activity } from "lucide-react";
+import { Loader2, DollarSign, Users, TrendingUp, TrendingDown, Calendar, ArrowUp, ArrowDown, Minus, Plus, Trophy, Briefcase, Award, Medal, TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon, Zap, Clock, Building2, Calculator, Receipt, Moon, Sun, Filter, Target, Activity, Sparkles } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
@@ -308,6 +308,12 @@ export default function Dashboard() {
               <Link href="/fixed-costs">
                 <Receipt className="w-3 h-3 mr-1.5" />
                 Koszty stałe
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8" asChild>
+              <Link href="/ai-insights">
+                <Sparkles className="w-3 h-3 mr-1.5" />
+                AI Insights
               </Link>
             </Button>
           </div>

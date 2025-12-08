@@ -15,6 +15,7 @@ import FixedCosts from "./pages/FixedCosts";
 import Clients from "./pages/Clients";
 import TasksPage from "./pages/TasksPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
+import AIFinancialInsights from "./pages/AIFinancialInsights";
 
 function Router() {
   return (
@@ -30,6 +31,7 @@ function Router() {
       <Route path={"/fixed-costs"} component={FixedCosts} />
       <Route path={"/tasks"} component={TasksPage} />
       <Route path={"/knowledge"} component={KnowledgeBasePage} />
+      <Route path={"/ai-insights"} component={AIFinancialInsights} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
