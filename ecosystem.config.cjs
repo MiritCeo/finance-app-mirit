@@ -38,10 +38,14 @@ module.exports = {
       instances: 1, // Użyj 1 instancji dla ES modules (cluster mode może mieć problemy)
       exec_mode: 'fork', // Fork mode działa lepiej z ES modules
       cwd: __dirname, // Ustaw katalog roboczy na katalog z ecosystem.config.cjs
+      // Przekaż wszystkie zmienne z .env bezpośrednio do procesu
+      // Użyj spread operator aby przekazać wszystkie zmienne z envResult.parsed
       env: {
         NODE_ENV: process.env.NODE_ENV || 'production',
         PORT: process.env.PORT || 3000,
-        // Przekaż wszystkie zmienne z .env (po załadowaniu przez dotenv.config powyżej)
+        // Przekaż wszystkie zmienne z .env (użyj envResult.parsed jeśli dostępny)
+        ...(envResult.parsed || {}),
+        // Nadpisz niektóre zmienne jeśli są w process.env (zmienne systemowe mają priorytet)
         DATABASE_URL: getEnv('DATABASE_URL'),
         JWT_SECRET: getEnv('JWT_SECRET'),
         OWNER_NAME: getEnv('OWNER_NAME'),
