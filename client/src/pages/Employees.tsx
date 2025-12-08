@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck, Download, Upload, MoreVertical } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck, Download, Upload, MoreVertical, CheckCircle2, XCircle, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -44,14 +44,25 @@ export default function Employees() {
   
   const exportMutation = trpc.employees.exportEmployees.useMutation();
   const importMutation = trpc.employees.importEmployees.useMutation({
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
+      console.log('[Import] Wynik importu:', result);
       toast.success(`Import zakończony: ${result.created} utworzonych, ${result.updated} zaktualizowanych${result.errors.length > 0 ? `, ${result.errors.length} błędów` : ''}`);
       if (result.errors.length > 0) {
         console.error('Błędy importu:', result.errors);
       }
-      refetch();
+      // Odśwież dane - użyj invalidate i refetch dla pewności
+      console.log('[Import] Odświeżanie danych...');
+      await utils.employees.list.invalidate();
+      const refreshedData = await refetch();
+      console.log('[Import] Odświeżone dane:', refreshedData.data?.length, 'pracowników');
+      // Dodatkowo wymuś odświeżenie po krótkim opóźnieniu
+      setTimeout(async () => {
+        const refreshedData2 = await refetch();
+        console.log('[Import] Drugie odświeżenie:', refreshedData2.data?.length, 'pracowników');
+      }, 500);
     },
     onError: (error) => {
+      console.error('[Import] Błąd:', error);
       toast.error("Błąd importu: " + error.message);
     },
   });
@@ -94,20 +105,53 @@ export default function Employees() {
       return;
     }
     
+    // Sprawdź rozszerzenie pliku
+    const fileExtension = importFile.name.split('.').pop()?.toLowerCase();
+    if (fileExtension !== 'xlsx' && fileExtension !== 'xls') {
+      toast.error("Nieprawidłowy format pliku. Wybierz plik Excel (.xlsx lub .xls)");
+      return;
+    }
+    
     try {
       // Konwertuj plik na base64
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const base64 = (e.target?.result as string).split(',')[1] || '';
-        await importMutation.mutateAsync({
-          filename: importFile.name,
-          data: base64,
-        });
-        setIsImportDialogOpen(false);
-        setImportFile(null);
+        try {
+          const result = e.target?.result as string;
+          if (!result) {
+            toast.error("Błąd: Nie można odczytać pliku");
+            return;
+          }
+          
+          const base64 = result.split(',')[1];
+          if (!base64) {
+            toast.error("Błąd: Nie można przekonwertować pliku na base64");
+            return;
+          }
+          
+          console.log('[Import] Wysyłanie pliku do importu:', {
+            filename: importFile.name,
+            size: importFile.size,
+            base64Length: base64.length
+          });
+          
+          await importMutation.mutateAsync({
+            filename: importFile.name,
+            data: base64,
+          });
+          setIsImportDialogOpen(false);
+          setImportFile(null);
+        } catch (error: any) {
+          console.error('[Import] Błąd podczas importu:', error);
+          toast.error("Błąd importu: " + (error.message || 'Nieznany błąd'));
+        }
+      };
+      reader.onerror = () => {
+        toast.error("Błąd: Nie można odczytać pliku");
       };
       reader.readAsDataURL(importFile);
     } catch (error: any) {
+      console.error('[Import] Błąd:', error);
       toast.error("Błąd importu: " + error.message);
     }
   };
@@ -398,6 +442,18 @@ export default function Employees() {
 
   // Filtrowanie i sortowanie pracowników
   const filteredAndSortedEmployees = employees?.filter(employee => {
+    // Debug: loguj pierwszego pracownika dla sprawdzenia
+    if (employees && employees.length > 0 && employees.indexOf(employee) === 0) {
+      console.log('[Employees] Przykładowy pracownik:', {
+        id: employee.id,
+        name: `${employee.firstName} ${employee.lastName}`,
+        isActive: employee.isActive,
+        employmentType: employee.employmentType,
+        searchTerm,
+        filterEmploymentType,
+        filterStatus
+      });
+    }
     // Wyszukiwanie
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = !searchTerm || 
@@ -790,46 +846,71 @@ export default function Employees() {
             </Select>
           </div>
           
-          {filteredAndSortedEmployees && filteredAndSortedEmployees.length === 0 && (
+          {filteredAndSortedEmployees && filteredAndSortedEmployees.length === 0 && employees && employees.length > 0 && (
             <div className="text-center py-8 text-muted-foreground">
               Brak pracowników spełniających kryteria wyszukiwania
+              <p className="text-sm mt-2">
+                (Znaleziono {employees.length} pracowników, ale filtry je ukrywają)
+              </p>
+            </div>
+          )}
+          {filteredAndSortedEmployees && filteredAndSortedEmployees.length === 0 && (!employees || employees.length === 0) && (
+            <div className="text-center py-8 text-muted-foreground">
+              Brak pracowników. Dodaj pierwszego pracownika.
             </div>
           )}
           
           {/* Tabela z poziomym przewijaniem */}
           <div className="overflow-x-auto -mx-2 sm:mx-0">
             <div className="inline-block min-w-full align-middle">
-              <Table className="min-w-[1600px]">
+              <Table className="min-w-[1400px]">
             <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="font-semibold min-w-[180px] sticky left-0 bg-muted/50 z-10 border-r shadow-sm">Imię i nazwisko</TableHead>
-                <TableHead className="min-w-[120px]">Stanowisko</TableHead>
-                <TableHead className="min-w-[130px]">Typ umowy</TableHead>
-                <TableHead className="text-right min-w-[100px]">Netto</TableHead>
-                <TableHead className="text-right min-w-[110px]">Koszt firmy</TableHead>
-                <TableHead className="text-right min-w-[100px]">Koszt godz.</TableHead>
-                <TableHead className="text-right min-w-[110px]">Stawka prac.</TableHead>
-                <TableHead className="text-right min-w-[110px]">Stawka klient</TableHead>
-                <TableHead className="text-right min-w-[90px]">Dni urlopu</TableHead>
-                <TableHead className="text-right min-w-[110px]">Urlop mies.</TableHead>
-                <TableHead className="text-right min-w-[110px]">Urlop rocz.</TableHead>
-                <TableHead className="text-right min-w-[120px]">Zysk mies.</TableHead>
-                <TableHead className="text-right min-w-[120px]">Zysk rocz.</TableHead>
-                <TableHead className="min-w-[100px]">Status</TableHead>
-                <TableHead className="text-right min-w-[80px] sticky right-0 bg-muted/50 z-10 border-l shadow-sm">Akcje</TableHead>
+              <TableRow className="border-b-2 border-border">
+                <TableHead className="font-semibold min-w-[160px] sticky left-0 bg-background z-20 border-r-2 border-border shadow-sm px-2 py-2">Imię i nazwisko</TableHead>
+                <TableHead className="min-w-[110px] px-2 py-2 border-l border-border/50">Stanowisko</TableHead>
+                <TableHead className="min-w-[120px] px-2 py-2 border-l border-border/50">Typ umowy</TableHead>
+                <TableHead className="text-right min-w-[85px] text-xs px-1.5 py-2 border-l-2 border-border/30 font-medium">Netto</TableHead>
+                <TableHead className="text-right min-w-[95px] text-xs px-1.5 py-2 border-l border-border/30 font-medium text-orange-600">Koszt firmy</TableHead>
+                <TableHead className="text-right min-w-[85px] text-xs px-1.5 py-2 border-l border-border/30">Koszt/h</TableHead>
+                <TableHead className="text-right min-w-[95px] text-xs px-1.5 py-2 border-l border-border/30">Stawka prac.</TableHead>
+                <TableHead className="text-right min-w-[95px] text-xs px-1.5 py-2 border-l border-border/30">Stawka klient</TableHead>
+                <TableHead className="text-right min-w-[70px] text-xs px-1.5 py-2 border-l-2 border-border/30">Urlop</TableHead>
+                <TableHead className="text-right min-w-[95px] text-xs px-1.5 py-2 border-l border-border/30">Urlop mies.</TableHead>
+                <TableHead className="text-right min-w-[95px] text-xs px-1.5 py-2 border-l border-border/30">Urlop rocz.</TableHead>
+                <TableHead className="text-right min-w-[130px] px-2 py-2 border-l-2 border-border/50 font-bold">Zysk mies.</TableHead>
+                <TableHead className="text-right min-w-[105px] text-xs px-1.5 py-2 border-l border-border/30">Zysk rocz.</TableHead>
+                <TableHead className="min-w-[60px] text-center px-1 py-2 border-l border-border/30">Status</TableHead>
+                <TableHead className="text-right min-w-[70px] sticky right-0 bg-background z-20 border-l-2 border-border shadow-sm px-1 py-2">Akcje</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAndSortedEmployees?.map((employee, idx) => {
-                // Używamy zapisanych wartości z bazy danych
-                const vacationCostMonthly = employee.vacationCostMonthly / 100;
-                const vacationCostAnnual = employee.vacationCostAnnual / 100;
+              {(() => {
+                // Oblicz maksymalny zysk dla normalizacji progress barów
+                const profits = filteredAndSortedEmployees?.map(emp => {
+                  const revenue = (168 * emp.hourlyRateClient) / 100;
+                  const cost = emp.monthlyCostTotal / 100;
+                  return revenue - cost;
+                }) || [];
+                const maxProfit = Math.max(...profits, 1);
+                const minProfit = Math.min(...profits, 0);
+                const profitRange = maxProfit - minProfit || 1;
                 
-                // Obliczamy zysk: (168h × stawka klienta) - koszt firmy
-                const monthlyRevenue = (168 * employee.hourlyRateClient) / 100;
-                const monthlyCost = employee.monthlyCostTotal / 100;
-                const monthlyProfit = monthlyRevenue - monthlyCost;
-                const annualProfit = monthlyProfit * 12;
+                return filteredAndSortedEmployees?.map((employee, idx) => {
+                  // Używamy zapisanych wartości z bazy danych
+                  const vacationCostMonthly = employee.vacationCostMonthly / 100;
+                  const vacationCostAnnual = employee.vacationCostAnnual / 100;
+                  
+                  // Obliczamy zysk: (168h × stawka klienta) - koszt firmy
+                  const monthlyRevenue = (168 * employee.hourlyRateClient) / 100;
+                  const monthlyCost = employee.monthlyCostTotal / 100;
+                  const monthlyProfit = monthlyRevenue - monthlyCost;
+                  const annualProfit = monthlyProfit * 12;
+                  
+                  // Procent marży
+                  const marginPercent = monthlyRevenue > 0 ? ((monthlyProfit / monthlyRevenue) * 100) : 0;
+                  
+                  // Normalizacja dla progress bara (0-100%)
+                  const normalizedProfit = profitRange > 0 ? ((monthlyProfit - minProfit) / profitRange) * 100 : 0;
                 
                 // Kolorowanie tła według progów rentowności
                 const getProfitColor = (profit: number) => {
@@ -839,67 +920,221 @@ export default function Employees() {
                   return 'bg-yellow-100 text-yellow-800'; // Powyżej 8k
                 };
                 
+                // Kolor tekstu i tła dla zysku - lepszy kontrast
+                const getProfitStyle = (profit: number) => {
+                  if (profit < 0) {
+                    return {
+                      textColor: 'text-red-700',
+                      bgColor: 'bg-red-50',
+                      borderColor: 'border-red-200'
+                    };
+                  }
+                  if (profit < 4000) {
+                    return {
+                      textColor: 'text-orange-700',
+                      bgColor: 'bg-orange-50',
+                      borderColor: 'border-orange-200'
+                    };
+                  }
+                  if (profit < 8000) {
+                    return {
+                      textColor: 'text-green-700',
+                      bgColor: 'bg-green-50',
+                      borderColor: 'border-green-200'
+                    };
+                  }
+                  return {
+                    textColor: 'text-emerald-700',
+                    bgColor: 'bg-emerald-50',
+                    borderColor: 'border-emerald-200'
+                  };
+                };
+                
+                // Ikona trendu dla zysku
+                const getProfitIcon = (profit: number) => {
+                  if (profit < 0) return <TrendingDown className="w-3 h-3 text-red-600" />;
+                  if (profit < 4000) return <Minus className="w-3 h-3 text-orange-600" />;
+                  return <TrendingUp className="w-3 h-3 text-green-600" />;
+                };
+                
                 return (
-                  <TableRow key={employee.id} className="hover:bg-muted/30">
-                    <TableCell className="font-medium sticky left-0 bg-background z-10 border-r shadow-sm">
-                      {employee.firstName} {employee.lastName}
+                  <TableRow key={employee.id} className={`hover:bg-muted/20 transition-colors ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
+                    <TableCell className="font-medium sticky left-0 bg-background z-20 border-r-2 border-border shadow-sm px-2 py-2">
+                      <div className="font-semibold">{employee.firstName} {employee.lastName}</div>
                     </TableCell>
-                    <TableCell>{employee.position || "-"}</TableCell>
-                    <TableCell>{employmentTypeLabels[employee.employmentType]}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="px-2 py-2 border-l border-border/50 text-muted-foreground">{employee.position || "-"}</TableCell>
+                    <TableCell className="px-2 py-2 border-l border-border/50">
+                      <span className="text-xs font-medium">{employmentTypeLabels[employee.employmentType]}</span>
+                    </TableCell>
+                    <TableCell className="text-right text-xs px-1.5 py-2 border-l-2 border-border/30 font-mono">
                       {formatCurrency(employee.monthlySalaryNet)}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right text-xs px-1.5 py-2 border-l border-border/30 font-mono text-orange-600 font-semibold">
                       {formatCurrency(employee.monthlyCostTotal)}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right text-xs px-1.5 py-2 border-l border-border/30 font-mono text-muted-foreground">
                       {formatCurrency(employee.hourlyRateCost)}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right text-xs px-1.5 py-2 border-l border-border/30 font-mono text-muted-foreground">
                       {formatCurrency(employee.hourlyRateEmployee)}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right text-xs px-1.5 py-2 border-l border-border/30 font-mono text-blue-600">
                       {formatCurrency(employee.hourlyRateClient)}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right text-xs px-1.5 py-2 border-l-2 border-border/30 font-mono">
                       {employee.vacationDaysPerYear || 21}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right text-xs px-1.5 py-2 border-l border-border/30 font-mono text-muted-foreground">
                       {new Intl.NumberFormat("pl-PL", {
                         style: "currency",
                         currency: "PLN",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
                       }).format(vacationCostMonthly)}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right text-xs px-1.5 py-2 border-l border-border/30 font-mono text-muted-foreground">
                       {new Intl.NumberFormat("pl-PL", {
                         style: "currency",
                         currency: "PLN",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
                       }).format(vacationCostAnnual)}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-md text-sm font-medium ${getProfitColor(monthlyProfit)}`}>
-                        {new Intl.NumberFormat("pl-PL", {
-                          style: "currency",
-                          currency: "PLN",
-                        }).format(monthlyProfit)}
-                      </span>
+                    <TableCell className="text-right px-2 py-2 border-l-2 border-border/50">
+                      <div className="space-y-1.5">
+                        {/* Główna wartość z ikoną */}
+                        <div className={`flex items-center justify-end gap-1.5 px-2 py-1.5 rounded-md border ${getProfitStyle(monthlyProfit).bgColor} ${getProfitStyle(monthlyProfit).borderColor}`}>
+                          {getProfitIcon(monthlyProfit)}
+                          <span className={`font-bold text-base ${getProfitStyle(monthlyProfit).textColor}`}>
+                            {new Intl.NumberFormat("pl-PL", {
+                              style: "currency",
+                              currency: "PLN",
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0,
+                            }).format(monthlyProfit)}
+                          </span>
+                        </div>
+                        
+                        {/* Progress bar i procent marży */}
+                        <div className="space-y-1">
+                          {/* Progress bar */}
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full transition-all ${
+                                monthlyProfit < 0 ? 'bg-red-500' :
+                                monthlyProfit < 4000 ? 'bg-orange-500' :
+                                monthlyProfit < 8000 ? 'bg-green-500' : 'bg-emerald-500'
+                              }`}
+                              style={{ width: `${Math.max(0, Math.min(100, normalizedProfit))}%` }}
+                            />
+                          </div>
+                          
+                          {/* Procent marży */}
+                          <div className="flex items-center justify-end gap-1 text-xs">
+                            <span className="text-muted-foreground">Marża:</span>
+                            <span className={`font-semibold ${
+                              marginPercent < 0 ? 'text-red-600' :
+                              marginPercent < 20 ? 'text-orange-600' :
+                              marginPercent < 40 ? 'text-green-600' : 'text-emerald-600'
+                            }`}>
+                              {marginPercent >= 0 ? '+' : ''}{marginPercent.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </TableCell>
-                    <TableCell className="text-right">
-                      {new Intl.NumberFormat("pl-PL", {
-                        style: "currency",
-                        currency: "PLN",
-                      }).format(annualProfit)}
+                    <TableCell className="text-right px-2 py-2 border-l border-border/30">
+                      <div className="space-y-1.5">
+                        {/* Główna wartość roczna */}
+                        <div className={`flex items-center justify-end gap-1 px-2 py-1 rounded border ${getProfitStyle(annualProfit).bgColor} ${getProfitStyle(annualProfit).borderColor}`}>
+                          <span className={`font-bold text-sm ${getProfitStyle(annualProfit).textColor}`}>
+                            {new Intl.NumberFormat("pl-PL", {
+                              style: "currency",
+                              currency: "PLN",
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0,
+                            }).format(annualProfit)}
+                          </span>
+                        </div>
+                        
+                        {/* Dodatkowe metryki */}
+                        <div className="space-y-1 text-xs">
+                          {/* Porównanie: 12x miesięczny zysk */}
+                          <div className="flex items-center justify-end gap-1 text-muted-foreground">
+                            <span className="text-[10px]">12× miesięczny</span>
+                            <span className="font-mono font-medium text-foreground">
+                              {new Intl.NumberFormat("pl-PL", {
+                                style: "currency",
+                                currency: "PLN",
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              }).format(monthlyProfit)}
+                            </span>
+                          </div>
+                          
+                          {/* ROI - Return on Investment */}
+                          {(() => {
+                            const annualCost = monthlyCost * 12;
+                            const roi = annualCost > 0 ? ((annualProfit / annualCost) * 100) : 0;
+                            return (
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-[10px] text-muted-foreground">ROI:</span>
+                                <span className={`font-semibold ${
+                                  roi < 0 ? 'text-red-600' :
+                                  roi < 50 ? 'text-orange-600' :
+                                  roi < 100 ? 'text-green-600' : 'text-emerald-600'
+                                }`}>
+                                  {roi >= 0 ? '+' : ''}{roi.toFixed(0)}%
+                                </span>
+                              </div>
+                            );
+                          })()}
+                          
+                          {/* Progress bar pokazujący zysk vs koszt roczny */}
+                          {(() => {
+                            const annualCost = monthlyCost * 12;
+                            const total = Math.abs(annualProfit) + Math.abs(annualCost);
+                            const profitPercent = total > 0 ? (Math.abs(annualProfit) / total) * 100 : 0;
+                            const costPercent = total > 0 ? (Math.abs(annualCost) / total) * 100 : 0;
+                            
+                            return (
+                              <div className="space-y-0.5">
+                                <div className="h-1.5 bg-muted rounded-full overflow-hidden flex">
+                                  {annualProfit >= 0 ? (
+                                    <>
+                                      <div 
+                                        className="bg-green-500 transition-all"
+                                        style={{ width: `${profitPercent}%` }}
+                                        title={`Zysk: ${new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", minimumFractionDigits: 0 }).format(annualProfit)}`}
+                                      />
+                                      <div 
+                                        className="bg-orange-400 transition-all"
+                                        style={{ width: `${costPercent}%` }}
+                                        title={`Koszt: ${new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", minimumFractionDigits: 0 }).format(annualCost)}`}
+                                      />
+                                    </>
+                                  ) : (
+                                    <div 
+                                      className="bg-red-500 transition-all"
+                                      style={{ width: '100%' }}
+                                      title={`Strata: ${new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", minimumFractionDigits: 0 }).format(Math.abs(annualProfit))}`}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
                     </TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        employee.isActive 
-                          ? "bg-green-100 text-green-800" 
-                          : "bg-gray-100 text-gray-800"
-                      }`}>
-                        {employee.isActive ? "Aktywny" : "Nieaktywny"}
-                      </span>
+                    <TableCell className="text-center px-1 py-2 border-l border-border/30">
+                      {employee.isActive ? (
+                        <CheckCircle2 className="w-5 h-5 text-green-600 mx-auto" title="Aktywny" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-red-600 mx-auto" title="Nieaktywny" />
+                      )}
                     </TableCell>
-                    <TableCell className="text-right sticky right-0 bg-background z-10 border-l shadow-sm">
+                    <TableCell className="text-right sticky right-0 bg-background z-20 border-l-2 border-border shadow-sm px-1 py-2">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -956,7 +1191,8 @@ export default function Employees() {
                     </TableCell>
                   </TableRow>
                 );
-              })}
+                });
+              })()}
               {employees?.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={15} className="text-center text-muted-foreground">

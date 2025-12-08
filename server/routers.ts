@@ -403,17 +403,39 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const { filename, data } = input;
         
-        // Konwertuj base64 na buffer
-        const buffer = Buffer.from(data, 'base64');
-        
-        // Odczytaj plik Excel
-        const workbook = XLSX.read(buffer, { type: 'buffer' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(worksheet) as any[];
-        
-        if (rows.length === 0) {
-          throw new Error('Plik Excel jest pusty');
-        }
+        try {
+          // Konwertuj base64 na buffer
+          const buffer = Buffer.from(data, 'base64');
+          
+          if (buffer.length === 0) {
+            throw new Error('Błąd: Pusty plik po konwersji base64');
+          }
+          
+          // Odczytaj plik Excel
+          const workbook = XLSX.read(buffer, { type: 'buffer' });
+          
+          if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+            throw new Error('Błąd: Plik Excel nie zawiera żadnych arkuszy');
+          }
+          
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          
+          if (!worksheet) {
+            throw new Error('Błąd: Nie można odczytać pierwszego arkusza');
+          }
+          
+          const rows = XLSX.utils.sheet_to_json(worksheet) as any[];
+          
+          console.log(`[Import] Wczytano ${rows.length} wierszy z pliku Excel`);
+          
+          if (rows.length === 0) {
+            throw new Error('Plik Excel jest pusty - brak danych do importu');
+          }
+          
+          // Loguj pierwszy wiersz dla debugowania
+          if (rows.length > 0) {
+            console.log('[Import] Przykładowy wiersz:', JSON.stringify(rows[0], null, 2));
+          }
         
         // Mapowanie typów umów
         const employmentTypeMap: Record<string, 'uop' | 'b2b' | 'zlecenie' | 'zlecenie_studenckie'> = {
@@ -430,29 +452,61 @@ export const appRouter = router({
           errors: [] as string[],
         };
         
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i];
-          try {
-            // Pobierz ID jeśli istnieje (dla aktualizacji)
-            const id = row['ID'] ? parseInt(row['ID']) : null;
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            try {
+              // Pobierz ID jeśli istnieje (dla aktualizacji)
+              // Sprawdź czy ID jest rzeczywiście liczbą (nie puste, nie NaN)
+              let id: number | null = null;
+              const idValue = row['ID'];
+              console.log(`[Import] Wiersz ${i + 2}: Surowa wartość ID z Excela:`, idValue, `(typ: ${typeof idValue})`);
+              
+              if (idValue !== null && idValue !== undefined && idValue !== '') {
+                const parsedId = parseInt(String(idValue));
+                if (!isNaN(parsedId) && parsedId > 0) {
+                  id = parsedId;
+                } else {
+                  console.log(`[Import] Wiersz ${i + 2}: ID nie jest poprawną liczbą (${idValue} -> ${parsedId}), traktuję jako nowy pracownik`);
+                }
+              } else {
+                console.log(`[Import] Wiersz ${i + 2}: Brak ID w Excelu, traktuję jako nowy pracownik`);
+              }
+              
+              console.log(`[Import] Wiersz ${i + 2}: ID=${id}, Imię=${row['Imię'] || row['Imie']}, Nazwisko=${row['Nazwisko']}`);
             const firstName = row['Imię'] || row['Imie'] || '';
             const lastName = row['Nazwisko'] || '';
             const position = row['Stanowisko'] || '';
             const employmentTypeRaw = (row['Typ umowy'] || 'uop').toLowerCase();
             const employmentType = employmentTypeMap[employmentTypeRaw] || 'uop';
             
+            // Funkcja pomocnicza do parsowania wartości finansowych
+            // Obsługuje zarówno stringi jak i liczby, usuwa spacje i zamienia przecinki na kropki
+            const parseFinancialValue = (value: any, defaultValue: number = 0): number => {
+              if (value === null || value === undefined || value === '') {
+                return defaultValue;
+              }
+              // Jeśli to już liczba, zwróć ją
+              if (typeof value === 'number') {
+                return value;
+              }
+              // Jeśli to string, usuń spacje i zamień przecinki na kropki
+              const cleaned = String(value).replace(/\s/g, '').replace(',', '.');
+              const parsed = parseFloat(cleaned);
+              return isNaN(parsed) ? defaultValue : parsed;
+            };
+            
             // Konwersja wartości finansowych z PLN na grosze
-            const monthlySalaryGross = Math.round((parseFloat(row['Wynagrodzenie brutto (PLN)'] || row['Wynagrodzenie brutto'] || '0') || 0) * 100);
-            const monthlySalaryNet = Math.round((parseFloat(row['Wynagrodzenie netto (PLN)'] || row['Wynagrodzenie netto'] || '0') || 0) * 100);
-            const monthlyCostTotal = Math.round((parseFloat(row['Koszt całkowity (PLN)'] || row['Koszt calkowity (PLN)'] || '0') || 0) * 100);
-            const hourlyRateCost = Math.round((parseFloat(row['Stawka godzinowa koszt (PLN)'] || row['Stawka godzinowa koszt'] || '0') || 0) * 100);
-            const hourlyRateEmployee = Math.round((parseFloat(row['Stawka godzinowa pracownik (PLN)'] || row['Stawka godzinowa pracownik'] || '0') || 0) * 100);
-            const hourlyRateClient = Math.round((parseFloat(row['Stawka godzinowa klient (PLN)'] || row['Stawka godzinowa klient'] || '0') || 0) * 100);
-            const vacationCostMonthly = Math.round((parseFloat(row['Koszt urlopu miesięczny (PLN)'] || row['Koszt urlopu miesieczny (PLN)'] || '0') || 0) * 100);
-            const vacationCostAnnual = Math.round((parseFloat(row['Koszt urlopu roczny (PLN)'] || '0') || 0) * 100);
-            const vacationDaysPerYear = parseInt(row['Dni urlopu rocznie'] || '21') || 21;
-            const vacationDaysUsed = parseInt(row['Wykorzystane dni urlopu'] || '0') || 0;
-            const isActive = row['Aktywny'] === 'Tak' || row['Aktywny'] === true || row['Aktywny'] === 'tak' || row['Aktywny'] === 1;
+            const monthlySalaryGross = Math.round(parseFinancialValue(row['Wynagrodzenie brutto (PLN)'] || row['Wynagrodzenie brutto'], 0) * 100);
+            const monthlySalaryNet = Math.round(parseFinancialValue(row['Wynagrodzenie netto (PLN)'] || row['Wynagrodzenie netto'], 0) * 100);
+            const monthlyCostTotal = Math.round(parseFinancialValue(row['Koszt całkowity (PLN)'] || row['Koszt calkowity (PLN)'] || row['Koszt całkowity'], 0) * 100);
+            const hourlyRateCost = Math.round(parseFinancialValue(row['Stawka godzinowa koszt (PLN)'] || row['Stawka godzinowa koszt'], 0) * 100);
+            const hourlyRateEmployee = Math.round(parseFinancialValue(row['Stawka godzinowa pracownik (PLN)'] || row['Stawka godzinowa pracownik'], 0) * 100);
+            const hourlyRateClient = Math.round(parseFinancialValue(row['Stawka godzinowa klient (PLN)'] || row['Stawka godzinowa klient'], 0) * 100);
+            const vacationCostMonthly = Math.round(parseFinancialValue(row['Koszt urlopu miesięczny (PLN)'] || row['Koszt urlopu miesieczny (PLN)'] || row['Koszt urlopu miesięczny'], 0) * 100);
+            const vacationCostAnnual = Math.round(parseFinancialValue(row['Koszt urlopu roczny (PLN)'] || row['Koszt urlopu roczny'], 0) * 100);
+            const vacationDaysPerYear = parseInt(String(row['Dni urlopu rocznie'] || '21')) || 21;
+            const vacationDaysUsed = parseInt(String(row['Wykorzystane dni urlopu'] || '0')) || 0;
+            const isActive = row['Aktywny'] === 'Tak' || row['Aktywny'] === true || row['Aktywny'] === 'tak' || row['Aktywny'] === 1 || row['Aktywny'] === 'TAK';
             const notes = row['Notatki'] || '';
             
             // Walidacja wymaganych pól
@@ -480,21 +534,60 @@ export const appRouter = router({
               notes: notes || undefined,
             };
             
+            // Loguj dane przed zapisem (tylko dla pierwszych 2 wierszy, aby nie zaśmiecać logów)
+            if (i < 2) {
+              console.log(`[Import] Dane pracownika wiersz ${i + 2}:`, {
+                id,
+                firstName,
+                lastName,
+                employmentType,
+                monthlySalaryNet: monthlySalaryNet / 100,
+                monthlyCostTotal: monthlyCostTotal / 100,
+                isActive
+              });
+            }
+            
             if (id) {
-              // Aktualizuj istniejącego pracownika
-              await db.updateEmployee(id, employeeData);
-              results.updated++;
+              // Sprawdź czy pracownik z tym ID istnieje w bazie
+              const existingEmployee = await db.getEmployeeById(id);
+              if (existingEmployee) {
+                // Aktualizuj istniejącego pracownika
+                console.log(`[Import] Próba aktualizacji pracownika ID ${id}: ${firstName} ${lastName}`);
+                await db.updateEmployee(id, employeeData);
+                results.updated++;
+                console.log(`[Import] ✓ Zaktualizowano pracownika ID ${id}: ${firstName} ${lastName}`);
+              } else {
+                // ID istnieje w Excelu, ale nie w bazie - utwórz nowego pracownika
+                console.log(`[Import] ID ${id} istnieje w Excelu, ale nie w bazie - utworzenie nowego pracownika: ${firstName} ${lastName}`);
+                const newId = await db.createEmployee(employeeData);
+                results.created++;
+                console.log(`[Import] ✓ Utworzono nowego pracownika ID ${newId} (Excel miał ID ${id}): ${firstName} ${lastName}`);
+              }
             } else {
-              // Utwórz nowego pracownika
-              await db.createEmployee(employeeData);
+              // Utwórz nowego pracownika (brak ID w Excelu)
+              console.log(`[Import] Próba utworzenia nowego pracownika (brak ID): ${firstName} ${lastName}`);
+              const newId = await db.createEmployee(employeeData);
               results.created++;
+              console.log(`[Import] ✓ Utworzono nowego pracownika ID ${newId}: ${firstName} ${lastName}`);
             }
           } catch (error: any) {
-            results.errors.push(`Wiersz ${i + 2}: ${error.message || 'Nieznany błąd'}`);
+            const errorMsg = `Wiersz ${i + 2}: ${error.message || 'Nieznany błąd'}`;
+            results.errors.push(errorMsg);
+            console.error(`[Import] ✗ Błąd w wierszu ${i + 2}:`, {
+              error: error.message,
+              stack: error.stack,
+              row: row
+            });
           }
         }
         
+        console.log(`[Import] Zakończono: ${results.created} utworzonych, ${results.updated} zaktualizowanych, ${results.errors.length} błędów`);
+        
         return results;
+        } catch (error: any) {
+          console.error('[Import] Błąd podczas importu:', error);
+          throw new Error(`Błąd importu: ${error.message || 'Nieznany błąd'}`);
+        }
       }),
   }),
 
