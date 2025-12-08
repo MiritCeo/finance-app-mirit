@@ -31,14 +31,20 @@ export default defineConfig({
         manualChunks: (id) => {
           // Podziel duże biblioteki na osobne chunki
           if (id.includes('node_modules')) {
+            // React i React-DOM muszą być w osobnym chunku, który jest ładowany jako pierwszy
+            if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
+              return 'react-vendor';
+            }
+            // lucide-react musi mieć dostęp do React - umieść go w vendor razem z React
+            // lub w osobnym chunku, ale upewnij się, że React jest już załadowany
+            if (id.includes('lucide-react')) {
+              return 'react-vendor'; // Umieść razem z React, aby miał dostęp
+            }
             if (id.includes('@radix-ui')) {
               return 'radix-ui';
             }
             if (id.includes('recharts')) {
               return 'recharts';
-            }
-            if (id.includes('lucide-react')) {
-              return 'lucide';
             }
             // Pozostałe node_modules
             return 'vendor';

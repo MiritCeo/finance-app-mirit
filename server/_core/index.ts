@@ -58,6 +58,22 @@ async function startServer() {
     console.warn("[Env] Błąd podczas ładowania dotenv:", e);
   }
   
+  // Test połączenia z bazą danych przy starcie
+  try {
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    if (db) {
+      // Wykonaj proste zapytanie testowe
+      await db.execute({ sql: "SELECT 1 as test", params: [] });
+      console.log("[Database] Test połączenia z bazą danych: OK");
+    } else {
+      console.warn("[Database] Baza danych nie jest dostępna (getDb() zwróciło null)");
+    }
+  } catch (error) {
+    console.error("[Database] Błąd testu połączenia z bazą danych:", error);
+    // Nie przerywamy startu - aplikacja może działać w trybie offline
+  }
+  
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
