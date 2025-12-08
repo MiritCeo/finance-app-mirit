@@ -24,6 +24,28 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Optymalizacje dla serwerów z małą pamięcią
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          // Podziel duże biblioteki na osobne chunki
+          if (id.includes('node_modules')) {
+            if (id.includes('@radix-ui')) {
+              return 'radix-ui';
+            }
+            if (id.includes('recharts')) {
+              return 'recharts';
+            }
+            if (id.includes('lucide-react')) {
+              return 'lucide';
+            }
+            // Pozostałe node_modules
+            return 'vendor';
+          }
+        },
+      },
+    },
   },
   server: {
     host: true,
