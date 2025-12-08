@@ -210,11 +210,11 @@ export function calculateZlecenieStudenckie(grossAmount: number) {
   // Brak składek ZUS dla studentów do 26 roku życia
   const zusEmployee = 0;
   
-  // Podatek 12% od całej kwoty
-  const tax = Math.round(grossAmount * 0.12);
+  // Zwolnienie z PIT dla studentów - brak podatku
+  const tax = 0;
   
-  // Netto
-  const netSalary = grossAmount - tax;
+  // Netto = brutto (brak podatku, ZUS i składki zdrowotnej)
+  const netSalary = grossAmount;
   
   return {
     netSalary,
@@ -368,8 +368,8 @@ export function calculateZlecenieFromNet(netSalary: number) {
  * @param netSalary Kwota netto którą pracownik chce otrzymać w groszach
  */
 export function calculateZlecenieStudenckieFromNet(netSalary: number) {
-  // Dla studenckiej: netto = brutto - 12% podatku
-  // brutto = netto / 0.88
-  const grossAmount = Math.round(netSalary / 0.88);
+  // Dla studenckiej: netto = brutto (zwolnienie z PIT, brak ZUS i składki zdrowotnej)
+  // brutto = netto
+  const grossAmount = netSalary;
   return calculateZlecenieStudenckie(grossAmount);
 }
