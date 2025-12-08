@@ -31,12 +31,14 @@ export default defineConfig({
         manualChunks: (id) => {
           // Podziel duże biblioteki na osobne chunki
           if (id.includes('node_modules')) {
-            // React i React-DOM muszą być w osobnym chunku, który jest ładowany jako pierwszy
+            // ⚠️ KRYTYCZNE: React i React-DOM muszą być w osobnym chunku, który jest ładowany jako pierwszy
+            // Zobacz PRODUCTION_SETTINGS.md - NIE ZMIENIAJ bez konsultacji!
             if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
               return 'react-vendor';
             }
-            // lucide-react musi mieć dostęp do React - umieść go w vendor razem z React
-            // lub w osobnym chunku, ale upewnij się, że React jest już załadowany
+            // ⚠️ KRYTYCZNE: lucide-react MUSI być w react-vendor (razem z React)
+            // Jeśli przeniesiesz do osobnego chunku, aplikacja przestanie działać (błąd forwardRef)
+            // Zobacz PRODUCTION_SETTINGS.md - NIE ZMIENIAJ bez konsultacji!
             if (id.includes('lucide-react')) {
               return 'react-vendor'; // Umieść razem z React, aby miał dostęp
             }

@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck, Download, Upload } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck, Download, Upload, MoreVertical } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -457,7 +458,7 @@ export default function Employees() {
   }
 
   return (
-    <div className="container mx-auto max-w-7xl space-y-6">
+    <div className="container mx-auto max-w-[98vw] xl:max-w-[95vw] space-y-6 px-2 sm:px-4">
       <Button onClick={() => setLocation("/")} variant="outline" className="mb-4">
         <ArrowLeft className="mr-2 h-4 w-4" />
         Powrót do dashboardu
@@ -721,7 +722,7 @@ export default function Employees() {
         <CardHeader>
           <CardTitle>Lista pracowników</CardTitle>
           <CardDescription>
-            Wszyscy pracownicy w systemie
+            Wszyscy pracownicy w systemie. Przewiń w poziomie, aby zobaczyć wszystkie kolumny.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -795,24 +796,27 @@ export default function Employees() {
             </div>
           )}
           
-          <Table>
+          {/* Tabela z poziomym przewijaniem */}
+          <div className="overflow-x-auto -mx-2 sm:mx-0">
+            <div className="inline-block min-w-full align-middle">
+              <Table className="min-w-[1600px]">
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="font-semibold">Imię i nazwisko</TableHead>
-                <TableHead>Stanowisko</TableHead>
-                <TableHead>Typ umowy</TableHead>
-                <TableHead className="text-right">Netto</TableHead>
-                <TableHead className="text-right">Koszt firmy</TableHead>
-                <TableHead className="text-right">Koszt godz.</TableHead>
-                <TableHead className="text-right">Stawka prac.</TableHead>
-                <TableHead className="text-right">Stawka klient</TableHead>
-                <TableHead className="text-right">Dni urlopu</TableHead>
-                <TableHead className="text-right">Urlop mies.</TableHead>
-                <TableHead className="text-right">Urlop rocz.</TableHead>
-                <TableHead className="text-right">Zysk mies.</TableHead>
-                <TableHead className="text-right">Zysk rocz.</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Akcje</TableHead>
+                <TableHead className="font-semibold min-w-[180px] sticky left-0 bg-muted/50 z-10 border-r shadow-sm">Imię i nazwisko</TableHead>
+                <TableHead className="min-w-[120px]">Stanowisko</TableHead>
+                <TableHead className="min-w-[130px]">Typ umowy</TableHead>
+                <TableHead className="text-right min-w-[100px]">Netto</TableHead>
+                <TableHead className="text-right min-w-[110px]">Koszt firmy</TableHead>
+                <TableHead className="text-right min-w-[100px]">Koszt godz.</TableHead>
+                <TableHead className="text-right min-w-[110px]">Stawka prac.</TableHead>
+                <TableHead className="text-right min-w-[110px]">Stawka klient</TableHead>
+                <TableHead className="text-right min-w-[90px]">Dni urlopu</TableHead>
+                <TableHead className="text-right min-w-[110px]">Urlop mies.</TableHead>
+                <TableHead className="text-right min-w-[110px]">Urlop rocz.</TableHead>
+                <TableHead className="text-right min-w-[120px]">Zysk mies.</TableHead>
+                <TableHead className="text-right min-w-[120px]">Zysk rocz.</TableHead>
+                <TableHead className="min-w-[100px]">Status</TableHead>
+                <TableHead className="text-right min-w-[80px] sticky right-0 bg-muted/50 z-10 border-l shadow-sm">Akcje</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -836,8 +840,8 @@ export default function Employees() {
                 };
                 
                 return (
-                  <TableRow key={employee.id}>
-                    <TableCell className="font-medium">
+                  <TableRow key={employee.id} className="hover:bg-muted/30">
+                    <TableCell className="font-medium sticky left-0 bg-background z-10 border-r shadow-sm">
                       {employee.firstName} {employee.lastName}
                     </TableCell>
                     <TableCell>{employee.position || "-"}</TableCell>
@@ -895,60 +899,60 @@ export default function Employees() {
                         {employee.isActive ? "Aktywny" : "Nieaktywny"}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleManageProjects(employee)}
-                          title="Zarządzaj projektami"
-                          className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 transition-all duration-200 hover:scale-110"
-                        >
-                          <Briefcase className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setLocation(`/employee/${employee.id}/annual-report`)}
-                          title="Raport roczny godzinowy"
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-all duration-200 hover:scale-110"
-                        >
-                          <Calendar className="w-4 h-4 mr-1" />
-                          <span className="text-xs">Raport</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setLocation(`/employee/${employee.id}/cv`)}
-                          title="Pokaż Aktualne CV"
-                          className="text-green-600 hover:text-green-700 hover:bg-green-50 transition-all duration-200 hover:scale-110"
-                        >
-                          <FileCheck className="w-4 h-4 mr-1" />
-                          <span className="text-xs">CV</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(employee)}
-                          title="Edytuj pracownika"
-                          className="hover:bg-primary/10 transition-all duration-200 hover:scale-110"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm("Czy na pewno chcesz usunąć tego pracownika?")) {
-                              deleteMutation.mutate({ id: employee.id });
-                            }
-                          }}
-                          title="Usuń pracownika"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200 hover:scale-110"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                    <TableCell className="text-right sticky right-0 bg-background z-10 border-l shadow-sm">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem
+                            onClick={() => handleEdit(employee)}
+                            className="cursor-pointer"
+                          >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edytuj pracownika
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleManageProjects(employee)}
+                            className="cursor-pointer"
+                          >
+                            <Briefcase className="mr-2 h-4 w-4" />
+                            Zarządzaj projektami
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setLocation(`/employee/${employee.id}/annual-report`)}
+                            className="cursor-pointer"
+                          >
+                            <Calendar className="mr-2 h-4 w-4" />
+                            Raport roczny
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setLocation(`/employee/${employee.id}/cv`)}
+                            className="cursor-pointer"
+                          >
+                            <FileCheck className="mr-2 h-4 w-4" />
+                            Pokaż CV
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (confirm("Czy na pewno chcesz usunąć tego pracownika?")) {
+                                deleteMutation.mutate({ id: employee.id });
+                              }
+                            }}
+                            className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Usuń pracownika
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 );
@@ -961,7 +965,9 @@ export default function Employees() {
                 </TableRow>
               )}
             </TableBody>
-          </Table>
+              </Table>
+            </div>
+          </div>
         </CardContent>
       </Card>
       

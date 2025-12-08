@@ -35,6 +35,8 @@ module.exports = {
       script: './server/_core/index.ts',
       interpreter: 'pnpm',
       interpreter_args: 'exec tsx',
+      // ⚠️ KRYTYCZNE: instances: 1 i exec_mode: 'fork' są wymagane dla ES modules
+      // Zobacz PRODUCTION_SETTINGS.md - NIE ZMIENIAJ bez konsultacji!
       instances: 1, // Użyj 1 instancji dla ES modules (cluster mode może mieć problemy)
       exec_mode: 'fork', // Fork mode działa lepiej z ES modules
       cwd: __dirname, // Ustaw katalog roboczy na katalog z ecosystem.config.cjs
@@ -43,7 +45,8 @@ module.exports = {
       env: {
         NODE_ENV: process.env.NODE_ENV || 'production',
         PORT: process.env.PORT || 3000,
-        // Przekaż wszystkie zmienne z .env (użyj envResult.parsed jeśli dostępny)
+        // ⚠️ KRYTYCZNE: Przekaż wszystkie zmienne z .env - NIE USUWAJ spread operatora!
+        // Zobacz PRODUCTION_SETTINGS.md - to zapewnia dostępność zmiennych środowiskowych
         ...(envResult.parsed || {}),
         // Nadpisz niektóre zmienne jeśli są w process.env (zmienne systemowe mają priorytet)
         DATABASE_URL: getEnv('DATABASE_URL'),
