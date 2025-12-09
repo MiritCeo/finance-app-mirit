@@ -40,6 +40,10 @@ export default function Employees() {
     enabled: !!user,
   });
   
+  const { data: fixedCostsMonthly } = trpc.fixedCosts.totalMonthly.useQuery(undefined, {
+    enabled: !!user,
+  });
+  
   const utils = trpc.useUtils();
   
   const exportMutation = trpc.employees.exportEmployees.useMutation();
@@ -860,6 +864,180 @@ export default function Employees() {
             </div>
           )}
           
+          {/* Podsumowanie zysków */}
+          {filteredAndSortedEmployees && filteredAndSortedEmployees.length > 0 && (() => {
+            // Oblicz przychód i koszty osobno
+            const totalMonthlyRevenue = filteredAndSortedEmployees.reduce((sum, emp) => {
+              return sum + ((168 * emp.hourlyRateClient) / 100);
+            }, 0);
+            
+            const totalMonthlyCost = filteredAndSortedEmployees.reduce((sum, emp) => {
+              return sum + (emp.monthlyCostTotal / 100);
+            }, 0);
+            
+            const totalMonthlyProfit = totalMonthlyRevenue - totalMonthlyCost;
+            const totalAnnualProfit = totalMonthlyProfit * 12;
+            
+            // Oblicz roczne wartości
+            const totalAnnualRevenue = totalMonthlyRevenue * 12;
+            const totalAnnualCost = totalMonthlyCost * 12;
+            
+            // Oblicz roczny koszt stały (miesięczny * 12)
+            const monthlyFixedCosts = (fixedCostsMonthly?.total || 0) / 100; // Konwersja z groszy
+            const annualFixedCosts = monthlyFixedCosts * 12;
+            
+            // Oblicz łączny koszt urlopów rocznie dla wszystkich pracowników
+            const totalAnnualVacationCost = filteredAndSortedEmployees.reduce((sum, emp) => {
+              return sum + ((emp.vacationCostAnnual || 0) / 100); // Konwersja z groszy
+            }, 0);
+            
+            // Zysk roczny netto = zysk roczny - koszty stałe roczne
+            const netAnnualProfit = totalAnnualProfit - annualFixedCosts;
+            
+            const getTotalProfitStyle = (profit: number) => {
+              if (profit < 0) return { textColor: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-200' };
+              if (profit < 50000) return { textColor: 'text-orange-700', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' };
+              if (profit < 100000) return { textColor: 'text-green-700', bgColor: 'bg-green-50', borderColor: 'border-green-200' };
+              return { textColor: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' };
+            };
+            
+            const monthlyStyle = getTotalProfitStyle(totalMonthlyProfit);
+            const annualStyle = getTotalProfitStyle(totalAnnualProfit);
+            const netStyle = getTotalProfitStyle(netAnnualProfit);
+            
+            return (
+              <div className="mb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="border-2">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Łączny zysk miesięczny</p>
+                        <p className={`text-2xl font-bold ${monthlyStyle.textColor}`}>
+                          {new Intl.NumberFormat("pl-PL", {
+                            style: "currency",
+                            currency: "PLN",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          }).format(totalMonthlyProfit)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {filteredAndSortedEmployees.length} {filteredAndSortedEmployees.length === 1 ? 'pracownik' : filteredAndSortedEmployees.length < 5 ? 'pracowników' : 'pracowników'}
+                        </p>
+                      </div>
+                      <div className={`p-3 rounded-lg ${monthlyStyle.bgColor} ${monthlyStyle.borderColor} border`}>
+                        <TrendingUp className={`h-6 w-6 ${monthlyStyle.textColor}`} />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="border-2">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm text-muted-foreground mb-1">Łączny zysk roczny</p>
+                        <p className={`text-2xl font-bold ${annualStyle.textColor}`}>
+                          {new Intl.NumberFormat("pl-PL", {
+                            style: "currency",
+                            currency: "PLN",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          }).format(totalAnnualProfit)}
+                        </p>
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs text-muted-foreground">
+                            Przychód: <span className="font-semibold text-blue-600">
+                              {new Intl.NumberFormat("pl-PL", {
+                                style: "currency",
+                                currency: "PLN",
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              }).format(totalAnnualRevenue)}
+                            </span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Marża: <span className={`font-semibold ${totalAnnualRevenue > 0 ? ((totalAnnualProfit / totalAnnualRevenue) * 100 >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-600'}`}>
+                              {totalAnnualRevenue > 0 
+                                ? `${((totalAnnualProfit / totalAnnualRevenue) * 100).toFixed(1)}%`
+                                : '0%'}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className={`p-3 rounded-lg ${annualStyle.bgColor} ${annualStyle.borderColor} border`}>
+                        <TrendingUp className={`h-6 w-6 ${annualStyle.textColor}`} />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="border-2">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm text-muted-foreground mb-1">Łączny koszt pracowniczy roczny</p>
+                        <p className="text-2xl font-bold text-orange-700">
+                          {new Intl.NumberFormat("pl-PL", {
+                            style: "currency",
+                            currency: "PLN",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          }).format(totalAnnualCost)}
+                        </p>
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs text-muted-foreground">
+                            {filteredAndSortedEmployees.length} {filteredAndSortedEmployees.length === 1 ? 'pracownik' : filteredAndSortedEmployees.length < 5 ? 'pracowników' : 'pracowników'} × 12 miesięcy
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Koszt urlopów: <span className="font-semibold text-orange-600">
+                              {new Intl.NumberFormat("pl-PL", {
+                                style: "currency",
+                                currency: "PLN",
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              }).format(totalAnnualVacationCost)}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-orange-50 border border-orange-200">
+                        <Users className="h-6 w-6 text-orange-700" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="border-2">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Zysk roczny netto</p>
+                        <p className={`text-2xl font-bold ${netStyle.textColor}`}>
+                          {new Intl.NumberFormat("pl-PL", {
+                            style: "currency",
+                            currency: "PLN",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          }).format(netAnnualProfit)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Zysk roczny: {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalAnnualProfit)} • Koszty stałe: {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(annualFixedCosts)}
+                        </p>
+                      </div>
+                      <div className={`p-3 rounded-lg ${netStyle.bgColor} ${netStyle.borderColor} border`}>
+                        {netAnnualProfit >= 0 ? (
+                          <TrendingUp className={`h-6 w-6 ${netStyle.textColor}`} />
+                        ) : (
+                          <TrendingDown className={`h-6 w-6 ${netStyle.textColor}`} />
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
+          
           {/* Tabela z poziomym przewijaniem */}
           <div className="overflow-x-auto -mx-2 sm:mx-0">
             <div className="inline-block min-w-full align-middle">
@@ -1128,11 +1306,13 @@ export default function Employees() {
                       </div>
                     </TableCell>
                     <TableCell className="text-center px-1 py-2 border-l border-border/30">
-                      {employee.isActive ? (
-                        <CheckCircle2 className="w-5 h-5 text-green-600 mx-auto" title="Aktywny" />
-                      ) : (
-                        <XCircle className="w-5 h-5 text-red-600 mx-auto" title="Nieaktywny" />
-                      )}
+                      <div title={employee.isActive ? "Aktywny" : "Nieaktywny"}>
+                        {employee.isActive ? (
+                          <CheckCircle2 className="w-5 h-5 text-green-600 mx-auto" />
+                        ) : (
+                          <XCircle className="w-5 h-5 text-red-600 mx-auto" />
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right sticky right-0 bg-background z-20 border-l-2 border-border shadow-sm px-1 py-2">
                       <DropdownMenu>
