@@ -1607,7 +1607,7 @@ export default function Employees() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[720px]">
+        <DialogContent className="sm:max-w-[960px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               Analiza AI {selectedEmployee ? `- ${selectedEmployee.firstName} ${selectedEmployee.lastName}` : ""}
@@ -1871,9 +1871,56 @@ export default function Employees() {
           )}
 
           {scenarioType === "impact" && (
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>Wpływ zmian możesz zasymulować suwakiem w panelu „what-if”.</p>
-              <p>Uwzględnij także wykluczenia pracowników — wyniki kart i scenariuszy bazują na bieżącej liście.</p>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-4 border rounded-lg">
+                  <p className="text-sm text-muted-foreground">Bazowy zysk roczny</p>
+                  <p className="text-2xl font-bold text-green-700">
+                    {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(totalAnnualProfit)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Bez zmian stawek/kosztów</p>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <p className="text-sm text-muted-foreground">Symulowany zysk roczny</p>
+                  <p className={`text-2xl font-bold ${simulatedAnnualProfit >= totalAnnualProfit ? "text-emerald-700" : "text-red-700"}`}>
+                    {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(simulatedAnnualProfit)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Stawki: {simulationClientRateChange >= 0 ? "+" : ""}{simulationClientRateChange}% • Koszty: {simulationCostChange >= 0 ? "+" : ""}{simulationCostChange}% • Wykluczonych: {excludedEmployeeIds.size}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 border rounded-lg space-y-2">
+                <p className="text-sm font-medium">Wpływ bieżących ustawień „what-if”</p>
+                <div className="flex flex-wrap gap-3 text-sm">
+                  <span className="px-2 py-1 rounded bg-muted/50 border">Δ zysk roczny: {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(simulatedAnnualProfit - totalAnnualProfit)}</span>
+                  <span className="px-2 py-1 rounded bg-muted/50 border">Δ zysk miesięczny: {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(simulatedMonthlyProfit - totalMonthlyProfit)}</span>
+                  <span className="px-2 py-1 rounded bg-muted/50 border">Wykluczonych: {excludedEmployeeIds.size}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Suwaki i wykluczenia w panelu „Analiza what-if” na bieżąco aktualizują powyższe wartości.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Szybkie wpływy zmian</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  {[
+                    { label: "Stawki +10%", value: includedEmployees.reduce((sum, emp) => sum + calcMonthlyProfit(emp, 10, 0), 0) * 12 - totalAnnualProfit },
+                    { label: "Koszty -10%", value: includedEmployees.reduce((sum, emp) => sum + calcMonthlyProfit(emp, 0, -10), 0) * 12 - totalAnnualProfit },
+                    { label: "Stawki -10%, koszty +5%", value: includedEmployees.reduce((sum, emp) => sum + calcMonthlyProfit(emp, -10, 5), 0) * 12 - totalAnnualProfit },
+                  ].map((item) => (
+                    <div key={item.label} className="p-3 border rounded-lg">
+                      <p className="font-semibold">{item.label}</p>
+                      <p className={`text-sm font-bold ${item.value >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                        {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(item.value)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">vs. stan bazowy</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
