@@ -2875,6 +2875,189 @@ Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
       }),
 
     /**
+     * Analiza trendów rynku (AI) - analizuje trendy rynkowe na podstawie danych pracowników
+     */
+    analyzeMarketTrends: protectedProcedure
+      .query(async () => {
+        const employees = await db.getActiveEmployees();
+        if (employees.length === 0) {
+          throw new Error("Brak pracowników do analizy");
+        }
+
+        // Przygotuj dane agreagowane
+        const totalEmployees = employees.length;
+        const totalMonthlyRevenue = employees.reduce((sum, e) => {
+          const rate = (e.hourlyRateClient || 0) / 100;
+          return sum + (168 * rate);
+        }, 0);
+        const totalMonthlyCost = employees.reduce((sum, e) => sum + ((e.monthlyCostTotal || 0) / 100), 0);
+        const totalMonthlyProfit = totalMonthlyRevenue - totalMonthlyCost;
+        const avgClientRate = employees.reduce((sum, e) => sum + ((e.hourlyRateClient || 0) / 100), 0) / totalEmployees;
+        const avgCost = employees.reduce((sum, e) => sum + ((e.monthlyCostTotal || 0) / 100), 0) / totalEmployees;
+        const avgMargin = totalMonthlyRevenue > 0 ? ((totalMonthlyProfit / totalMonthlyRevenue) * 100) : 0;
+
+        // Grupowanie po typach umów
+        const byEmploymentType = employees.reduce((acc, e) => {
+          const type = e.employmentType;
+          if (!acc[type]) {
+            acc[type] = { count: 0, totalRevenue: 0, totalCost: 0 };
+          }
+          acc[type].count++;
+          const rate = (e.hourlyRateClient || 0) / 100;
+          acc[type].totalRevenue += 168 * rate;
+          acc[type].totalCost += (e.monthlyCostTotal || 0) / 100;
+          return acc;
+        }, {} as Record<string, { count: number; totalRevenue: number; totalCost: number }>);
+
+        const employmentTypeBreakdown = Object.entries(byEmploymentType).map(([type, data]) => ({
+          type,
+          count: data.count,
+          avgRevenue: data.totalRevenue / data.count,
+          avgCost: data.totalCost / data.count,
+          avgProfit: (data.totalRevenue - data.totalCost) / data.count,
+        }));
+
+        // Prompt dla AI
+        const prompt = `Jesteś ekspertem rynku IT i analitykiem finansowym. Przeanalizuj trendy rynkowe na podstawie danych firmy.
+
+Dane firmy:
+- Liczba pracowników: ${totalEmployees}
+- Łączny przychód miesięczny: ${totalMonthlyRevenue.toFixed(2)} PLN
+- Łączny koszt miesięczny: ${totalMonthlyCost.toFixed(2)} PLN
+- Łączny zysk miesięczny: ${totalMonthlyProfit.toFixed(2)} PLN
+- Średnia marża: ${avgMargin.toFixed(1)}%
+- Średnia stawka klienta: ${avgClientRate.toFixed(2)} PLN/h
+- Średni koszt pracownika: ${avgCost.toFixed(2)} PLN/mies
+
+Podział po typach umów:
+${employmentTypeBreakdown.map(e => `- ${e.type}: ${e.count} pracowników, średni przychód ${e.avgRevenue.toFixed(2)} PLN, średni koszt ${e.avgCost.toFixed(2)} PLN, średni zysk ${e.avgProfit.toFixed(2)} PLN`).join('\n')}
+
+Przeanalizuj trendy rynkowe i daj rekomendacje dotyczące:
+1. Optymalnych stawek rynkowych
+2. Trendów w kosztach pracowniczych
+3. Rekomendacji dotyczących struktury zatrudnienia
+4. Prognoz na najbliższe miesiące
+5. Ryzyk i szans
+
+Odpowiedz w formacie JSON:
+{
+  "trends": [
+    {
+      "category": "Kategoria trendu (np. 'Stawki rynkowe', 'Koszty', 'Struktura zatrudnienia')",
+      "description": "Opis trendu (2-3 zdania)",
+      "impact": "low" | "medium" | "high",
+      "recommendation": "Rekomendacja (2-3 zdania)"
+    }
+  ],
+  "forecast": {
+    "next3Months": "Prognoza na najbliższe 3 miesiące (2-3 zdania)",
+    "next6Months": "Prognoza na najbliższe 6 miesięcy (2-3 zdania)",
+    "risks": ["Ryzyko 1", "Ryzyko 2", "Ryzyko 3"],
+    "opportunities": ["Szanse 1", "Szanse 2", "Szanse 3"]
+  },
+  "recommendations": [
+    {
+      "title": "Tytuł rekomendacji",
+      "description": "Opis rekomendacji (2-3 zdania)",
+      "priority": "high" | "medium" | "low",
+      "expectedImpact": "Oczekiwany wpływ (1 zdanie)"
+    }
+  ],
+  "summary": "Krótkie podsumowanie analizy trendów (3-4 zdania)"
+}
+
+Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
+
+        const { invokeLLM } = await import("./_core/llm");
+
+        // Bezpieczne parsowanie JSON
+        const safeParseJSON = (text: string): any => {
+          let jsonContent = text.trim();
+
+          if (jsonContent.startsWith("```json")) {
+            jsonContent = jsonContent.replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
+          } else if (jsonContent.startsWith("```")) {
+            jsonContent = jsonContent.replace(/^```\s*/, "").replace(/\s*```$/, "");
+          }
+
+          const match = jsonContent.match(/\{[\s\S]*\}/);
+          if (match) {
+            jsonContent = match[0];
+          }
+
+          try {
+            return JSON.parse(jsonContent);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error("[AI Market Trends] JSON parse error:", msg);
+            throw new Error(`Nie udało się sparsować odpowiedzi JSON: ${msg}`);
+          }
+        };
+
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { 
+                role: "system", 
+                content: "Jesteś ekspertem rynku IT i analitykiem finansowym. Odpowiadaj zawsze w formacie JSON. Analizuj trendy rynkowe i daj praktyczne rekomendacje." 
+              },
+              { role: "user", content: prompt }
+            ],
+          });
+
+          const rawContent = response.choices[0]?.message?.content;
+          const content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent || {});
+          console.log("[AI Market Trends] Raw response length:", content.length);
+
+          const analysis = safeParseJSON(content);
+
+          return {
+            trends: analysis.trends || [],
+            forecast: analysis.forecast || {
+              next3Months: "",
+              next6Months: "",
+              risks: [],
+              opportunities: [],
+            },
+            recommendations: analysis.recommendations || [],
+            summary: analysis.summary || "",
+            rawData: {
+              totalEmployees,
+              totalMonthlyRevenue,
+              totalMonthlyCost,
+              totalMonthlyProfit,
+              avgClientRate,
+              avgCost,
+              avgMargin,
+            },
+          };
+        } catch (error) {
+          console.error("[AI Market Trends] Error:", error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return {
+            trends: [],
+            forecast: {
+              next3Months: "",
+              next6Months: "",
+              risks: [`Błąd analizy: ${errorMessage}`],
+              opportunities: [],
+            },
+            recommendations: [],
+            summary: `Nie udało się przeprowadzić pełnej analizy: ${errorMessage}`,
+            rawData: {
+              totalEmployees,
+              totalMonthlyRevenue,
+              totalMonthlyCost,
+              totalMonthlyProfit,
+              avgClientRate,
+              avgCost,
+              avgMargin,
+            },
+          };
+        }
+      }),
+
+    /**
      * Chat finansowy - odpowiada na pytania o finanse firmy
      */
     chat: protectedProcedure
