@@ -6,6 +6,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { sql } from "drizzle-orm";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -64,7 +65,7 @@ async function startServer() {
     const db = await getDb();
     if (db) {
       // Wykonaj proste zapytanie testowe
-      await db.execute({ sql: "SELECT 1 as test", params: [] });
+      await db.execute(sql`SELECT 1 as test`);
       console.log("[Database] Test połączenia z bazą danych: OK");
     } else {
       console.warn("[Database] Baza danych nie jest dostępna (getDb() zwróciło null)");

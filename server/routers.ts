@@ -2429,7 +2429,8 @@ Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
             ],
           });
           
-          const content = response.choices[0]?.message?.content || "{}";
+          const rawContent = response.choices[0]?.message?.content;
+          const content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent || {});
           console.log("[AI] Raw response:", content);
           
           // Spróbuj wyciągnąć JSON z odpowiedzi (może być otoczony markdown)
@@ -2565,7 +2566,8 @@ Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
             ],
           });
           
-          const content = response.choices[0]?.message?.content || "{}";
+          const rawContent = response.choices[0]?.message?.content;
+          const content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent || {});
           console.log("[AI] Raw response:", content);
           
           // Spróbuj wyciągnąć JSON z odpowiedzi (może być otoczony markdown)
@@ -2595,6 +2597,279 @@ Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
             topPerformers: [],
             lowEfficiencyEmployees: [],
             rawData: employeesData,
+          };
+        }
+      }),
+
+    /**
+     * Analiza pojedynczego pracownika (AI) z wykorzystaniem danych finansowych i CV
+     */
+    analyzeEmployee: protectedProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const employee = await db.getEmployeeById(input.employeeId);
+        if (!employee) {
+          throw new Error("Employee not found");
+        }
+
+        // Pobierz CV pracownika (jeśli istnieje)
+        const cvData = await db.getEmployeeCVWithDetails(input.employeeId);
+
+        // Pobierz przypisania do projektów
+        const assignments = await db.getAssignmentsByEmployee(input.employeeId);
+        const projects = await db.getAllProjects();
+        const projectMap = new Map(projects.map(p => [p.id, p]));
+
+        // Oblicz metryki finansowe bazując na stałych kosztach (stałe 168h)
+        const baseClientRate = (employee.hourlyRateClient || 0) / 100;
+        const baseCost = (employee.monthlyCostTotal || 0) / 100;
+        const monthlyRevenue = 168 * baseClientRate;
+        const monthlyProfit = monthlyRevenue - baseCost;
+        const annualProfit = monthlyProfit * 12;
+        const margin = monthlyRevenue > 0 ? ((monthlyProfit / monthlyRevenue) * 100) : 0;
+
+        // Lista projektów pracownika (tylko aktywne)
+        const employeeProjects = assignments
+          .filter(a => a.isActive)
+          .map(a => {
+            const project = projectMap.get(a.projectId);
+            return {
+              name: project?.name || `Projekt #${a.projectId}`,
+              hourlyRateClient: (a.hourlyRateClient || 0) / 100,
+              hourlyRateCost: (a.hourlyRateCost || 0) / 100,
+            };
+          });
+
+        // Średnie do porównania
+        const allEmployees = await db.getActiveEmployees();
+        const avgClientRate = allEmployees.length > 0
+          ? allEmployees.reduce((sum, e) => sum + ((e.hourlyRateClient || 0) / 100), 0) / allEmployees.length
+          : 0;
+        const avgCost = allEmployees.length > 0
+          ? allEmployees.reduce((sum, e) => sum + ((e.monthlyCostTotal || 0) / 100), 0) / allEmployees.length
+          : 0;
+        const avgMargin = allEmployees.length > 0
+          ? allEmployees.reduce((sum, e) => {
+              const rate = (e.hourlyRateClient || 0) / 100;
+              const cost = (e.monthlyCostTotal || 0) / 100;
+              const revenue = 168 * rate;
+              const profit = revenue - cost;
+              const m = revenue > 0 ? ((profit / revenue) * 100) : 0;
+              return sum + m;
+            }, 0) / allEmployees.length
+          : 0;
+
+        // Przygotuj dane CV (escape, skrócenie)
+        const escapeForPrompt = (text: string | null | undefined): string => {
+          if (!text) return "";
+          return text
+            .replace(/\n/g, " ")
+            .replace(/\r/g, "")
+            .replace(/\t/g, " ")
+            .replace(/"/g, "'")
+            .replace(/\\/g, "/")
+            .substring(0, 500);
+        };
+
+        const cvInfo = cvData ? {
+          yearsOfExperience: cvData.yearsOfExperience || 0,
+          seniorityLevel: escapeForPrompt(cvData.seniorityLevel) || "Brak danych",
+          summary: escapeForPrompt(cvData.summary) || "",
+          tagline: escapeForPrompt(cvData.tagline) || "",
+          skills: (cvData.skills || []).map((s: any) => escapeForPrompt(s.skillName)).filter(Boolean).join(", ") || "Brak",
+          technologies: (cvData.technologies || []).map((t: any) =>
+            `${escapeForPrompt(t.technologyName)} (${t.proficiency}${t.category ? `, ${escapeForPrompt(t.category)}` : ''})`
+          ).join(", ") || "Brak",
+          languages: (cvData.languages || []).map((l: any) =>
+            `${escapeForPrompt(l.name)}${l.level ? ` (${escapeForPrompt(l.level)})` : ''}`
+          ).join(", ") || "Brak",
+          cvProjects: (cvData.projects || []).map((p: any) => {
+            const project = projectMap.get(p.projectId);
+            const projectName = project?.name || `Projekt #${p.projectId}`;
+            return `${escapeForPrompt(projectName)}${p.role ? ` jako ${escapeForPrompt(p.role)}` : ''}${p.description ? `: ${escapeForPrompt(p.description)}` : ''}`;
+          }).join("; ") || "Brak projektów w CV",
+        } : null;
+
+        const employeeData = {
+          id: employee.id,
+          name: `${employee.firstName} ${employee.lastName}`,
+          position: employee.position || "Brak stanowiska",
+          employmentType: employee.employmentType,
+          isActive: employee.isActive,
+          hourlyRateClient: baseClientRate,
+          hourlyRateEmployee: (employee.hourlyRateEmployee || 0) / 100,
+          monthlyCost: baseCost,
+          monthlyRevenue,
+          monthlyProfit,
+          annualProfit,
+          margin,
+          projects: employeeProjects,
+          vacationDays: employee.vacationDaysPerYear || 21,
+          vsAverage: {
+            clientRate: ((baseClientRate / avgClientRate - 1) * 100) || 0,
+            cost: ((baseCost / avgCost - 1) * 100) || 0,
+            margin: (margin - avgMargin) || 0,
+          },
+          cv: cvInfo,
+        };
+
+        // Prompt dla AI
+        const prompt = `Jesteś ekspertem HR i finansowym analizującym indywidualnego pracownika w firmie IT.
+
+Dane o pracowniku:
+- Imię i nazwisko: ${employeeData.name}
+- Stanowisko: ${employeeData.position}
+- Typ umowy: ${employeeData.employmentType}
+- Status: ${employeeData.isActive ? 'Aktywny' : 'Nieaktywny'}
+- Stawka godzinowa dla klienta: ${employeeData.hourlyRateClient.toFixed(2)} PLN/h
+- Stawka godzinowa pracownika: ${employeeData.hourlyRateEmployee.toFixed(2)} PLN/h
+- Koszt miesięczny firmy: ${employeeData.monthlyCost.toFixed(2)} PLN
+- Przychód miesięczny: ${employeeData.monthlyRevenue.toFixed(2)} PLN
+- Zysk miesięczny: ${employeeData.monthlyProfit.toFixed(2)} PLN
+- Zysk roczny: ${employeeData.annualProfit.toFixed(2)} PLN
+- Marża: ${employeeData.margin.toFixed(1)}%
+- Dni urlopu: ${employeeData.vacationDays}
+- Przypisany do projektów: ${employeeData.projects.length > 0 ? employeeData.projects.map(p => `${p.name} (${p.hourlyRateClient.toFixed(2)} PLN/h)`).join(', ') : 'Brak przypisań'}
+
+${cvInfo ? `Dane z CV pracownika:
+- Lata doświadczenia: ${cvInfo.yearsOfExperience}
+- Poziom seniority: ${cvInfo.seniorityLevel}
+- Krótki opis: ${cvInfo.tagline || 'Brak'}
+- Opis profilu: ${cvInfo.summary || 'Brak'}
+- Umiejętności miękkie: ${cvInfo.skills}
+- Technologie i umiejętności twarde: ${cvInfo.technologies}
+- Języki: ${cvInfo.languages}
+- Projekty w CV: ${cvInfo.cvProjects}
+` : 'UWAGA: Pracownik nie ma CV w systemie - analiza będzie oparta tylko na danych finansowych.'}
+
+Porównanie ze średnią w firmie:
+- Stawka klienta: ${employeeData.vsAverage.clientRate >= 0 ? '+' : ''}${employeeData.vsAverage.clientRate.toFixed(1)}% względem średniej
+- Koszt: ${employeeData.vsAverage.cost >= 0 ? '+' : ''}${employeeData.vsAverage.cost.toFixed(1)}% względem średniej
+- Marża: ${employeeData.vsAverage.margin >= 0 ? '+' : ''}${employeeData.vsAverage.margin.toFixed(1)}% względem średniej
+
+Przeanalizuj tego pracownika uwzględniając jego doświadczenie, umiejętności i technologie z CV. ${cvInfo ? 'Użyj danych z CV do lepszej oceny potencjału, rozwoju kariery i ryzyka odejścia.' : 'Pamiętaj, że brak CV może wpływać na dokładność analizy.'}
+
+Odpowiedz w formacie JSON:
+{
+  "riskLevel": "low" | "medium" | "high",
+  "riskReason": "Krótkie wyjaśnienie poziomu ryzyka odejścia (1-2 zdania)",
+  "recommendations": [
+    {
+      "type": "salary_increase" | "project_change" | "training" | "promotion" | "retention" | "optimization",
+      "title": "Tytuł rekomendacji",
+      "description": "Szczegółowy opis rekomendacji (2-3 zdania)",
+      "priority": "high" | "medium" | "low",
+      "impact": "Krótki opis wpływu na firmę (1 zdanie)"
+    }
+  ],
+  "careerDevelopment": {
+    "currentLevel": "junior" | "mid" | "senior" | "expert",
+    "potential": "low" | "medium" | "high",
+    "suggestions": [
+      "Sugestia rozwoju 1",
+      "Sugestia rozwoju 2",
+      "Sugestia rozwoju 3"
+    ],
+    "nextSteps": "Krótki opis następnych kroków w rozwoju kariery (2-3 zdania)"
+  },
+  "valueAnalysis": {
+    "currentValue": "low" | "medium" | "high",
+    "growthPotential": "low" | "medium" | "high",
+    "analysis": "Analiza wartości pracownika dla firmy (2-3 zdania)"
+  },
+  "summary": "Krótkie podsumowanie analizy (2-3 zdania)"
+}
+
+Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
+
+        const { invokeLLM } = await import("./_core/llm");
+
+        // Bezpieczne parsowanie JSON
+        const safeParseJSON = (text: string): any => {
+          let jsonContent = text.trim();
+
+          if (jsonContent.startsWith("```json")) {
+            jsonContent = jsonContent.replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
+          } else if (jsonContent.startsWith("```")) {
+            jsonContent = jsonContent.replace(/^```\s*/, "").replace(/\s*```$/, "");
+          }
+
+          const match = jsonContent.match(/\{[\s\S]*\}/);
+          if (match) {
+            jsonContent = match[0];
+          }
+
+          try {
+            return JSON.parse(jsonContent);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error("[AI Employee Analysis] JSON parse error:", msg);
+            throw new Error(`Nie udało się sparsować odpowiedzi JSON: ${msg}`);
+          }
+        };
+
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { 
+                role: "system", 
+                content: "Jesteś ekspertem HR i finansowym. Odpowiadaj zawsze w formacie JSON. Analizuj pracowników pod kątem wartości dla firmy, ryzyka odejścia i potencjału rozwoju." 
+              },
+              { role: "user", content: prompt }
+            ],
+          });
+
+          const rawContent = response.choices[0]?.message?.content;
+          const content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent || {});
+          console.log("[AI Employee Analysis] Raw response length:", content.length);
+          console.log("[AI Employee Analysis] Raw response (first 400 chars):", content.substring(0, 400));
+
+          const analysis = safeParseJSON(content);
+
+          return {
+            employeeId: employee.id,
+            employeeName: employeeData.name,
+            riskLevel: analysis.riskLevel || "medium",
+            riskReason: analysis.riskReason || "",
+            recommendations: analysis.recommendations || [],
+            careerDevelopment: analysis.careerDevelopment || {
+              currentLevel: "mid",
+              potential: "medium",
+              suggestions: [],
+              nextSteps: "",
+            },
+            valueAnalysis: analysis.valueAnalysis || {
+              currentValue: "medium",
+              growthPotential: "medium",
+              analysis: "",
+            },
+            summary: analysis.summary || "",
+            rawData: employeeData,
+          };
+        } catch (error) {
+          console.error("[AI Employee Analysis] Error:", error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return {
+            employeeId: employee.id,
+            employeeName: employeeData.name,
+            riskLevel: "medium" as const,
+            riskReason: `Nie udało się przeprowadzić analizy: ${errorMessage}`,
+            recommendations: [],
+            careerDevelopment: {
+              currentLevel: "mid" as const,
+              potential: "medium" as const,
+              suggestions: [],
+              nextSteps: "",
+            },
+            valueAnalysis: {
+              currentValue: "medium" as const,
+              growthPotential: "medium" as const,
+              analysis: "",
+            },
+            summary: "",
+            rawData: employeeData,
           };
         }
       }),

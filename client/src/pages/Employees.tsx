@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck, Download, Upload, MoreVertical, CheckCircle2, XCircle, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
+import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck, Download, Upload, MoreVertical, CheckCircle2, XCircle, TrendingUp, TrendingDown, Minus, Sparkles, AlertTriangle, Calculator, RotateCcw } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -31,6 +33,15 @@ export default function Employees() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [selectedEmployeeForAI, setSelectedEmployeeForAI] = useState<number | null>(null);
+  const [isEmployeeAIAnalysisOpen, setIsEmployeeAIAnalysisOpen] = useState(false);
+  // What-if i scenariusze
+  const [excludedEmployeeIds, setExcludedEmployeeIds] = useState<Set<number>>(new Set());
+  const [simulationClientRateChange, setSimulationClientRateChange] = useState<number>(0);
+  const [simulationCostChange, setSimulationCostChange] = useState<number>(0);
+  const [isAnalysisPanelOpen, setIsAnalysisPanelOpen] = useState(false);
+  const [isAdvancedScenariosOpen, setIsAdvancedScenariosOpen] = useState(false);
+  const [scenarioType, setScenarioType] = useState<"optimization" | "projections" | "impact" | "market">("optimization");
   
   const { data: employees, isLoading, refetch } = trpc.employees.list.useQuery(undefined, {
     enabled: !!user,
@@ -39,10 +50,27 @@ export default function Employees() {
   const { data: projects } = trpc.projects.list.useQuery(undefined, {
     enabled: !!user,
   });
-  
-  const { data: fixedCostsMonthly } = trpc.fixedCosts.totalMonthly.useQuery(undefined, {
-    enabled: !!user,
-  });
+
+  const employeeAIQuery = trpc.aiFinancial.analyzeEmployee.useQuery(
+    { employeeId: selectedEmployeeForAI! },
+    {
+      enabled: !!selectedEmployeeForAI && isEmployeeAIAnalysisOpen,
+      retry: false,
+    }
+  );
+  // Pomocnicze kalkulacje
+  const calcMonthlyProfit = (emp: any, rateChangePct = 0, costChangePct = 0) => {
+    const rate = (emp.hourlyRateClient || 0) * (1 + rateChangePct / 100);
+    const cost = (emp.monthlyCostTotal || 0) * (1 + costChangePct / 100);
+    return (168 * rate - cost) / 100;
+  };
+
+  const calcMargin = (emp: any, rateChangePct = 0, costChangePct = 0) => {
+    const revenue = 168 * (emp.hourlyRateClient || 0) * (1 + rateChangePct / 100);
+    const cost = (emp.monthlyCostTotal || 0) * (1 + costChangePct / 100);
+    if (revenue <= 0) return 0;
+    return ((revenue - cost) / revenue) * 100;
+  };
   
   const utils = trpc.useUtils();
   
@@ -509,6 +537,58 @@ export default function Employees() {
     return sortOrder === "asc" ? comparison : -comparison;
   });
 
+  const selectedEmployee = employees?.find(e => e.id === selectedEmployeeForAI);
+
+  // Wykluczenia i symulacje
+  const toggleExcludeEmployee = (id: number) => {
+    setExcludedEmployeeIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const resetSimulations = () => {
+    setSimulationClientRateChange(0);
+    setSimulationCostChange(0);
+    setExcludedEmployeeIds(new Set());
+  };
+
+  const includedEmployees = filteredAndSortedEmployees?.filter(e => !excludedEmployeeIds.has(e.id)) || [];
+
+  const totalMonthlyProfit = includedEmployees.reduce((sum, emp) => sum + calcMonthlyProfit(emp), 0);
+  const simulatedMonthlyProfit = includedEmployees.reduce(
+    (sum, emp) => sum + calcMonthlyProfit(emp, simulationClientRateChange, simulationCostChange),
+    0
+  );
+  const totalMonthlyCost = includedEmployees.reduce((sum, emp) => sum + (emp.monthlyCostTotal || 0) / 100, 0);
+  const totalAnnualProfit = totalMonthlyProfit * 12;
+  const totalAnnualCost = totalMonthlyCost * 12;
+  const simulatedAnnualProfit = simulatedMonthlyProfit * 12;
+
+  // Proste scenariusze
+  const scenarioRows = [
+    {
+      name: "Optymalizacja kosztów (-10%)",
+      profit: includedEmployees.reduce((sum, emp) => sum + calcMonthlyProfit(emp, 0, -10), 0) * 12,
+      change: "Koszty -10%",
+    },
+    {
+      name: "Podwyżka stawek (+10%)",
+      profit: includedEmployees.reduce((sum, emp) => sum + calcMonthlyProfit(emp, 10, 0), 0) * 12,
+      change: "Stawki +10%",
+    },
+    {
+      name: "Scenariusz pesymistyczny (-10% stawki, +5% koszt)",
+      profit: includedEmployees.reduce((sum, emp) => sum + calcMonthlyProfit(emp, -10, 5), 0) * 12,
+      change: "Stawki -10%, koszt +5%",
+    },
+  ];
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -523,6 +603,61 @@ export default function Employees() {
         <ArrowLeft className="mr-2 h-4 w-4" />
         Powrót do dashboardu
       </Button>
+
+      {/* Karty podsumowań */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm text-muted-foreground">Łączny zysk miesięczny</CardTitle>
+            <CardDescription className="text-2xl font-bold text-green-600">
+              {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(totalMonthlyProfit)}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm text-muted-foreground">Łączny zysk roczny</CardTitle>
+            <CardDescription className="text-2xl font-bold text-green-700">
+              {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(totalAnnualProfit)}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm text-muted-foreground">Łączny koszt roczny</CardTitle>
+            <CardDescription className="text-2xl font-bold text-orange-600">
+              {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(totalAnnualCost)}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm text-muted-foreground">Symulowany zysk roczny</CardTitle>
+            <CardDescription className={`text-2xl font-bold ${simulatedAnnualProfit >= totalAnnualProfit ? "text-emerald-700" : "text-orange-700"}`}>
+              {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(simulatedAnnualProfit)}
+            </CardDescription>
+            <p className="text-xs text-muted-foreground">
+              Zmiana stawek: {simulationClientRateChange}% • Zmiana kosztów: {simulationCostChange}%
+            </p>
+          </CardHeader>
+        </Card>
+      </div>
+
+      {/* Przyciski analiza/scenariusze */}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={() => setIsAnalysisPanelOpen(true)}>
+          <Calculator className="mr-2 h-4 w-4" />
+          Analiza „what-if”
+        </Button>
+        <Button variant="outline" onClick={() => setIsAdvancedScenariosOpen(true)}>
+          <Sparkles className="mr-2 h-4 w-4 text-purple-600" />
+          Scenariusze
+        </Button>
+        <Button variant="ghost" onClick={resetSimulations}>
+          <RotateCcw className="mr-2 h-4 w-4" />
+          Reset symulacji
+        </Button>
+      </div>
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -864,180 +999,6 @@ export default function Employees() {
             </div>
           )}
           
-          {/* Podsumowanie zysków */}
-          {filteredAndSortedEmployees && filteredAndSortedEmployees.length > 0 && (() => {
-            // Oblicz przychód i koszty osobno
-            const totalMonthlyRevenue = filteredAndSortedEmployees.reduce((sum, emp) => {
-              return sum + ((168 * emp.hourlyRateClient) / 100);
-            }, 0);
-            
-            const totalMonthlyCost = filteredAndSortedEmployees.reduce((sum, emp) => {
-              return sum + (emp.monthlyCostTotal / 100);
-            }, 0);
-            
-            const totalMonthlyProfit = totalMonthlyRevenue - totalMonthlyCost;
-            const totalAnnualProfit = totalMonthlyProfit * 12;
-            
-            // Oblicz roczne wartości
-            const totalAnnualRevenue = totalMonthlyRevenue * 12;
-            const totalAnnualCost = totalMonthlyCost * 12;
-            
-            // Oblicz roczny koszt stały (miesięczny * 12)
-            const monthlyFixedCosts = (fixedCostsMonthly?.total || 0) / 100; // Konwersja z groszy
-            const annualFixedCosts = monthlyFixedCosts * 12;
-            
-            // Oblicz łączny koszt urlopów rocznie dla wszystkich pracowników
-            const totalAnnualVacationCost = filteredAndSortedEmployees.reduce((sum, emp) => {
-              return sum + ((emp.vacationCostAnnual || 0) / 100); // Konwersja z groszy
-            }, 0);
-            
-            // Zysk roczny netto = zysk roczny - koszty stałe roczne
-            const netAnnualProfit = totalAnnualProfit - annualFixedCosts;
-            
-            const getTotalProfitStyle = (profit: number) => {
-              if (profit < 0) return { textColor: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-200' };
-              if (profit < 50000) return { textColor: 'text-orange-700', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' };
-              if (profit < 100000) return { textColor: 'text-green-700', bgColor: 'bg-green-50', borderColor: 'border-green-200' };
-              return { textColor: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' };
-            };
-            
-            const monthlyStyle = getTotalProfitStyle(totalMonthlyProfit);
-            const annualStyle = getTotalProfitStyle(totalAnnualProfit);
-            const netStyle = getTotalProfitStyle(netAnnualProfit);
-            
-            return (
-              <div className="mb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="border-2">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-1">Łączny zysk miesięczny</p>
-                        <p className={`text-2xl font-bold ${monthlyStyle.textColor}`}>
-                          {new Intl.NumberFormat("pl-PL", {
-                            style: "currency",
-                            currency: "PLN",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                          }).format(totalMonthlyProfit)}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {filteredAndSortedEmployees.length} {filteredAndSortedEmployees.length === 1 ? 'pracownik' : filteredAndSortedEmployees.length < 5 ? 'pracowników' : 'pracowników'}
-                        </p>
-                      </div>
-                      <div className={`p-3 rounded-lg ${monthlyStyle.bgColor} ${monthlyStyle.borderColor} border`}>
-                        <TrendingUp className={`h-6 w-6 ${monthlyStyle.textColor}`} />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="border-2">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-sm text-muted-foreground mb-1">Łączny zysk roczny</p>
-                        <p className={`text-2xl font-bold ${annualStyle.textColor}`}>
-                          {new Intl.NumberFormat("pl-PL", {
-                            style: "currency",
-                            currency: "PLN",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                          }).format(totalAnnualProfit)}
-                        </p>
-                        <div className="mt-2 space-y-1">
-                          <p className="text-xs text-muted-foreground">
-                            Przychód: <span className="font-semibold text-blue-600">
-                              {new Intl.NumberFormat("pl-PL", {
-                                style: "currency",
-                                currency: "PLN",
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 0,
-                              }).format(totalAnnualRevenue)}
-                            </span>
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Marża: <span className={`font-semibold ${totalAnnualRevenue > 0 ? ((totalAnnualProfit / totalAnnualRevenue) * 100 >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-600'}`}>
-                              {totalAnnualRevenue > 0 
-                                ? `${((totalAnnualProfit / totalAnnualRevenue) * 100).toFixed(1)}%`
-                                : '0%'}
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                      <div className={`p-3 rounded-lg ${annualStyle.bgColor} ${annualStyle.borderColor} border`}>
-                        <TrendingUp className={`h-6 w-6 ${annualStyle.textColor}`} />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="border-2">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-sm text-muted-foreground mb-1">Łączny koszt pracowniczy roczny</p>
-                        <p className="text-2xl font-bold text-orange-700">
-                          {new Intl.NumberFormat("pl-PL", {
-                            style: "currency",
-                            currency: "PLN",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                          }).format(totalAnnualCost)}
-                        </p>
-                        <div className="mt-2 space-y-1">
-                          <p className="text-xs text-muted-foreground">
-                            {filteredAndSortedEmployees.length} {filteredAndSortedEmployees.length === 1 ? 'pracownik' : filteredAndSortedEmployees.length < 5 ? 'pracowników' : 'pracowników'} × 12 miesięcy
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Koszt urlopów: <span className="font-semibold text-orange-600">
-                              {new Intl.NumberFormat("pl-PL", {
-                                style: "currency",
-                                currency: "PLN",
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 0,
-                              }).format(totalAnnualVacationCost)}
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                      <div className="p-3 rounded-lg bg-orange-50 border border-orange-200">
-                        <Users className="h-6 w-6 text-orange-700" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="border-2">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-1">Zysk roczny netto</p>
-                        <p className={`text-2xl font-bold ${netStyle.textColor}`}>
-                          {new Intl.NumberFormat("pl-PL", {
-                            style: "currency",
-                            currency: "PLN",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                          }).format(netAnnualProfit)}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Zysk roczny: {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalAnnualProfit)} • Koszty stałe: {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(annualFixedCosts)}
-                        </p>
-                      </div>
-                      <div className={`p-3 rounded-lg ${netStyle.bgColor} ${netStyle.borderColor} border`}>
-                        {netAnnualProfit >= 0 ? (
-                          <TrendingUp className={`h-6 w-6 ${netStyle.textColor}`} />
-                        ) : (
-                          <TrendingDown className={`h-6 w-6 ${netStyle.textColor}`} />
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            );
-          })()}
-          
           {/* Tabela z poziomym przewijaniem */}
           <div className="overflow-x-auto -mx-2 sm:mx-0">
             <div className="inline-block min-w-full align-middle">
@@ -1306,13 +1267,11 @@ export default function Employees() {
                       </div>
                     </TableCell>
                     <TableCell className="text-center px-1 py-2 border-l border-border/30">
-                      <div title={employee.isActive ? "Aktywny" : "Nieaktywny"}>
-                        {employee.isActive ? (
-                          <CheckCircle2 className="w-5 h-5 text-green-600 mx-auto" />
-                        ) : (
-                          <XCircle className="w-5 h-5 text-red-600 mx-auto" />
-                        )}
-                      </div>
+                      {employee.isActive ? (
+                        <CheckCircle2 className="w-5 h-5 text-green-600 mx-auto" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-red-600 mx-auto" />
+                      )}
                     </TableCell>
                     <TableCell className="text-right sticky right-0 bg-background z-20 border-l-2 border-border shadow-sm px-1 py-2">
                       <DropdownMenu>
@@ -1353,6 +1312,16 @@ export default function Employees() {
                           >
                             <FileCheck className="mr-2 h-4 w-4" />
                             Pokaż CV
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedEmployeeForAI(employee.id);
+                              setIsEmployeeAIAnalysisOpen(true);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <Sparkles className="mr-2 h-4 w-4 text-purple-600" />
+                            Analiza AI
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -1498,6 +1467,271 @@ export default function Employees() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog analizy AI pracownika */}
+      <Dialog
+        open={isEmployeeAIAnalysisOpen}
+        onOpenChange={(open) => {
+          setIsEmployeeAIAnalysisOpen(open);
+          if (!open) {
+            setSelectedEmployeeForAI(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[720px]">
+          <DialogHeader>
+            <DialogTitle>
+              Analiza AI {selectedEmployee ? `- ${selectedEmployee.firstName} ${selectedEmployee.lastName}` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              Spersonalizowana analiza ryzyka, rekomendacji i rozwoju kariery.
+            </DialogDescription>
+          </DialogHeader>
+
+          {employeeAIQuery.isLoading && (
+            <div className="flex items-center gap-2 py-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Analizuję pracownika...</span>
+            </div>
+          )}
+
+          {employeeAIQuery.error && (
+            <div className="text-red-600 text-sm py-2">
+              Nie udało się przeprowadzić analizy: {employeeAIQuery.error.message}
+            </div>
+          )}
+
+          {employeeAIQuery.data && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className={`
+                  h-4 w-4
+                  ${employeeAIQuery.data.riskLevel === "high" ? "text-red-600" : employeeAIQuery.data.riskLevel === "medium" ? "text-orange-500" : "text-emerald-600"}
+                `} />
+                <div>
+                  <p className="text-sm text-muted-foreground">Ryzyko odejścia</p>
+                  <p className="font-semibold">
+                    {employeeAIQuery.data.riskLevel.toUpperCase()}
+                    {employeeAIQuery.data.riskReason ? ` – ${employeeAIQuery.data.riskReason}` : ""}
+                  </p>
+                </div>
+              </div>
+
+              {employeeAIQuery.data.summary && (
+                <div className="p-3 rounded-lg border bg-muted/30">
+                  <p className="text-sm font-medium">Podsumowanie</p>
+                  <p className="text-sm text-muted-foreground mt-1">{employeeAIQuery.data.summary}</p>
+                </div>
+              )}
+
+              {employeeAIQuery.data.recommendations?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Rekomendacje</p>
+                  <div className="space-y-2">
+                    {employeeAIQuery.data.recommendations.map((rec: any, idx: number) => (
+                      <div key={idx} className="p-3 rounded-lg border">
+                        <p className="text-xs uppercase text-muted-foreground">{rec.type}</p>
+                        <p className="font-semibold">{rec.title}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Priorytet: {rec.priority} • Wpływ: {rec.impact}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {employeeAIQuery.data.careerDevelopment && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Rozwój kariery</p>
+                  <div className="p-3 rounded-lg border space-y-1">
+                    <p className="text-sm">Poziom: {employeeAIQuery.data.careerDevelopment.currentLevel}</p>
+                    <p className="text-sm">Potencjał: {employeeAIQuery.data.careerDevelopment.potential}</p>
+                    {employeeAIQuery.data.careerDevelopment.suggestions?.length > 0 && (
+                      <ul className="list-disc list-inside text-sm text-muted-foreground mt-1">
+                        {employeeAIQuery.data.careerDevelopment.suggestions.map((s: string, idx: number) => (
+                          <li key={idx}>{s}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {employeeAIQuery.data.careerDevelopment.nextSteps && (
+                      <p className="text-sm text-muted-foreground mt-1">{employeeAIQuery.data.careerDevelopment.nextSteps}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {employeeAIQuery.data.valueAnalysis && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Analiza wartości</p>
+                  <div className="p-3 rounded-lg border space-y-1">
+                    <p className="text-sm">Wartość: {employeeAIQuery.data.valueAnalysis.currentValue}</p>
+                    <p className="text-sm">Potencjał wzrostu: {employeeAIQuery.data.valueAnalysis.growthPotential}</p>
+                    {employeeAIQuery.data.valueAnalysis.analysis && (
+                      <p className="text-sm text-muted-foreground mt-1">{employeeAIQuery.data.valueAnalysis.analysis}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Analiza what-if */}
+      <Dialog open={isAnalysisPanelOpen} onOpenChange={setIsAnalysisPanelOpen}>
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>Analiza „what-if”</DialogTitle>
+            <DialogDescription>Symulacja zmian stawek i kosztów oraz wykluczanie pracowników.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-medium">Zmiana stawki klienta (%)</p>
+              <Slider
+                value={[simulationClientRateChange]}
+                min={-30}
+                max={50}
+                step={1}
+                onValueChange={(vals: number[]) => setSimulationClientRateChange(vals[0] ?? 0)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">{simulationClientRateChange}%</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium">Zmiana kosztu pracownika (%)</p>
+              <Slider
+                value={[simulationCostChange]}
+                min={-30}
+                max={50}
+                step={1}
+                onValueChange={(vals: number[]) => setSimulationCostChange(vals[0] ?? 0)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">{simulationCostChange}%</p>
+            </div>
+            <div className="border rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Wyklucz z analizy</p>
+                <Button variant="ghost" size="sm" onClick={() => setExcludedEmployeeIds(new Set())}>Wyczyść wybór</Button>
+              </div>
+              <div className="max-h-48 overflow-auto mt-2 space-y-1">
+                {filteredAndSortedEmployees?.map(emp => (
+                  <label key={emp.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={excludedEmployeeIds.has(emp.id)}
+                      onCheckedChange={() => toggleExcludeEmployee(emp.id)}
+                    />
+                    <span>{emp.firstName} {emp.lastName}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="p-3 border rounded-lg">
+                <p className="text-muted-foreground">Aktualny zysk roczny</p>
+                <p className="text-lg font-semibold text-green-700">
+                  {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(totalAnnualProfit)}
+                </p>
+              </div>
+              <div className="p-3 border rounded-lg">
+                <p className="text-muted-foreground">Symulowany zysk roczny</p>
+                <p className="text-lg font-semibold text-emerald-700">
+                  {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(simulatedAnnualProfit)}
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={resetSimulations}>
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Resetuj
+            </Button>
+            <Button onClick={() => setIsAnalysisPanelOpen(false)}>Zamknij</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Scenariusze */}
+      <Dialog open={isAdvancedScenariosOpen} onOpenChange={setIsAdvancedScenariosOpen}>
+        <DialogContent className="sm:max-w-[720px]">
+          <DialogHeader>
+            <DialogTitle>Scenariusze</DialogTitle>
+            <DialogDescription>Symulacje rocznego zysku dla różnych założeń.</DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 mb-4">
+            {["optimization", "projections", "impact", "market"].map(tab => (
+              <Button
+                key={tab}
+                variant={scenarioType === tab ? "default" : "outline"}
+                size="sm"
+                onClick={() => setScenarioType(tab as any)}
+              >
+                {tab === "optimization" && "Optymalizacja"}
+                {tab === "projections" && "Projekcje"}
+                {tab === "impact" && "Wpływ zmian"}
+                {tab === "market" && "Trendy rynku (AI)"}
+              </Button>
+            ))}
+          </div>
+
+          {scenarioType === "optimization" && (
+            <div className="space-y-2">
+              {scenarioRows.map(row => (
+                <div key={row.name} className="p-3 border rounded-lg flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold">{row.name}</p>
+                    <p className="text-xs text-muted-foreground">{row.change}</p>
+                  </div>
+                  <p className="text-sm font-semibold text-green-700">
+                    {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(row.profit)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {scenarioType === "projections" && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Szybkie warianty roczne:</p>
+              <div className="space-y-2">
+                <div className="p-3 border rounded flex justify-between">
+                  <span>Realistyczny (bez zmian)</span>
+                  <span className="font-semibold text-green-700">
+                    {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(totalAnnualProfit)}
+                  </span>
+                </div>
+                <div className="p-3 border rounded flex justify-between">
+                  <span>Pesymistyczny (stawki -10%, koszt +5%)</span>
+                  <span className="font-semibold text-orange-700">
+                    {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(
+                      includedEmployees.reduce((sum, emp) => sum + calcMonthlyProfit(emp, -10, 5), 0) * 12
+                    )}
+                  </span>
+                </div>
+                <div className="p-3 border rounded flex justify-between">
+                  <span>Optymistyczny (stawki +10%, koszt -5%)</span>
+                  <span className="font-semibold text-emerald-700">
+                    {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(
+                      includedEmployees.reduce((sum, emp) => sum + calcMonthlyProfit(emp, 10, -5), 0) * 12
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {scenarioType === "impact" && (
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>Wpływ zmian możesz zasymulować suwakiem w panelu „what-if”.</p>
+              <p>Uwzględnij także wykluczenia pracowników — wyniki kart i scenariuszy bazują na bieżącej liście.</p>
+            </div>
+          )}
+
+          {scenarioType === "market" && (
+            <div className="text-sm text-muted-foreground">
+              Trendy rynku były dostępne w osobnej zakładce AI; w tej chwili można je uruchomić z widoku AI Insights.
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
