@@ -91,7 +91,7 @@ export default function Projects() {
       refetch();
     },
     onError: (error) => {
-      toast.error("Błąd: " + error.message);
+      toast.error(error.message || "Nie można usunąć projektu");
     },
   });
 

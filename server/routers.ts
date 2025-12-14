@@ -754,8 +754,15 @@ export const appRouter = router({
     delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
-        await db.deleteProject(input.id);
-        return { success: true };
+        try {
+          await db.deleteProject(input.id);
+          return { success: true };
+        } catch (error: any) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error.message || "Nie można usunąć projektu",
+          });
+        }
       }),
     
     getStats: adminProcedure

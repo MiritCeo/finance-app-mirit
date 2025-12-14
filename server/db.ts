@@ -275,6 +275,13 @@ export async function updateProject(id: number, project: Partial<InsertProject>)
 export async function deleteProject(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  
+  // Sprawdź czy są przypisania pracowników do projektu
+  const assignments = await getAssignmentsByProject(id);
+  if (assignments.length > 0) {
+    throw new Error(`Nie można usunąć projektu - przypisanych jest ${assignments.length} pracowników. Najpierw usuń przypisania pracowników.`);
+  }
+  
   await db.delete(projects).where(eq(projects.id, id));
 }
 
