@@ -25,6 +25,9 @@ export function useAuth(options?: UseAuthOptions) {
   });
 
   const logout = useCallback(async () => {
+    // Zapisz rolę użytkownika przed wylogowaniem, aby wiedzieć gdzie przekierować
+    const userRole = meQuery.data?.role;
+    
     try {
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {
@@ -38,8 +41,17 @@ export function useAuth(options?: UseAuthOptions) {
     } finally {
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
+      
+      // Przekieruj na odpowiednią stronę logowania w zależności od roli
+      if (typeof window !== "undefined") {
+        if (userRole === "admin") {
+          window.location.href = "/admin-login";
+        } else {
+          window.location.href = "/employee-login";
+        }
+      }
     }
-  }, [logoutMutation, utils]);
+  }, [logoutMutation, utils, meQuery.data?.role]);
 
   const state = useMemo(() => {
     localStorage.setItem(

@@ -54,13 +54,21 @@ export function registerOAuthRoutes(app: Express) {
         const dbInstance = await db.getDb();
         if (dbInstance) {
           await dbInstance.delete(users).where(eq(users.openId, oldEmployeeOpenId));
+          console.log("[Auth] Admin login - deleted old employee user");
         }
       }
       
       // Sprawdź czy ten employee ma powiązany user z rolą admin
       // Jeśli nie, utwórz/aktualizuj user z rolą admin
       const openId = `admin_${adminEmployee.id}`;
-      console.log("[Auth] Admin login - upserting user with role 'admin'", { openId, email: adminEmployee.email });
+      console.log("[Auth] Admin login - upserting user with role 'admin'", { openId, email: adminEmployee.email, employeeId: adminEmployee.id });
+      
+      // Najpierw sprawdź czy użytkownik z admin_ już istnieje
+      const existingAdminUser = await db.getUserByOpenId(openId);
+      if (existingAdminUser) {
+        console.log("[Auth] Admin login - existing admin user found, updating role:", existingAdminUser.role);
+      }
+      
       await db.upsertUser({
         openId,
         name: `${adminEmployee.firstName} ${adminEmployee.lastName}`,
@@ -73,14 +81,31 @@ export function registerOAuthRoutes(app: Express) {
       
       // Sprawdź czy użytkownik został poprawnie utworzony/zaktualizowany
       const createdUser = await db.getUserByOpenId(openId);
+      if (!createdUser) {
+        console.error("[Auth] Admin login - ERROR: User was not created/updated!");
+        res.status(500).json({ error: "Błąd tworzenia użytkownika" });
+        return;
+      }
+      
       console.log("[Auth] Admin login - user after upsert:", JSON.stringify({
-        id: createdUser?.id,
-        openId: createdUser?.openId,
-        role: createdUser?.role,
-        employeeId: createdUser?.employeeId,
-        email: createdUser?.email,
-        loginMethod: createdUser?.loginMethod
+        id: createdUser.id,
+        openId: createdUser.openId,
+        role: createdUser.role,
+        employeeId: createdUser.employeeId,
+        email: createdUser.email,
+        loginMethod: createdUser.loginMethod
       }, null, 2));
+      
+      // Weryfikacja: upewnij się, że rola jest 'admin'
+      if (createdUser.role !== 'admin') {
+        console.error("[Auth] Admin login - ERROR: User role is not 'admin'! Role:", createdUser.role);
+        // Próbuj jeszcze raz zaktualizować rolę bezpośrednio
+        const dbInstance = await db.getDb();
+        if (dbInstance) {
+          await dbInstance.update(users).set({ role: 'admin' }).where(eq(users.openId, openId));
+          console.log("[Auth] Admin login - forced role update to 'admin'");
+        }
+      }
 
       // Utwórz token sesji
       const sessionToken = await sdk.createSessionToken(openId, {
