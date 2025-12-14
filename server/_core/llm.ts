@@ -210,18 +210,34 @@ const normalizeToolChoice = (
 };
 
 const resolveApiUrl = () => {
-  // Jeśli mamy własny URL Forge, użyj go
-  if (ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0) {
-    return `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`;
-  }
-  
-  // Jeśli mamy klucz OpenAI, użyj bezpośrednio OpenAI API
-  if (ENV.openaiApiKey && ENV.openaiApiKey.trim().length > 0) {
+  // PRIORYTET 1: Jeśli mamy klucz OpenAI (i nie jest to placeholder), użyj bezpośrednio OpenAI API
+  const openaiKey = ENV.openaiApiKey?.trim() || "";
+  if (openaiKey.length > 0 && !openaiKey.includes("your-") && openaiKey.startsWith("sk-")) {
+    console.log("[LLM] Używam OpenAI API (znaleziono OPENAI_API_KEY)");
     return "https://api.openai.com/v1/chat/completions";
   }
   
-  // Fallback do Forge (jeśli nie ma klucza OpenAI)
-  return "https://forge.manus.im/v1/chat/completions";
+  // PRIORYTET 2: Jeśli mamy własny URL Forge, użyj go
+  if (ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0) {
+    console.log("[LLM] Używam Forge API (znaleziono BUILT_IN_FORGE_API_URL)");
+    return `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`;
+  }
+  
+  // PRIORYTET 3: Jeśli mamy klucz Forge (i nie jest to placeholder), użyj domyślnego Forge API
+  const forgeKey = ENV.forgeApiKey?.trim() || "";
+  if (forgeKey.length > 0 && !forgeKey.includes("your-")) {
+    console.log("[LLM] Używam Forge API (znaleziono BUILT_IN_FORGE_API_KEY)");
+    return "https://forge.manus.im/v1/chat/completions";
+  }
+  
+  // Debug: sprawdź co faktycznie jest w zmiennych
+  console.error("[LLM] DEBUG - openaiKey:", openaiKey ? `${openaiKey.substring(0, 10)}... (długość: ${openaiKey.length})` : "BRAK");
+  console.error("[LLM] DEBUG - forgeKey:", forgeKey ? `${forgeKey.substring(0, 10)}... (długość: ${forgeKey.length})` : "BRAK");
+  console.error("[LLM] DEBUG - process.env.OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? `ustawiony (${process.env.OPENAI_API_KEY.substring(0, 10)}...)` : "BRAK");
+  console.error("[LLM] DEBUG - ENV.openaiApiKey:", ENV.openaiApiKey ? `ustawiony (${ENV.openaiApiKey.substring(0, 10)}...)` : "BRAK");
+  
+  // Fallback - błąd
+  throw new Error("Brak skonfigurowanego klucza API. Ustaw OPENAI_API_KEY lub BUILT_IN_FORGE_API_KEY w pliku .env");
 };
 
 const assertApiKey = () => {
@@ -346,12 +362,18 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  // apiUrl został już zdefiniowany wcześniej
-  const apiKey = getApiKey();
+  // Użyj odpowiedniego klucza w zależności od wybranego API
+  const apiKey = isOpenAI 
+    ? (ENV.openaiApiKey || "") 
+    : (ENV.forgeApiKey || ENV.openaiApiKey || "");
   
+  // Debug: sprawdź aktualne wartości
   console.log("[LLM] Wywołanie API:", apiUrl);
   console.log("[LLM] Klucz API dostępny:", apiKey ? `Tak (${apiKey.substring(0, 10)}...)` : "Nie");
   console.log("[LLM] Używany klucz:", ENV.openaiApiKey ? "OPENAI_API_KEY" : "BUILT_IN_FORGE_API_KEY");
+  console.log("[LLM] process.env.OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? `ustawiony (${process.env.OPENAI_API_KEY.substring(0, 10)}...)` : "BRAK");
+  console.log("[LLM] ENV.openaiApiKey:", ENV.openaiApiKey ? `ustawiony (${ENV.openaiApiKey.substring(0, 10)}...)` : "BRAK");
+  console.log("[LLM] ENV.forgeApiKey:", ENV.forgeApiKey ? `ustawiony (${ENV.forgeApiKey.substring(0, 10)}...)` : "BRAK");
   
   try {
     const response = await fetch(apiUrl, {

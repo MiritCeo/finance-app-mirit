@@ -72,6 +72,23 @@ function UrgentTasksList() {
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  
+  // Sprawdź czy użytkownik jest administratorem
+  if (!authLoading && user && user.role !== "admin") {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Brak dostępu</h1>
+          <p className="text-muted-foreground mb-4">
+            Ta strona jest dostępna tylko dla administratorów.
+          </p>
+          <Button onClick={() => window.location.href = "/my-cv"}>
+            Przejdź do Moje CV
+          </Button>
+        </div>
+      </div>
+    );
+  }
   // Pobierz bieżący miesiąc i rok
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -220,10 +237,23 @@ export default function Dashboard() {
     <div className="container mx-auto max-w-7xl space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            {user?.role && (
+              <Badge 
+                variant={user.role === "admin" ? "default" : user.role === "employee" ? "secondary" : "outline"}
+                className={user.role === "admin" ? "bg-blue-600 text-white" : user.role === "employee" ? "bg-green-600 text-white" : ""}
+              >
+                {user.role === "admin" ? "Administrator" : user.role === "employee" ? "Pracownik" : "Użytkownik"}
+              </Badge>
+            )}
+          </div>
           <p className="text-muted-foreground flex items-center gap-2">
             <span>👋</span>
             <span>Witaj, <span className="font-semibold text-foreground">{user.name || user.email}</span>!</span>
+            {user?.loginMethod && (
+              <span className="text-xs text-muted-foreground">({user.loginMethod === "standalone" ? "Tryb standalone" : user.loginMethod === "local" ? "Lokalne logowanie" : user.loginMethod === "employee" ? "Logowanie pracownika" : user.loginMethod})</span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-3">

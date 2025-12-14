@@ -9,7 +9,8 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: varchar("role", { length: 20 }).default("user").notNull(), // Zmienione z ENUM na VARCHAR aby obsługiwać "employee"
+  employeeId: int("employeeId"), // Opcjonalne powiązanie z pracownikiem
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -27,6 +28,8 @@ export const employees = mysqlTable("employees", {
   lastName: varchar("lastName", { length: 100 }).notNull(),
   position: varchar("position", { length: 200 }),
   employmentType: mysqlEnum("employmentType", ["uop", "b2b", "zlecenie", "zlecenie_studenckie"]).notNull(),
+  email: varchar("email", { length: 320 }), // Email do logowania
+  passwordHash: varchar("passwordHash", { length: 255 }), // Hash hasła (bcrypt)
   hourlyRateCost: int("hourlyRateCost").default(0).notNull(), // Koszt godzinowy pracodawcy w groszach (obliczany: koszt miesięczny / 168h)
   hourlyRateEmployee: int("hourlyRateEmployee").default(0).notNull(), // Stawka godzinowa dla pracownika w groszach
   hourlyRateClient: int("hourlyRateClient").default(0).notNull(), // Stawka godzinowa dla klienta w groszach

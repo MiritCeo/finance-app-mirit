@@ -37,7 +37,8 @@ async function startServer() {
     const envPath = path.resolve(process.cwd(), ".env");
     console.log("[Env] Próba załadowania .env z:", envPath);
     console.log("[Env] process.cwd():", process.cwd());
-    const result = dotenv.config({ path: envPath });
+    // override: true - nadpisz istniejące zmienne środowiskowe (ważne przy restartach)
+    const result = dotenv.config({ path: envPath, override: true });
     if (result.error) {
       console.warn("[Env] Błąd ładowania .env:", result.error.message);
     } else {

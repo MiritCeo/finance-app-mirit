@@ -88,6 +88,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = 'admin';
       updateSet.role = 'admin';
     }
+    if (user.employeeId !== undefined) {
+      values.employeeId = user.employeeId;
+      updateSet.employeeId = user.employeeId;
+    }
 
     if (!values.lastSignedIn) {
       values.lastSignedIn = new Date();
@@ -138,10 +142,31 @@ export async function getEmployeeById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getEmployeeByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(employees).where(eq(employees.email, email)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateEmployeePassword(id: number, passwordHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(employees).set({ passwordHash }).where(eq(employees.id, id));
+}
+
 export async function createEmployee(employee: InsertEmployee) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(employees).values(employee);
+  
+  // Upewnij się, że email i passwordHash są null jeśli nie są podane
+  const employeeData: InsertEmployee = {
+    ...employee,
+    email: employee.email ?? null,
+    passwordHash: employee.passwordHash ?? null,
+  };
+  
+  const result = await db.insert(employees).values(employeeData);
   return Number(result[0].insertId);
 }
 
@@ -796,6 +821,7 @@ export async function createOrUpdateEmployeeCV(data: {
     startDate?: string;
     endDate?: string;
     technologies?: string;
+    keywords?: string;
   }>;
 }) {
   const database = await getDb();

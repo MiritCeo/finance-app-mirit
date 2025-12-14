@@ -16,22 +16,106 @@ import Clients from "./pages/Clients";
 import TasksPage from "./pages/TasksPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import AIFinancialInsights from "./pages/AIFinancialInsights";
+import EmployeeLogin from "./pages/EmployeeLogin";
+import MyCV from "./pages/MyCV";
+import AdminLogin from "./pages/AdminLogin";
+import DashboardLayout from "./components/DashboardLayout";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function Router() {
   return (
     <Switch>
-      <Route path={"/"} component={Dashboard} />
-      <Route path={"/employees"} component={Employees} />
-      <Route path={"/projects"} component={Projects} />
-      <Route path={"/clients"} component={Clients} />
-      <Route path={"/time-reporting"} component={TimeReporting} />
-      <Route path={"/simulator"} component={EmployeeProfitSimulator} />
-      <Route path={"/employee/:id/annual-report"} component={EmployeeAnnualReport} />
-      <Route path={"/employee/:id/cv"} component={EmployeeCV} />
-      <Route path={"/fixed-costs"} component={FixedCosts} />
-      <Route path={"/tasks"} component={TasksPage} />
-      <Route path={"/knowledge"} component={KnowledgeBasePage} />
-      <Route path={"/ai-insights"} component={AIFinancialInsights} />
+      <Route path={"/admin-login"} component={AdminLogin} />
+      <Route path={"/employee-login"} component={EmployeeLogin} />
+      <Route path={"/my-cv"} component={MyCV} />
+      <Route path={"/"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <Dashboard />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/employees"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <Employees />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/projects"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <Projects />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/clients"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <Clients />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/time-reporting"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <TimeReporting />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/simulator"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <EmployeeProfitSimulator />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/employee/:id/annual-report"}>
+        {(params) => (
+          <ProtectedRoute requiredRole="admin">
+            <DashboardLayout>
+              <EmployeeAnnualReport />
+            </DashboardLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path={"/employee/:id/cv"}>
+        {(params) => (
+          <ProtectedRoute requiredRole="admin">
+            <DashboardLayout>
+              <EmployeeCV />
+            </DashboardLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path={"/fixed-costs"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <FixedCosts />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/tasks"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <TasksPage />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/knowledge"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <KnowledgeBasePage />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/ai-insights"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <AIFinancialInsights />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

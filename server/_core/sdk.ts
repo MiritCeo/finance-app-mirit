@@ -156,6 +156,9 @@ class SDKServer {
 
   private getSessionSecret() {
     const secret = ENV.cookieSecret;
+    if (!secret || secret.length === 0) {
+      throw new Error("JWT_SECRET is not set. Please configure JWT_SECRET in .env file.");
+    }
     return new TextEncoder().encode(secret);
   }
 
@@ -168,10 +171,13 @@ class SDKServer {
     openId: string,
     options: { expiresInMs?: number; name?: string } = {}
   ): Promise<string> {
+    // W trybie standalone używamy domyślnego appId jeśli nie jest ustawione
+    const appId = ENV.appId || "standalone-app";
+    
     return this.signSession(
       {
         openId,
-        appId: ENV.appId,
+        appId,
         name: options.name || "",
       },
       options
@@ -201,7 +207,7 @@ class SDKServer {
     cookieValue: string | undefined | null
   ): Promise<{ openId: string; appId: string; name: string } | null> {
     if (!cookieValue) {
-      console.warn("[Auth] Missing session cookie");
+      // Nie loguj w trybie standalone - to jest oczekiwane zachowanie
       return null;
     }
 

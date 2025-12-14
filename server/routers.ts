@@ -1,7 +1,8 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, employeeProcedure, router } from "./_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
 import { employeeProjectAssignments } from "../drizzle/schema";
@@ -33,26 +34,28 @@ export const appRouter = router({
 
   // ============ EMPLOYEES ============
   employees: router({
-    list: protectedProcedure.query(async () => {
+    list: adminProcedure.query(async () => {
       return await db.getAllEmployees();
     }),
     
-    active: protectedProcedure.query(async () => {
+    active: adminProcedure.query(async () => {
       return await db.getActiveEmployees();
     }),
     
-    getById: protectedProcedure
+    getById: adminProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         return await db.getEmployeeById(input.id);
       }),
     
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         firstName: z.string().min(1),
         lastName: z.string().min(1),
         position: z.string().optional(),
         employmentType: z.enum(["uop", "b2b", "zlecenie", "zlecenie_studenckie"]),
+        email: z.string().email().optional().nullable(),
+        passwordHash: z.string().optional().nullable(),
         hourlyRateCost: z.number().default(0),
         hourlyRateEmployee: z.number().default(0),
         hourlyRateClient: z.number().default(0),
@@ -65,17 +68,28 @@ export const appRouter = router({
         notes: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        const id = await db.createEmployee(input);
+        // Jeśli podano hasło, zahashuj je przed zapisaniem
+        let employeeData = { ...input };
+        if (input.passwordHash && input.passwordHash.length > 0) {
+          const bcrypt = await import("bcrypt");
+          employeeData.passwordHash = await bcrypt.default.hash(input.passwordHash, 10);
+        } else {
+          employeeData.passwordHash = null;
+        }
+        
+        const id = await db.createEmployee(employeeData);
         return { id, success: true };
       }),
     
-    update: protectedProcedure
+    update: adminProcedure
       .input(z.object({
         id: z.number(),
         firstName: z.string().min(1).optional(),
         lastName: z.string().min(1).optional(),
         position: z.string().optional(),
         employmentType: z.enum(["uop", "b2b", "zlecenie", "zlecenie_studenckie"]).optional(),
+        email: z.string().email().optional().nullable(),
+        passwordHash: z.string().optional().nullable(),
         hourlyRateCost: z.number().optional(),
         hourlyRateEmployee: z.number().optional(),
         hourlyRateClient: z.number().optional(),
@@ -90,18 +104,55 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
+        
+        // Jeśli podano hasło, zahashuj je przed zapisaniem
+        if (data.passwordHash && data.passwordHash.length > 0) {
+          const bcrypt = await import("bcrypt");
+          data.passwordHash = await bcrypt.default.hash(data.passwordHash, 10);
+        } else if (data.passwordHash === "") {
+          // Puste string oznacza usunięcie hasła
+          data.passwordHash = null;
+        }
+        
         await db.updateEmployee(id, data);
         return { success: true };
       }),
     
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteEmployee(input.id);
         return { success: true };
       }),
     
-    calculateSalary: protectedProcedure
+    updateLoginData: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        email: z.string().email().optional().nullable(),
+        password: z.string().optional().nullable(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, email, password } = input;
+        
+        const updateData: any = {};
+        if (email !== undefined) {
+          updateData.email = email;
+        }
+        
+        if (password !== undefined && password !== null && password.length > 0) {
+          const bcrypt = await import("bcrypt");
+          const passwordHash = await bcrypt.default.hash(password, 10);
+          await db.updateEmployeePassword(id, passwordHash);
+        }
+        
+        if (Object.keys(updateData).length > 0) {
+          await db.updateEmployee(id, updateData);
+        }
+        
+        return { success: true };
+      }),
+    
+    calculateSalary: adminProcedure
       .input(z.object({
         employmentType: z.enum(["uop", "b2b", "zlecenie", "zlecenie_studenckie"]),
         monthlySalaryNet: z.number(),
@@ -192,7 +243,7 @@ export const appRouter = router({
       }),
       
     // Raport roczny pracownika
-    getAnnualReport: protectedProcedure
+    getAnnualReport: adminProcedure
       .input(z.object({
         employeeId: z.number(),
         year: z.number(),
@@ -305,7 +356,7 @@ export const appRouter = router({
       }),
       
     // Aktualizacja kosztu rzeczywistego w raporcie miesięcznym
-    updateActualCost: protectedProcedure
+    updateActualCost: adminProcedure
       .input(z.object({
         employeeId: z.number(),
         year: z.number(),
@@ -327,7 +378,7 @@ export const appRouter = router({
       }),
       
     // Aktualizacja godzin w raporcie miesięcznym
-    updateMonthlyHours: protectedProcedure
+    updateMonthlyHours: adminProcedure
       .input(z.object({
         employeeId: z.number(),
         year: z.number(),
@@ -354,7 +405,7 @@ export const appRouter = router({
       }),
     
     // Eksport listy pracowników do Excel
-    exportEmployees: protectedProcedure.mutation(async () => {
+    exportEmployees: adminProcedure.mutation(async () => {
       const employees = await db.getAllEmployees();
       
       // Przygotuj dane do eksportu
@@ -395,7 +446,7 @@ export const appRouter = router({
     }),
     
     // Import listy pracowników z Excel
-    importEmployees: protectedProcedure
+    importEmployees: adminProcedure
       .input(z.object({
         filename: z.string(),
         data: z.string(), // base64 string
@@ -593,21 +644,21 @@ export const appRouter = router({
 
   // ============ CLIENTS ============
   clients: router({
-    list: protectedProcedure.query(async () => {
+    list: adminProcedure.query(async () => {
       return await db.getAllClients();
     }),
     
-    active: protectedProcedure.query(async () => {
+    active: adminProcedure.query(async () => {
       return await db.getActiveClients();
     }),
     
-    getById: protectedProcedure
+    getById: adminProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         return await db.getClientById(input.id);
       }),
     
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         name: z.string().min(1),
         contactPerson: z.string().optional(),
@@ -620,7 +671,7 @@ export const appRouter = router({
         return { id, success: true };
       }),
     
-    update: protectedProcedure
+    update: adminProcedure
       .input(z.object({
         id: z.number(),
         name: z.string().min(1).optional(),
@@ -639,23 +690,23 @@ export const appRouter = router({
 
   // ============ PROJECTS ============
   projects: router({
-    list: protectedProcedure.query(async () => {
+    list: adminProcedure.query(async () => {
       return await db.getAllProjects();
     }),
     
-    byStatus: protectedProcedure
+    byStatus: adminProcedure
       .input(z.object({ status: z.string() }))
       .query(async ({ input }) => {
         return await db.getProjectsByStatus(input.status);
       }),
     
-    getById: protectedProcedure
+    getById: adminProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         return await db.getProjectById(input.id);
       }),
     
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         clientId: z.number(),
         name: z.string().min(1),
@@ -675,7 +726,7 @@ export const appRouter = router({
         return { id, success: true };
       }),
     
-    update: protectedProcedure
+    update: adminProcedure
       .input(z.object({
         id: z.number(),
         clientId: z.number().optional(),
@@ -696,14 +747,14 @@ export const appRouter = router({
         return { success: true };
       }),
     
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteProject(input.id);
         return { success: true };
       }),
     
-    getStats: protectedProcedure
+    getStats: adminProcedure
       .input(z.object({
         year: z.number().optional(),
         month: z.number().min(1).max(12).optional(),
@@ -807,19 +858,19 @@ export const appRouter = router({
 
   // ============ ASSIGNMENTS ============
   assignments: router({
-    byProject: protectedProcedure
+    byProject: adminProcedure
       .input(z.object({ projectId: z.number() }))
       .query(async ({ input }) => {
         return await db.getAssignmentsByProject(input.projectId);
       }),
     
-    byEmployee: protectedProcedure
+    byEmployee: adminProcedure
       .input(z.object({ employeeId: z.number() }))
       .query(async ({ input }) => {
         return await db.getAssignmentsByEmployee(input.employeeId);
       }),
     
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         employeeId: z.number(),
         projectId: z.number(),
@@ -838,7 +889,7 @@ export const appRouter = router({
         return { id, success: true };
       }),
     
-    update: protectedProcedure
+    update: adminProcedure
       .input(z.object({
         id: z.number(),
         projectId: z.number().optional(),
@@ -859,7 +910,7 @@ export const appRouter = router({
         return { success: true };
       }),
     
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteAssignment(input.id);
@@ -869,13 +920,13 @@ export const appRouter = router({
 
   // ============ TIME ENTRIES ============
   timeEntries: router({
-    byAssignment: protectedProcedure
+    byAssignment: adminProcedure
       .input(z.object({ assignmentId: z.number() }))
       .query(async ({ input }) => {
         return await db.getTimeEntriesByAssignment(input.assignmentId);
       }),
     
-    recent: protectedProcedure
+    recent: adminProcedure
       .input(z.object({ limit: z.number().optional() }).optional())
       .query(async ({ input }) => {
         const limit = input?.limit || 50;
@@ -897,7 +948,7 @@ export const appRouter = router({
         return enrichedEntries;
       }),
     
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         assignmentId: z.number(),
         workDate: z.string(),
@@ -916,14 +967,14 @@ export const appRouter = router({
         return { id, success: true };
       }),
     
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteTimeEntry(input.id);
         return { success: true };
       }),
     
-    saveMonthlyHours: protectedProcedure
+    saveMonthlyHours: adminProcedure
       .input(z.object({
         month: z.number().min(1).max(12),
         year: z.number(),
@@ -1035,7 +1086,7 @@ export const appRouter = router({
         return { success: true };
       }),
     
-    deleteMonthlyReport: protectedProcedure
+    deleteMonthlyReport: adminProcedure
       .input(z.object({
         month: z.number().min(1).max(12),
         year: z.number(),
@@ -1063,7 +1114,7 @@ export const appRouter = router({
         return { success: true };
       }),
     
-    getMonthlyReportDetails: protectedProcedure
+    getMonthlyReportDetails: adminProcedure
       .input(z.object({
         month: z.number().min(1).max(12),
         year: z.number(),
@@ -1115,7 +1166,7 @@ export const appRouter = router({
         return result;
       }),
     
-    monthlyReports: protectedProcedure.query(async () => {
+    monthlyReports: adminProcedure.query(async () => {
       try {
         // Pobierz zapisane raporty miesięczne z monthlyEmployeeReports
         // To zapewnia, że raporty nie zmienią się gdy zmienią się ustawienia pracownika
@@ -1186,7 +1237,7 @@ export const appRouter = router({
       }
     }),
     
-    details: protectedProcedure
+    details: adminProcedure
       .input(z.object({
         month: z.number().min(1).max(12),
         year: z.number().min(2020),
@@ -1285,15 +1336,15 @@ export const appRouter = router({
 
   // ============ FIXED COSTS ============
   fixedCosts: router({
-    list: protectedProcedure.query(async () => {
+    list: adminProcedure.query(async () => {
       return await db.getAllFixedCosts();
     }),
     
-    active: protectedProcedure.query(async () => {
+    active: adminProcedure.query(async () => {
       return await db.getActiveFixedCosts();
     }),
     
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         name: z.string().min(1),
         amount: z.number(),
@@ -1312,7 +1363,7 @@ export const appRouter = router({
         return { id, success: true };
       }),
     
-    update: protectedProcedure
+    update: adminProcedure
       .input(z.object({
         id: z.number(),
         name: z.string().min(1).optional(),
@@ -1334,14 +1385,14 @@ export const appRouter = router({
         return { success: true };
       }),
     
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteFixedCost(input.id);
         return { success: true };
       }),
     
-    totalMonthly: protectedProcedure.query(async () => {
+    totalMonthly: adminProcedure.query(async () => {
       const costs = await db.getActiveFixedCosts();
       const total = costs.reduce((sum, cost) => {
         // Przelicz na koszt miesięczny w zależności od frequency
@@ -1410,7 +1461,7 @@ export const appRouter = router({
 
   // ============ OWNER SALARY SIMULATOR ============
   simulator: router({
-    simulate: protectedProcedure
+    simulate: adminProcedure
       .input(z.object({
         availableProfit: z.number(),
         profitPercentage: z.number(),
@@ -1424,7 +1475,7 @@ export const appRouter = router({
         );
       }),
     
-    save: protectedProcedure
+    save: adminProcedure
       .input(z.object({
         scenarioName: z.string().min(1),
         netSalary: z.number(),
@@ -1441,7 +1492,7 @@ export const appRouter = router({
         return { id, success: true };
       }),
     
-    list: protectedProcedure.query(async ({ ctx }) => {
+    list: adminProcedure.query(async ({ ctx }) => {
       if (!ctx.user) throw new Error("Not authenticated");
       return await db.getSimulationsByUser(ctx.user.id);
     }),
@@ -1449,7 +1500,7 @@ export const appRouter = router({
 
   // ============ DASHBOARD / REPORTS ============
   dashboard: router({
-    kpi: protectedProcedure
+    kpi: adminProcedure
       .input(z.object({
         year: z.number().optional(),
         month: z.number().min(1).max(12).optional(),
@@ -1573,7 +1624,7 @@ export const appRouter = router({
     }),
 
     // Dokładne wyniki miesięczne z raportów pracowników
-    getAccurateMonthlyResults: protectedProcedure
+    getAccurateMonthlyResults: adminProcedure
       .input(z.object({
         year: z.number(),
         month: z.number().min(1).max(12),
@@ -1680,7 +1731,7 @@ export const appRouter = router({
       }),
     
     // Ranking pracowników według rentowności (cały rok)
-    getTopEmployeesByYear: protectedProcedure
+    getTopEmployeesByYear: adminProcedure
       .input(z.object({
         limit: z.number().min(1).max(20).default(10),
         year: z.number().optional(),
@@ -1763,7 +1814,7 @@ export const appRouter = router({
       }),
     
     // Ranking pracowników według rentowności (bieżący miesiąc)
-    getTopEmployees: protectedProcedure
+    getTopEmployees: adminProcedure
       .input(z.object({
         limit: z.number().min(1).max(20).default(10),
         year: z.number().optional(),
@@ -1856,7 +1907,7 @@ export const appRouter = router({
       }),
     
     // Analiza rentowności projektów
-    getProjectProfitability: protectedProcedure
+    getProjectProfitability: adminProcedure
       .input(z.object({
         year: z.number().optional(),
         month: z.number().min(1).max(12).optional(),
@@ -1949,7 +2000,7 @@ export const appRouter = router({
       }),
     
     // Trendy zysków/strat (ostatnie N miesięcy)
-    getProfitTrends: protectedProcedure
+    getProfitTrends: adminProcedure
       .input(z.object({
         months: z.number().min(1).max(24).default(12),
       }))
@@ -2024,7 +2075,7 @@ export const appRouter = router({
 
   // ============ EMPLOYEE PROFIT SIMULATOR ============
   employeeProfit: router({
-    simulate: protectedProcedure
+    simulate: adminProcedure
       .input(z.object({
         employmentType: z.enum(["uop", "b2b", "zlecenie", "zlecenie_studenckie"]),
         monthlySalaryNet: z.number(),
@@ -2045,7 +2096,7 @@ export const appRouter = router({
         );
       }),
     
-    calculateMinRate: protectedProcedure
+    calculateMinRate: adminProcedure
       .input(z.object({
         monthlyCostTotal: z.number(),
         targetMarginPercentage: z.number(),
@@ -2065,11 +2116,11 @@ export const appRouter = router({
 
   // ============ TASKS ============
   tasks: router({
-    getAll: protectedProcedure.query(async () => {
+    getAll: adminProcedure.query(async () => {
       return db.getAllTasks();
     }),
     
-    getByStatus: protectedProcedure
+    getByStatus: adminProcedure
       .input(z.object({
         status: z.enum(["planned", "in_progress", "urgent", "done"]),
       }))
@@ -2077,7 +2128,7 @@ export const appRouter = router({
         return db.getTasksByStatus(input.status);
       }),
     
-    getUrgent: protectedProcedure
+    getUrgent: adminProcedure
       .input(z.object({
         limit: z.number().default(10),
       }))
@@ -2085,7 +2136,7 @@ export const appRouter = router({
         return db.getUrgentTasks(input.limit);
       }),
     
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         title: z.string().min(1).max(500),
         description: z.string().optional(),
@@ -2096,7 +2147,7 @@ export const appRouter = router({
         return { id, success: true };
       }),
     
-    update: protectedProcedure
+    update: adminProcedure
       .input(z.object({
         id: z.number(),
         title: z.string().min(1).max(500).optional(),
@@ -2110,7 +2161,7 @@ export const appRouter = router({
         return { success: true };
       }),
     
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({
         id: z.number(),
       }))
@@ -2122,11 +2173,11 @@ export const appRouter = router({
 
   // ============ KNOWLEDGE BASE ============
   knowledgeBase: router({
-    getAll: protectedProcedure.query(async () => {
+    getAll: adminProcedure.query(async () => {
       return db.getAllKnowledgeBase();
     }),
     
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         title: z.string().min(1).max(500),
         content: z.string().min(1),
@@ -2137,7 +2188,7 @@ export const appRouter = router({
         return { id, success: true };
       }),
     
-    update: protectedProcedure
+    update: adminProcedure
       .input(z.object({
         id: z.number(),
         title: z.string().min(1).max(500).optional(),
@@ -2150,7 +2201,7 @@ export const appRouter = router({
         return { success: true };
       }),
     
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({
         id: z.number(),
       }))
@@ -2162,18 +2213,26 @@ export const appRouter = router({
 
   // ============ EMPLOYEE CV ============
   employeeCV: router({
-    get: protectedProcedure
+    get: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
+        employeeId: z.number().optional(), // Opcjonalne - jeśli nie podane, używa employeeId z kontekstu
       }))
-      .query(async ({ input }) => {
-        const cv = await db.getEmployeeCVWithDetails(input.employeeId);
+      .query(async ({ input, ctx }) => {
+        // Jeśli użytkownik jest pracownikiem, może zobaczyć tylko swoje CV
+        let employeeId = input.employeeId;
+        if (ctx.user?.role === 'employee' && ctx.user.employeeId) {
+          employeeId = ctx.user.employeeId;
+        } else if (!employeeId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "employeeId jest wymagane" });
+        }
+        
+        const cv = await db.getEmployeeCVWithDetails(employeeId);
         return cv;
       }),
     
-    createOrUpdate: protectedProcedure
+    createOrUpdate: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
+        employeeId: z.number().optional(), // Opcjonalne - jeśli nie podane, używa employeeId z kontekstu
         yearsOfExperience: z.number().min(0),
         summary: z.string().optional(), // Opis profilu (długi opis)
         tagline: z.string().optional(), // Krótki opis (2-3 zdania)
@@ -2200,22 +2259,48 @@ export const appRouter = router({
           keywords: z.string().optional(), // Słowa kluczowe dla projektu (pomocne dla AI)
         })).optional(),
       }))
-      .mutation(async ({ input }) => {
-        const cvId = await db.createOrUpdateEmployeeCV(input);
+      .mutation(async ({ input, ctx }) => {
+        // Jeśli użytkownik jest pracownikiem, może edytować tylko swoje CV
+        let employeeId = input.employeeId;
+        if (ctx.user?.role === 'employee' && ctx.user.employeeId) {
+          employeeId = ctx.user.employeeId;
+        } else if (!employeeId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "employeeId jest wymagane" });
+        }
+        
+        // Sprawdź czy pracownik próbuje edytować swoje CV
+        if (ctx.user?.role === 'employee' && ctx.user.employeeId !== employeeId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Możesz edytować tylko swoje CV" });
+        }
+        
+        const cvId = await db.createOrUpdateEmployeeCV({ ...input, employeeId });
         return { cvId, success: true };
       }),
     
-    generate: protectedProcedure
+    generate: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
+        employeeId: z.number().optional(),
       }))
-      .query(async ({ input }) => {
-        const cv = await db.getEmployeeCVWithDetails(input.employeeId);
+      .query(async ({ input, ctx }) => {
+        // Jeśli użytkownik jest pracownikiem, może generować tylko swoje CV
+        let employeeId = input.employeeId;
+        if (ctx.user?.role === 'employee' && ctx.user.employeeId) {
+          employeeId = ctx.user.employeeId;
+        } else if (!employeeId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "employeeId jest wymagane" });
+        }
+        
+        // Sprawdź czy pracownik próbuje generować swoje CV
+        if (ctx.user?.role === 'employee' && ctx.user.employeeId !== employeeId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Możesz generować tylko swoje CV" });
+        }
+        
+        const cv = await db.getEmployeeCVWithDetails(employeeId);
         if (!cv) {
           throw new Error("CV not found");
         }
         
-        const employee = await db.getEmployeeById(input.employeeId);
+        const employee = await db.getEmployeeById(employeeId);
         if (!employee) {
           throw new Error("Employee not found");
         }
@@ -2233,26 +2318,47 @@ export const appRouter = router({
         };
       }),
     
-    generateHTML: protectedProcedure
+    generateHTML: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
+        employeeId: z.number().optional(), // Opcjonalne - jeśli nie podane, używa employeeId z kontekstu
         language: z.enum(["pl", "en"]).default("pl"), // Język CV: pl = polski, en = angielski
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
+        // Jeśli użytkownik jest pracownikiem, może generować tylko swoje CV
+        let employeeId = input.employeeId;
+        if (ctx.user?.role === 'employee' && ctx.user.employeeId) {
+          employeeId = ctx.user.employeeId;
+        } else if (!employeeId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "employeeId jest wymagane" });
+        }
+        
+        // Sprawdź czy pracownik próbuje generować swoje CV
+        if (ctx.user?.role === 'employee' && ctx.user.employeeId !== employeeId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Możesz generować tylko swoje CV" });
+        }
+        
         const { generateCVHTML } = await import("./cvGenerator");
-        const result = await generateCVHTML(input.employeeId, input.language);
+        const result = await generateCVHTML(employeeId, input.language);
         return result;
       }),
     
-    getHistory: protectedProcedure
+    getHistory: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
+        employeeId: z.number().optional(), // Opcjonalne - jeśli nie podane, używa employeeId z kontekstu
       }))
-      .query(async ({ input }) => {
-        return await db.getCVHistory(input.employeeId);
+      .query(async ({ input, ctx }) => {
+        // Jeśli użytkownik jest pracownikiem, może zobaczyć tylko swoją historię
+        let employeeId = input.employeeId;
+        if (ctx.user?.role === 'employee' && ctx.user.employeeId) {
+          employeeId = ctx.user.employeeId;
+        } else if (!employeeId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "employeeId jest wymagane" });
+        }
+        
+        return await db.getCVHistory(employeeId);
       }),
     
-    getHistoryById: protectedProcedure
+    getHistoryById: employeeProcedure
       .input(z.object({
         id: z.number(),
       }))
@@ -2264,7 +2370,7 @@ export const appRouter = router({
         return history;
       }),
     
-    deleteHistory: protectedProcedure
+    deleteHistory: employeeProcedure
       .input(z.object({
         id: z.number(),
       }))
@@ -2283,7 +2389,7 @@ export const appRouter = router({
     /**
      * Analizuje rentowność projektów i zwraca insights z AI
      */
-    analyzeProjects: protectedProcedure
+    analyzeProjects: adminProcedure
       .input(z.object({
         year: z.number().optional(),
         month: z.number().min(1).max(12).optional(),
@@ -2467,7 +2573,7 @@ Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
     /**
      * Analizuje efektywność pracowników
      */
-    analyzeEmployees: protectedProcedure
+    analyzeEmployees: adminProcedure
       .input(z.object({
         year: z.number().optional(),
         month: z.number().min(1).max(12).optional(),
@@ -2604,7 +2710,7 @@ Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
     /**
      * Analiza pojedynczego pracownika (AI) z wykorzystaniem danych finansowych i CV
      */
-    analyzeEmployee: protectedProcedure
+    analyzeEmployee: adminProcedure
       .input(z.object({
         employeeId: z.number(),
       }))
@@ -2877,7 +2983,7 @@ Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
     /**
      * Analiza trendów rynku (AI) - analizuje trendy rynkowe na podstawie danych pracowników
      */
-    analyzeMarketTrends: protectedProcedure
+    analyzeMarketTrends: adminProcedure
       .query(async () => {
         const employees = await db.getActiveEmployees();
         if (employees.length === 0) {
@@ -3060,7 +3166,7 @@ Odpowiedz TYLKO w formacie JSON, bez dodatkowego tekstu.`;
     /**
      * Chat finansowy - odpowiada na pytania o finanse firmy
      */
-    chat: protectedProcedure
+    chat: adminProcedure
       .input(z.object({
         message: z.string(),
         context: z.object({

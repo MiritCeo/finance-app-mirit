@@ -8,6 +8,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -22,13 +27,13 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, CheckSquare, BookOpen, DollarSign, Calendar, Briefcase, UserCircle, Building2, Clock, Receipt, Plus, Zap, Moon, Sun, Sparkles } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, CheckSquare, BookOpen, DollarSign, Calendar, Briefcase, UserCircle, Building2, Clock, Receipt, Plus, Zap, Moon, Sun, Sparkles, Info, Menu, X } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-const menuItems = [
+const adminMenuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/", color: "text-blue-600" },
   { icon: Sparkles, label: "AI Insights", path: "/ai-insights", color: "text-purple-600" },
   { icon: CheckSquare, label: "Zadania", path: "/tasks", color: "text-purple-600" },
@@ -38,6 +43,10 @@ const menuItems = [
   { icon: Building2, label: "Klienci", path: "/clients", color: "text-cyan-600" },
   { icon: Clock, label: "Raportowanie godzin", path: "/time-reporting", color: "text-pink-600" },
   { icon: Receipt, label: "Koszty stałe", path: "/fixed-costs", color: "text-red-600" },
+];
+
+const employeeMenuItems = [
+  { icon: UserCircle, label: "Moje CV", path: "/my-cv", color: "text-blue-600" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -70,21 +79,33 @@ export default function DashboardLayout({
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-6">
             <h1 className="text-2xl font-semibold tracking-tight text-center">
-              Sign in to continue
+              Zaloguj się aby kontynuować
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Access to this dashboard requires authentication. Continue to launch the login flow.
+              Dostęp do panelu wymaga uwierzytelnienia. Wybierz typ konta.
             </p>
           </div>
-          <Button
-            onClick={() => {
-              window.location.href = getLoginUrl();
-            }}
-            size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
-          >
-            Sign in
-          </Button>
+          <div className="flex flex-col gap-3 w-full">
+            <Button
+              onClick={() => {
+                window.location.href = "/admin-login";
+              }}
+              size="lg"
+              className="w-full shadow-lg hover:shadow-xl transition-all"
+            >
+              Zaloguj jako administrator
+            </Button>
+            <Button
+              onClick={() => {
+                window.location.href = "/employee-login";
+              }}
+              variant="outline"
+              size="lg"
+              className="w-full"
+            >
+              Zaloguj jako pracownik
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -121,6 +142,9 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  
+  // Wybierz menu w zależności od roli użytkownika
+  const menuItems = user?.role === 'employee' ? employeeMenuItems : adminMenuItems;
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 
@@ -160,6 +184,11 @@ function DashboardLayoutContent({
     };
   }, [isResizing, setSidebarWidth]);
 
+  // Debug: sprawdź czy sidebar jest renderowany
+  useEffect(() => {
+    console.log("[Sidebar] State:", state, "isCollapsed:", isCollapsed, "isMobile:", isMobile);
+  }, [state, isCollapsed, isMobile]);
+
   return (
     <>
       <div className="relative" ref={sidebarRef}>
@@ -170,23 +199,31 @@ function DashboardLayoutContent({
         >
           <SidebarHeader className="h-16 justify-center border-b bg-gradient-to-r from-primary/5 to-primary/10">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
-              <button
-                onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-primary/10 rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
-                aria-label="Toggle navigation"
-              >
-                <PanelLeft className="h-4 w-4 text-primary" />
-              </button>
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                   <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
                     <LayoutDashboard className="h-4 w-4 text-white" />
                   </div>
-                  <span className="font-bold text-lg tracking-tight truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-                    Mirit Finance
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-bold text-lg tracking-tight truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent block">
+                      Mirit Finance
+                    </span>
+                    {user?.role && (
+                      <span className={`text-xs font-semibold block truncate ${
+                        user.role === "admin" ? "text-blue-600 dark:text-blue-400" : 
+                        user.role === "employee" ? "text-green-600 dark:text-green-400" : 
+                        "text-muted-foreground"
+                      }`}>
+                        {user.role === "admin" ? "Administrator" : user.role === "employee" ? "Pracownik" : "Użytkownik"}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              ) : null}
+              ) : (
+                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
+                  <LayoutDashboard className="h-4 w-4 text-white" />
+                </div>
+              )}
             </div>
           </SidebarHeader>
 
@@ -229,6 +266,17 @@ function DashboardLayoutContent({
                     <p className="text-xs text-muted-foreground truncate mt-1.5">
                       {user?.email || "-"}
                     </p>
+                    {user?.role && (
+                      <p className="text-xs font-semibold mt-0.5">
+                        {user.role === "admin" ? (
+                          <span className="text-blue-600 dark:text-blue-400">Administrator</span>
+                        ) : user.role === "employee" ? (
+                          <span className="text-green-600 dark:text-green-400">Pracownik</span>
+                        ) : (
+                          <span className="text-muted-foreground">Użytkownik</span>
+                        )}
+                      </p>
+                    )}
                   </div>
                 </button>
               </DropdownMenuTrigger>
@@ -252,11 +300,23 @@ function DashboardLayoutContent({
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
+                  onClick={() => {
+                    // Pokaż informacje o użytkowniku
+                    const roleText = user?.role === "admin" ? "Administrator" : user?.role === "employee" ? "Pracownik" : "Użytkownik";
+                    const userInfo = `Zalogowany jako: ${user?.name || "-"}\nRola: ${roleText}\nEmail: ${user?.email || "-"}\nMetoda logowania: ${user?.loginMethod || "-"}`;
+                    alert(userInfo);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Info className="mr-2 h-4 w-4" />
+                  <span>Informacje o koncie</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sign out</span>
+                  <span>Wyloguj</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -273,20 +333,51 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset>
-        {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+        <div className="flex border-b h-14 items-center justify-between bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+          <div className="flex items-center gap-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleSidebar}
+                  className="h-9 w-9 rounded-lg hover:bg-accent transition-all"
+                >
+                  {isCollapsed ? (
+                    <Menu className="h-5 w-5" />
+                  ) : (
+                    <PanelLeft className="h-5 w-5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isCollapsed ? "Otwórz menu" : "Zwiń menu"}</p>
+              </TooltipContent>
+            </Tooltip>
             <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
-                    {activeMenuItem?.label ?? "Menu"}
-                  </span>
-                </div>
-              </div>
+              {activeMenuItem && (
+                <>
+                  <activeMenuItem.icon className={`h-5 w-5 ${activeMenuItem.color}`} />
+                  <h2 className="text-lg font-semibold">{activeMenuItem.label}</h2>
+                </>
+              )}
             </div>
           </div>
-        )}
+          <div className="flex items-center gap-3">
+            {user?.role && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted border">
+                <span className="text-xs text-muted-foreground">Zalogowany jako:</span>
+                <span className={`text-xs font-semibold ${
+                  user.role === "admin" ? "text-blue-600 dark:text-blue-400" : 
+                  user.role === "employee" ? "text-green-600 dark:text-green-400" : 
+                  "text-muted-foreground"
+                }`}>
+                  {user.role === "admin" ? "Administrator" : user.role === "employee" ? "Pracownik" : "Użytkownik"}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
         <main className="flex-1 p-6 min-h-screen">{children}</main>
       </SidebarInset>
     </>

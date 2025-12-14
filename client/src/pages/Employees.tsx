@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
-import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck, Download, Upload, MoreVertical, CheckCircle2, XCircle, TrendingUp, TrendingDown, Minus, Sparkles, AlertTriangle, Calculator, RotateCcw, BarChart3, Lightbulb } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck, Download, Upload, MoreVertical, CheckCircle2, XCircle, TrendingUp, TrendingDown, Minus, Sparkles, AlertTriangle, Calculator, RotateCcw, BarChart3, Lightbulb, Key, Lock } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -19,10 +19,30 @@ import { toast } from "sonner";
 export default function Employees() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  
+  // Sprawdź czy użytkownik jest administratorem
+  if (user && user.role !== "admin") {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Brak dostępu</h1>
+          <p className="text-muted-foreground mb-4">
+            Ta strona jest dostępna tylko dla administratorów.
+          </p>
+          <Button onClick={() => setLocation("/my-cv")}>
+            Przejdź do Moje CV
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAssignmentDialogOpen, setIsAssignmentDialogOpen] = useState(false);
   const [isManageProjectsDialogOpen, setIsManageProjectsDialogOpen] = useState(false);
+  const [isLoginDataDialogOpen, setIsLoginDataDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
+  const [editingLoginDataEmployee, setEditingLoginDataEmployee] = useState<any>(null);
   const [assigningEmployee, setAssigningEmployee] = useState<any>(null);
   const [managingEmployee, setManagingEmployee] = useState<any>(null);
   const [editingAssignment, setEditingAssignment] = useState<any>(null);
@@ -301,6 +321,13 @@ export default function Employees() {
     },
   });
   
+  const updateLoginDataMutation = trpc.employees.updateLoginData.useMutation({
+    onSuccess: () => {
+      toast.success("Dane logowania zaktualizowane");
+      refetch();
+    },
+  });
+  
   const updateMutation = trpc.employees.update.useMutation({
     onSuccess: () => {
       toast.success("Pracownik zaktualizowany");
@@ -333,6 +360,14 @@ export default function Employees() {
     vacationCostAnnual: "",
     vacationDaysPerYear: "21",
   });
+  
+  const [loginData, setLoginData] = useState({
+    email: "",
+    password: "",
+  });
+  
+  const [generatedPassword, setGeneratedPassword] = useState<string>("");
+  const [showPassword, setShowPassword] = useState(false);
 
   // Automatyczne przeliczanie kosztów gdy zmieni się netto lub dni urlopu
   useEffect(() => {
@@ -411,11 +446,20 @@ export default function Employees() {
       vacationDaysPerYear: "21",
     });
   };
+  
+  const resetLoginData = () => {
+    setLoginData({
+      email: "",
+      password: "",
+    });
+    setGeneratedPassword("");
+    setShowPassword(false);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const data = {
+    const data: any = {
       firstName: formData.firstName,
       lastName: formData.lastName,
       position: formData.position || undefined,
@@ -1420,6 +1464,21 @@ export default function Employees() {
                             Edytuj pracownika
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            onClick={() => {
+                              setEditingLoginDataEmployee(employee);
+                              setLoginData({
+                                email: employee.email || "",
+                                password: "",
+                              });
+                              setIsLoginDataDialogOpen(true);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <Key className="mr-2 h-4 w-4" />
+                            Zarządzaj danymi logowania
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
                             onClick={() => handleManageProjects(employee)}
                             className="cursor-pointer"
                           >
@@ -1482,6 +1541,132 @@ export default function Employees() {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Dialog zarządzania danymi logowania */}
+      <Dialog open={isLoginDataDialogOpen} onOpenChange={(open) => {
+        setIsLoginDataDialogOpen(open);
+        if (!open) {
+          setEditingLoginDataEmployee(null);
+          resetLoginData();
+        }
+      }}>
+        <DialogContent className="sm:max-w-[450px]">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            if (!editingLoginDataEmployee) return;
+            
+            const data: any = {
+              id: editingLoginDataEmployee.id,
+              email: loginData.email || null,
+            };
+            
+            if (loginData.password && loginData.password.length > 0) {
+              data.password = loginData.password;
+            }
+            
+            updateLoginDataMutation.mutate(data, {
+              onSuccess: () => {
+                setIsLoginDataDialogOpen(false);
+                setEditingLoginDataEmployee(null);
+                resetLoginData();
+              },
+            });
+          }}>
+            <DialogHeader>
+              <DialogTitle>Zarządzanie danymi logowania</DialogTitle>
+              <DialogDescription>
+                {editingLoginDataEmployee && `Ustaw email i hasło dla ${editingLoginDataEmployee.firstName} ${editingLoginDataEmployee.lastName}`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="loginEmail">Email</Label>
+                <Input
+                  id="loginEmail"
+                  type="email"
+                  value={loginData.email}
+                  onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                  placeholder="pracownik@example.com"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Email do logowania (opcjonalne)
+                </p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="loginPassword">Hasło</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const randomPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12).toUpperCase() + "!@#";
+                      setLoginData({ ...loginData, password: randomPassword });
+                      setGeneratedPassword(randomPassword);
+                      setShowPassword(true);
+                    }}
+                    className="text-xs h-6"
+                  >
+                    Generuj hasło
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    id="loginPassword"
+                    type={showPassword ? "text" : "password"}
+                    value={loginData.password}
+                    onChange={(e) => {
+                      setLoginData({ ...loginData, password: e.target.value });
+                      setGeneratedPassword("");
+                    }}
+                    placeholder="Zostaw puste aby nie zmieniać"
+                  />
+                  {loginData.password && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="h-10 w-10"
+                    >
+                      {showPassword ? "👁️" : "👁️‍🗨️"}
+                    </Button>
+                  )}
+                </div>
+                {generatedPassword && (
+                  <div className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-xs">
+                    <p className="font-semibold text-green-800 dark:text-green-200">Wygenerowane hasło:</p>
+                    <p className="font-mono text-green-700 dark:text-green-300 break-all">{generatedPassword}</p>
+                    <p className="text-green-600 dark:text-green-400 mt-1">⚠️ Zapisz to hasło! Nie będzie możliwości jego odzyskania.</p>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Zostaw puste aby nie zmieniać hasła. Wpisz nowe hasło aby je zmienić.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsLoginDataDialogOpen(false);
+                  setEditingLoginDataEmployee(null);
+                  resetLoginData();
+                }}
+              >
+                Anuluj
+              </Button>
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
+                Zapisz
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       
       {/* Dialog przypisania do projektu */}
       <Dialog open={isAssignmentDialogOpen} onOpenChange={(open) => {
