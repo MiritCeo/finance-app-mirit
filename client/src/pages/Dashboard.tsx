@@ -310,9 +310,6 @@ export default function Dashboard() {
           <p className="text-muted-foreground flex items-center gap-2">
             <span>👋</span>
             <span>Witaj, <span className="font-semibold text-foreground">{user.name || user.email}</span>!</span>
-            {user?.loginMethod && (
-              <span className="text-xs text-muted-foreground">({user.loginMethod === "standalone" ? "Tryb standalone" : user.loginMethod === "local" ? "Lokalne logowanie" : user.loginMethod === "employee" ? "Logowanie pracownika" : user.loginMethod})</span>
-            )}
           </p>
         </div>
         <div className="flex items-center gap-3">

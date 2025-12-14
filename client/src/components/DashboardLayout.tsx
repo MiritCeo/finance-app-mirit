@@ -206,7 +206,7 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center border-b bg-gradient-to-r from-primary/5 to-primary/10">
+          <SidebarHeader className="h-16 justify-center border-b bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20 dark:border-sidebar-border">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -214,14 +214,14 @@ function DashboardLayoutContent({
                     <LayoutDashboard className="h-4 w-4 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className="font-bold text-lg tracking-tight truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent block">
+                    <span className="font-bold text-lg tracking-tight truncate text-foreground dark:text-foreground block">
                       Mirit Intranet
                     </span>
                     {user?.role && (
                       <span className={`text-xs font-semibold block truncate ${
                         user.role === "admin" ? "text-blue-600 dark:text-blue-400" : 
                         user.role === "employee" ? "text-green-600 dark:text-green-400" : 
-                        "text-muted-foreground"
+                        "text-muted-foreground dark:text-muted-foreground"
                       }`}>
                         {user.role === "admin" ? "Administrator" : user.role === "employee" ? "Pracownik" : "Użytkownik"}
                       </span>
@@ -246,12 +246,12 @@ function DashboardLayoutContent({
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
+                      className={`h-10 transition-all font-normal text-sidebar-foreground dark:text-sidebar-foreground`}
                     >
                       <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                        className={`h-4 w-4 ${isActive ? "text-primary dark:text-primary" : "text-sidebar-foreground dark:text-sidebar-foreground"}`}
                       />
-                      <span>{item.label}</span>
+                      <span className="text-sidebar-foreground dark:text-sidebar-foreground">{item.label}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -269,10 +269,10 @@ function DashboardLayoutContent({
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
+                    <p className="text-sm font-medium truncate leading-none text-sidebar-foreground dark:text-sidebar-foreground">
                       {user?.name || "-"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
+                    <p className="text-xs text-muted-foreground dark:text-muted-foreground truncate mt-1.5">
                       {user?.email || "-"}
                     </p>
                     {user?.role && (
@@ -282,7 +282,7 @@ function DashboardLayoutContent({
                         ) : user.role === "employee" ? (
                           <span className="text-green-600 dark:text-green-400">Pracownik</span>
                         ) : (
-                          <span className="text-muted-foreground">Użytkownik</span>
+                          <span className="text-muted-foreground dark:text-muted-foreground">Użytkownik</span>
                         )}
                       </p>
                     )}
@@ -312,7 +312,7 @@ function DashboardLayoutContent({
                   onClick={() => {
                     // Pokaż informacje o użytkowniku
                     const roleText = user?.role === "admin" ? "Administrator" : user?.role === "employee" ? "Pracownik" : "Użytkownik";
-                    const userInfo = `Zalogowany jako: ${user?.name || "-"}\nRola: ${roleText}\nEmail: ${user?.email || "-"}\nMetoda logowania: ${user?.loginMethod || "-"}`;
+                    const userInfo = `Zalogowany jako: ${user?.name || "-"}\nRola: ${roleText}\nEmail: ${user?.email || "-"}`;
                     alert(userInfo);
                   }}
                   className="cursor-pointer"
