@@ -31,7 +31,17 @@ export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
+    // Debug: loguj informacje o użytkowniku
+    console.log("[AdminProcedure] Checking user:", {
+      hasUser: !!ctx.user,
+      role: ctx.user?.role,
+      employeeId: ctx.user?.employeeId,
+      openId: ctx.user?.openId,
+      email: ctx.user?.email
+    });
+
     if (!ctx.user || ctx.user.role !== 'admin') {
+      console.error("[AdminProcedure] Access denied - user role:", ctx.user?.role, "expected: admin");
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
 

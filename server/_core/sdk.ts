@@ -288,8 +288,16 @@ class SDKServer {
 
     const sessionUserId = session.openId;
     const signedInAt = new Date();
+    console.log("[Auth] authenticateRequest - sessionUserId:", sessionUserId);
     let user = await db.getUserByOpenId(sessionUserId);
-    console.log("[Auth] authenticateRequest - user from DB:", user);
+    console.log("[Auth] authenticateRequest - user from DB:", JSON.stringify({
+      id: user?.id,
+      openId: user?.openId,
+      role: user?.role,
+      employeeId: user?.employeeId,
+      email: user?.email,
+      name: user?.name
+    }, null, 2));
 
     // If user not in DB, sync from OAuth server automatically
     if (!user) {
