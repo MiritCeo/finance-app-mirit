@@ -251,10 +251,14 @@ async function seed() {
     const adminEmail = process.env.ADMIN_EMAIL || "admin@mirit.pl";
     const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
     
-    // Sprawdź czy administrator już istnieje
+    // Sprawdź czy administrator już istnieje w employees
     const existingAdmin = await db.select().from(employees).where(eq(employees.email, adminEmail)).limit(1);
     
+    let adminEmployeeId;
+    
     if (existingAdmin.length === 0) {
+      // Utwórz nowego administratora w employees
+      console.log("  Tworzenie nowego konta administratora w employees...");
       const result = await db.insert(employees).values({
         firstName: "Administrator",
         lastName: "Systemu",
@@ -271,45 +275,73 @@ async function seed() {
       });
       
       // Pobierz ID utworzonego pracownika
-      const adminEmployeeId = result[0]?.insertId;
+      adminEmployeeId = result[0]?.insertId;
       if (!adminEmployeeId) {
         // Jeśli insertId nie jest dostępne, pobierz pracownika z bazy po emailu
         const createdAdmin = await db.select().from(employees).where(eq(employees.email, adminEmail)).limit(1);
         if (createdAdmin.length === 0) {
           throw new Error("Nie udało się utworzyć konta administratora");
         }
-        const adminEmployeeIdFromDb = createdAdmin[0].id;
-        
-        // Utwórz użytkownika z rolą admin
-        await db.insert(users).values({
-          openId: `admin_${adminEmployeeIdFromDb}`,
-          name: "Administrator Systemu",
-          email: adminEmail,
-          loginMethod: "admin",
-          role: "admin",
-          employeeId: adminEmployeeIdFromDb,
-          lastSignedIn: new Date(),
-        });
-      } else {
-        // Utwórz użytkownika z rolą admin
-        await db.insert(users).values({
-          openId: `admin_${adminEmployeeId}`,
-          name: "Administrator Systemu",
-          email: adminEmail,
-          loginMethod: "admin",
-          role: "admin",
-          employeeId: adminEmployeeId,
-          lastSignedIn: new Date(),
-        });
+        adminEmployeeId = createdAdmin[0].id;
       }
       
-      console.log(`✅ Konto administratora utworzone:`);
-      console.log(`   Email: ${adminEmail}`);
-      console.log(`   Hasło: ${adminPassword}`);
-      console.log(`   ⚠️  Pamiętaj aby zmienić hasło po pierwszym logowaniu!`);
+      // Zaktualizuj hasło jeśli nie było ustawione
+      await db.update(employees).set({ passwordHash: adminPasswordHash }).where(eq(employees.id, adminEmployeeId));
+      
+      console.log(`  ✅ Utworzono konto administratora w employees (ID: ${adminEmployeeId})`);
     } else {
-      console.log("ℹ️  Konto administratora już istnieje");
+      // Administrator już istnieje w employees
+      adminEmployeeId = existingAdmin[0].id;
+      console.log(`  ℹ️  Konto administratora już istnieje w employees (ID: ${adminEmployeeId})`);
+      
+      // Zaktualizuj hasło jeśli nie było ustawione lub jeśli chcemy je zresetować
+      if (!existingAdmin[0].passwordHash) {
+        await db.update(employees).set({ passwordHash: adminPasswordHash }).where(eq(employees.id, adminEmployeeId));
+        console.log("  ✅ Zaktualizowano hasło administratora");
+      }
     }
+    
+    // Sprawdź czy użytkownik z rolą admin istnieje w users
+    const openId = `admin_${adminEmployeeId}`;
+    const existingUser = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+    
+    if (existingUser.length === 0) {
+      // Utwórz użytkownika z rolą admin
+      console.log("  Tworzenie użytkownika z rolą admin w users...");
+      await db.insert(users).values({
+        openId: openId,
+        name: "Administrator Systemu",
+        email: adminEmail,
+        loginMethod: "admin",
+        role: "admin",
+        employeeId: adminEmployeeId,
+        lastSignedIn: new Date(),
+      });
+      console.log(`  ✅ Utworzono użytkownika z rolą admin (openId: ${openId})`);
+    } else {
+      // Użytkownik już istnieje - sprawdź czy ma poprawną rolę
+      const user = existingUser[0];
+      if (user.role !== "admin") {
+        console.log(`  ⚠️  Użytkownik istnieje ale ma rolę '${user.role}' zamiast 'admin' - aktualizuję...`);
+        await db.update(users).set({ 
+          role: "admin",
+          loginMethod: "admin",
+          employeeId: adminEmployeeId,
+          email: adminEmail,
+          name: "Administrator Systemu"
+        }).where(eq(users.openId, openId));
+        console.log(`  ✅ Zaktualizowano rolę użytkownika na 'admin'`);
+      } else {
+        console.log(`  ℹ️  Użytkownik z rolą admin już istnieje (openId: ${openId})`);
+      }
+    }
+    
+    console.log(`\n✅ Konto administratora gotowe:`);
+    console.log(`   Email: ${adminEmail}`);
+    console.log(`   Hasło: ${adminPassword}`);
+    console.log(`   Employee ID: ${adminEmployeeId}`);
+    console.log(`   OpenID: ${openId}`);
+    console.log(`   ⚠️  Pamiętaj aby zmienić hasło po pierwszym logowaniu!`);
 
     console.log("✅ Seedowanie zakończone pomyślnie!");
     console.log("\n📊 Dodano:");
