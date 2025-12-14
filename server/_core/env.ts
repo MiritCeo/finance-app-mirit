@@ -18,6 +18,7 @@ export const ENV = {
   get oAuthServerUrl() { return process.env.OAUTH_SERVER_URL ?? ""; },
   get ownerOpenId() { return process.env.OWNER_OPEN_ID ?? ""; },
   get isProduction() { return process.env.NODE_ENV === "production"; },
+  get isStandalone() { return !this.oAuthServerUrl || this.oAuthServerUrl.length === 0; },
   get forgeApiUrl() { return process.env.BUILT_IN_FORGE_API_URL ?? ""; },
   // Użyj OPENAI_API_KEY jako fallback jeśli BUILT_IN_FORGE_API_KEY nie jest ustawiony
   get forgeApiKey() { return process.env.BUILT_IN_FORGE_API_KEY ?? process.env.OPENAI_API_KEY ?? ""; },

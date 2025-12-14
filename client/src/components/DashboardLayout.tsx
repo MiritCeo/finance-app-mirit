@@ -46,7 +46,9 @@ const adminMenuItems = [
 ];
 
 const employeeMenuItems = [
+  { icon: LayoutDashboard, label: "Dashboard", path: "/", color: "text-blue-600" },
   { icon: UserCircle, label: "Moje CV", path: "/my-cv", color: "text-blue-600" },
+  { icon: BookOpen, label: "Baza Wiedzy", path: "/knowledge", color: "text-indigo-600" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -206,7 +208,7 @@ function DashboardLayoutContent({
                   </div>
                   <div className="flex-1 min-w-0">
                     <span className="font-bold text-lg tracking-tight truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent block">
-                      Mirit Finance
+                      Mirit Intranet
                     </span>
                     {user?.role && (
                       <span className={`text-xs font-semibold block truncate ${

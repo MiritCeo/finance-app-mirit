@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/mysql2";
-import { employees, clients, projects, fixedCosts, employeeProjectAssignments, timeEntries } from "./drizzle/schema.ts";
+import { eq } from "drizzle-orm";
+import { employees, clients, projects, fixedCosts, employeeProjectAssignments, timeEntries, users } from "./drizzle/schema.ts";
+import bcrypt from "bcrypt";
 
 const db = drizzle(process.env.DATABASE_URL);
 
@@ -243,6 +245,52 @@ async function seed() {
       ]);
     }
 
+    // Dodaj konto administratora
+    console.log("\nDodawanie konta administratora...");
+    const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+    const adminEmail = process.env.ADMIN_EMAIL || "admin@mirit.pl";
+    const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
+    
+    // Sprawdź czy administrator już istnieje
+    const existingAdmin = await db.select().from(employees).where(eq(employees.email, adminEmail)).limit(1);
+    
+    if (existingAdmin.length === 0) {
+      const [adminEmployee] = await db.insert(employees).values({
+        firstName: "Administrator",
+        lastName: "Systemu",
+        position: "Administrator",
+        employmentType: "uop",
+        email: adminEmail,
+        passwordHash: adminPasswordHash,
+        hourlyRateCost: 0,
+        monthlySalaryGross: 0,
+        monthlySalaryNet: 0,
+        monthlyCostTotal: 0,
+        vacationDaysPerYear: 0,
+        isActive: true,
+      });
+      
+      const adminEmployeeId = adminEmployee.insertId;
+      
+      // Utwórz użytkownika z rolą admin
+      await db.insert(users).values({
+        openId: `admin_${adminEmployeeId}`,
+        name: "Administrator Systemu",
+        email: adminEmail,
+        loginMethod: "admin",
+        role: "admin",
+        employeeId: adminEmployeeId,
+        lastSignedIn: new Date(),
+      });
+      
+      console.log(`✅ Konto administratora utworzone:`);
+      console.log(`   Email: ${adminEmail}`);
+      console.log(`   Hasło: ${adminPassword}`);
+      console.log(`   ⚠️  Pamiętaj aby zmienić hasło po pierwszym logowaniu!`);
+    } else {
+      console.log("ℹ️  Konto administratora już istnieje");
+    }
+
     console.log("✅ Seedowanie zakończone pomyślnie!");
     console.log("\n📊 Dodano:");
     console.log("- 4 pracowników");
@@ -251,6 +299,7 @@ async function seed() {
     console.log("- 4 przypisań pracowników");
     console.log("- 12 raportów godzin (3 miesiące)");
     console.log("- 5 kosztów stałych");
+    console.log("- 1 konto administratora");
     
   } catch (error) {
     console.error("❌ Błąd podczas seedowania:", error);

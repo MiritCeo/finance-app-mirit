@@ -2,20 +2,44 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
+
     try {
-      // Przekieruj do endpointu lokalnego logowania
-      window.location.href = "/api/auth/local-login";
+      const response = await fetch("/api/auth/admin-login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Błąd logowania");
+      }
+
+      toast.success("Zalogowano pomyślnie");
+      // Przekieruj do dashboardu
+      setLocation("/");
+      // Odśwież stronę aby załadować nową sesję
+      window.location.reload();
     } catch (error: any) {
-      console.error("Błąd logowania:", error);
+      toast.error(error.message || "Błąd logowania");
     } finally {
       setIsLoading(false);
     }
@@ -30,46 +54,45 @@ export default function AdminLogin() {
             Zaloguj się jako administrator systemu
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Tryb standalone:</strong> W trybie standalone (bez OAuth) logowanie jest automatyczne.
-              Jeśli widzisz ten ekran, kliknij przycisk poniżej aby się zalogować.
-            </AlertDescription>
-          </Alert>
-
-          <div className="space-y-2 p-4 bg-muted rounded-lg">
-            <p className="text-sm font-semibold">Dane logowania:</p>
-            <div className="text-sm space-y-1 text-muted-foreground">
-              <p><strong>Tryb:</strong> Standalone (automatyczne logowanie)</p>
-              <p><strong>Rola:</strong> Administrator</p>
-              <p><strong>Nazwa:</strong> Administrator</p>
-              <p><strong>OpenID:</strong> admin</p>
-              <p className="text-xs mt-2 pt-2 border-t">
-                W trybie standalone logowanie jest automatyczne - nie wymaga hasła.
-                Kliknij przycisk poniżej aby się zalogować.
-              </p>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="admin@mirit.pl"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={isLoading}
+              />
             </div>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Hasło</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Logowanie...
+                </>
+              ) : (
+                "Zaloguj się"
+              )}
+            </Button>
+          </form>
 
-          <Button 
-            onClick={handleLogin} 
-            className="w-full" 
-            disabled={isLoading}
-            size="lg"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Logowanie...
-              </>
-            ) : (
-              "Zaloguj się jako administrator"
-            )}
-          </Button>
-
-          <div className="text-center">
+          <div className="mt-4 text-center">
             <Button
               variant="link"
               onClick={() => setLocation("/employee-login")}

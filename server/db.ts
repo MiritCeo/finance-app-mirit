@@ -14,6 +14,10 @@ import {
   monthlyEmployeeReports, InsertMonthlyEmployeeReport, MonthlyEmployeeReport,
   tasks, InsertTask, Task,
   knowledgeBase, InsertKnowledgeBase, KnowledgeBase,
+  knowledgeBaseFavorites, InsertKnowledgeBaseFavorite, KnowledgeBaseFavorite,
+  knowledgeBaseViews, InsertKnowledgeBaseView, KnowledgeBaseView,
+  knowledgeBaseComments, InsertKnowledgeBaseComment, KnowledgeBaseComment,
+  knowledgeBaseLinks, InsertKnowledgeBaseLink, KnowledgeBaseLink,
   employeeCV, InsertEmployeeCV, EmployeeCV,
   employeeSkills, InsertEmployeeSkill, EmployeeSkill,
   employeeTechnologies, InsertEmployeeTechnology, EmployeeTechnology,
@@ -118,6 +122,17 @@ export async function getUserByOpenId(openId: string) {
   }
 
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user: database not available");
+    return undefined;
+  }
+
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -696,10 +711,17 @@ export async function deleteTask(id: number) {
 }
 
 // Knowledge Base
-export async function getAllKnowledgeBase() {
+export async function getAllKnowledgeBase(filters?: { status?: "draft" | "published" | "archived" }) {
   const database = await getDb();
   if (!database) return [];
-  return database.select().from(knowledgeBase).orderBy(sql`${knowledgeBase.createdAt} DESC`);
+  
+  let query = database.select().from(knowledgeBase);
+  
+  if (filters?.status) {
+    query = query.where(eq(knowledgeBase.status, filters.status)) as any;
+  }
+  
+  return query.orderBy(sql`${knowledgeBase.createdAt} DESC`);
 }
 
 export async function getKnowledgeBaseById(id: number) {
@@ -712,24 +734,473 @@ export async function getKnowledgeBaseById(id: number) {
 export async function createKnowledgeBase(data: InsertKnowledgeBase) {
   const database = await getDb();
   if (!database) return 0;
-  const result = await database.insert(knowledgeBase).values({
+  
+  const insertData: any = {
     ...data,
     createdAt: new Date(),
     updatedAt: new Date(),
-  });
+  };
+  
+  // Jeśli status to "published", ustaw publishedAt
+  if ((data as any).status === "published" && !(data as any).publishedAt) {
+    insertData.publishedAt = new Date();
+  }
+  
+  const result = await database.insert(knowledgeBase).values(insertData);
   return result[0].insertId;
 }
 
 export async function updateKnowledgeBase(id: number, data: Partial<InsertKnowledgeBase>) {
   const database = await getDb();
   if (!database) return;
-  await database.update(knowledgeBase).set({ ...data, updatedAt: new Date() }).where(eq(knowledgeBase.id, id));
+  
+  const updateData: any = {
+    ...data,
+    updatedAt: new Date(),
+  };
+  
+  // Jeśli zmieniamy status z draft na published, ustaw publishedAt
+  if ((data as any).status === "published") {
+    const current = await getKnowledgeBaseById(id);
+    if (current && (current as any).status !== "published" && !(data as any).publishedAt) {
+      updateData.publishedAt = new Date();
+    }
+  }
+  
+  await database.update(knowledgeBase).set(updateData).where(eq(knowledgeBase.id, id));
 }
 
 export async function deleteKnowledgeBase(id: number) {
   const database = await getDb();
   if (!database) return;
   await database.delete(knowledgeBase).where(eq(knowledgeBase.id, id));
+}
+
+// ============ KNOWLEDGE BASE ENHANCED FUNCTIONS ============
+
+export async function searchKnowledgeBase(filters: {
+  query?: string;
+  label?: string;
+  tags?: string;
+  projectId?: number;
+  status?: "draft" | "published" | "archived";
+  sortBy?: "newest" | "oldest" | "title" | "views";
+}) {
+  const database = await getDb();
+  if (!database) return [];
+  
+  const conditions: any[] = [];
+  
+  if (filters.query) {
+    conditions.push(
+      or(
+        sql`${knowledgeBase.title} LIKE ${`%${filters.query}%`}`,
+        sql`${knowledgeBase.content} LIKE ${`%${filters.query}%`}`
+      )
+    );
+  }
+  
+  if (filters.label) {
+    conditions.push(eq(knowledgeBase.label, filters.label));
+  }
+  
+  if (filters.tags) {
+    const tagsArray = filters.tags.split(",").map(t => t.trim());
+    const tagConditions = tagsArray.map(tag => 
+      sql`${knowledgeBase.tags} LIKE ${`%${tag}%`}`
+    );
+    conditions.push(or(...tagConditions));
+  }
+  
+  // Filtruj po statusie (domyślnie tylko published)
+  if (!filters.status) {
+    conditions.push(eq(knowledgeBase.status, "published"));
+  } else {
+    conditions.push(eq(knowledgeBase.status, filters.status));
+  }
+  
+  // Filtruj po projectId jeśli podano
+  if (filters.projectId) {
+    conditions.push(eq(knowledgeBase.projectId, filters.projectId));
+  }
+  
+  let queryBuilder = database.select().from(knowledgeBase);
+  
+  if (conditions.length > 0) {
+    queryBuilder = queryBuilder.where(and(...conditions)) as any;
+  }
+  
+  // Sortowanie
+  switch (filters.sortBy) {
+    case "oldest":
+      queryBuilder = queryBuilder.orderBy(knowledgeBase.createdAt) as any;
+      break;
+    case "title":
+      queryBuilder = queryBuilder.orderBy(knowledgeBase.title) as any;
+      break;
+    case "views":
+      queryBuilder = queryBuilder.orderBy(desc(knowledgeBase.viewCount)) as any;
+      break;
+    case "newest":
+    default:
+      queryBuilder = queryBuilder.orderBy(desc(knowledgeBase.createdAt)) as any;
+      break;
+  }
+  
+  // Najpierw przypięte
+  const results = await queryBuilder;
+  return results.sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    return 0;
+  });
+}
+
+export async function incrementKnowledgeBaseViewCount(knowledgeBaseId: number, userId: number | null) {
+  const database = await getDb();
+  if (!database) return;
+  
+  // Zwiększ licznik w tabeli knowledgeBase
+  const article = await getKnowledgeBaseById(knowledgeBaseId);
+  if (article) {
+    await database.update(knowledgeBase)
+      .set({ viewCount: (article.viewCount || 0) + 1 })
+      .where(eq(knowledgeBase.id, knowledgeBaseId));
+  }
+  
+  // Dodaj wpis do historii odczytów
+  await database.insert(knowledgeBaseViews).values({
+    knowledgeBaseId,
+    userId: userId || null,
+    viewedAt: new Date(),
+  });
+}
+
+export async function getKnowledgeBaseFavorites(userId: number) {
+  const database = await getDb();
+  if (!database) return [];
+  
+  return await database
+    .select({
+      id: knowledgeBase.id,
+      title: knowledgeBase.title,
+      content: knowledgeBase.content,
+      label: knowledgeBase.label,
+      tags: knowledgeBase.tags,
+      viewCount: knowledgeBase.viewCount,
+      isPinned: knowledgeBase.isPinned,
+      createdAt: knowledgeBase.createdAt,
+      updatedAt: knowledgeBase.updatedAt,
+    })
+    .from(knowledgeBaseFavorites)
+    .innerJoin(knowledgeBase, eq(knowledgeBaseFavorites.knowledgeBaseId, knowledgeBase.id))
+    .where(eq(knowledgeBaseFavorites.userId, userId))
+    .orderBy(desc(knowledgeBaseFavorites.createdAt));
+}
+
+export async function toggleKnowledgeBaseFavorite(userId: number, knowledgeBaseId: number): Promise<{ isFavorite: boolean }> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  
+  // Sprawdź czy już jest w ulubionych
+  const existing = await database
+    .select()
+    .from(knowledgeBaseFavorites)
+    .where(
+      and(
+        eq(knowledgeBaseFavorites.userId, userId),
+        eq(knowledgeBaseFavorites.knowledgeBaseId, knowledgeBaseId)
+      )
+    )
+    .limit(1);
+  
+  if (existing.length > 0) {
+    // Usuń z ulubionych
+    await database
+      .delete(knowledgeBaseFavorites)
+      .where(
+        and(
+          eq(knowledgeBaseFavorites.userId, userId),
+          eq(knowledgeBaseFavorites.knowledgeBaseId, knowledgeBaseId)
+        )
+      );
+    return { isFavorite: false };
+  } else {
+    // Dodaj do ulubionych
+    await database.insert(knowledgeBaseFavorites).values({
+      userId,
+      knowledgeBaseId,
+      createdAt: new Date(),
+    });
+    return { isFavorite: true };
+  }
+}
+
+export async function getKnowledgeBaseStats() {
+  const database = await getDb();
+  if (!database) return null;
+  
+  const totalArticles = await database.select({ count: sql<number>`count(*)` }).from(knowledgeBase);
+  const totalViews = await database.select({ count: sql<number>`count(*)` }).from(knowledgeBaseViews);
+  const mostViewed = await database
+    .select()
+    .from(knowledgeBase)
+    .orderBy(desc(knowledgeBase.viewCount))
+    .limit(10);
+  
+  return {
+    totalArticles: totalArticles[0]?.count || 0,
+    totalViews: totalViews[0]?.count || 0,
+    mostViewed,
+  };
+}
+
+// ============ KNOWLEDGE BASE COMMENTS ============
+
+export async function getKnowledgeBaseComments(articleId: number) {
+  const database = await getDb();
+  if (!database) return [];
+  
+  // Pobierz wszystkie komentarze dla artykułu
+  const comments = await database
+    .select()
+    .from(knowledgeBaseComments)
+    .where(eq(knowledgeBaseComments.knowledgeBaseId, articleId))
+    .orderBy(knowledgeBaseComments.createdAt);
+  
+  // Pobierz informacje o użytkownikach
+  const commentsWithUsers = await Promise.all(
+    comments.map(async (comment) => {
+      const user = await database
+        .select()
+        .from(users)
+        .where(eq(users.id, comment.userId))
+        .limit(1);
+      
+      return {
+        ...comment,
+        user: user[0] || null,
+      };
+    })
+  );
+  
+  // Zbuduj strukturę drzewa (komentarze główne i odpowiedzi)
+  const rootComments = commentsWithUsers.filter(c => !c.parentId);
+  const repliesMap = new Map<number, typeof commentsWithUsers>();
+  
+  commentsWithUsers.forEach(comment => {
+    if (comment.parentId) {
+      if (!repliesMap.has(comment.parentId)) {
+        repliesMap.set(comment.parentId, []);
+      }
+      repliesMap.get(comment.parentId)!.push(comment);
+    }
+  });
+  
+  return rootComments.map(comment => ({
+    ...comment,
+    replies: repliesMap.get(comment.id) || [],
+  }));
+}
+
+export async function createKnowledgeBaseComment(data: {
+  knowledgeBaseId: number;
+  userId: number;
+  parentId?: number | null;
+  content: string;
+}) {
+  const database = await getDb();
+  if (!database) return 0;
+  
+  const result = await database.insert(knowledgeBaseComments).values({
+    knowledgeBaseId: data.knowledgeBaseId,
+    userId: data.userId,
+    parentId: data.parentId || null,
+    content: data.content,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  
+  return result[0].insertId;
+}
+
+export async function updateKnowledgeBaseComment(id: number, content: string) {
+  const database = await getDb();
+  if (!database) return;
+  
+  await database
+    .update(knowledgeBaseComments)
+    .set({ content, updatedAt: new Date() })
+    .where(eq(knowledgeBaseComments.id, id));
+}
+
+export async function deleteKnowledgeBaseComment(id: number) {
+  const database = await getDb();
+  if (!database) return;
+  
+  // Usuń również wszystkie odpowiedzi (CASCADE)
+  await database
+    .delete(knowledgeBaseComments)
+    .where(eq(knowledgeBaseComments.id, id));
+}
+
+// ============ KNOWLEDGE BASE LINKS ============
+
+export async function getRelatedArticles(articleId: number) {
+  const database = await getDb();
+  if (!database) return [];
+  
+  // Pobierz artykuły powiązane (gdzie ten artykuł jest źródłem)
+  const links = await database
+    .select({
+      article: knowledgeBase,
+      linkType: knowledgeBaseLinks.linkType,
+    })
+    .from(knowledgeBaseLinks)
+    .innerJoin(knowledgeBase, eq(knowledgeBaseLinks.toArticleId, knowledgeBase.id))
+    .where(eq(knowledgeBaseLinks.fromArticleId, articleId));
+  
+  // Pobierz również artykuły, które linkują do tego artykułu (odwrotne powiązania)
+  const reverseLinks = await database
+    .select({
+      article: knowledgeBase,
+      linkType: knowledgeBaseLinks.linkType,
+    })
+    .from(knowledgeBaseLinks)
+    .innerJoin(knowledgeBase, eq(knowledgeBaseLinks.fromArticleId, knowledgeBase.id))
+    .where(eq(knowledgeBaseLinks.toArticleId, articleId));
+  
+  // Połącz i usuń duplikaty
+  const allLinks = [...links, ...reverseLinks];
+  const uniqueArticles = new Map<number, typeof links[0]>();
+  
+  allLinks.forEach(link => {
+    if (!uniqueArticles.has(link.article.id)) {
+      uniqueArticles.set(link.article.id, link);
+    }
+  });
+  
+  return Array.from(uniqueArticles.values()).map(l => l.article);
+}
+
+export async function suggestSimilarArticles(articleId: number, limit: number = 5) {
+  const database = await getDb();
+  if (!database) return [];
+  
+  // Pobierz aktualny artykuł
+  const currentArticle = await getKnowledgeBaseById(articleId);
+  if (!currentArticle) return [];
+  
+  // Pobierz wszystkie artykuły (oprócz aktualnego)
+  const allArticles = await database
+    .select()
+    .from(knowledgeBase)
+    .where(and(
+      sql`${knowledgeBase.id} != ${articleId}`,
+      eq(knowledgeBase.status, "published")
+    ));
+  
+  // Oblicz podobieństwo na podstawie tagów i labeli
+  const scoredArticles = allArticles.map(article => {
+    let score = 0;
+    
+    // Podobieństwo tagów
+    if (currentArticle.tags && article.tags) {
+      const currentTags = new Set(currentArticle.tags.split(",").map(t => t.trim().toLowerCase()));
+      const articleTags = new Set(article.tags.split(",").map(t => t.trim().toLowerCase()));
+      const commonTags = Array.from(currentTags).filter(t => articleTags.has(t));
+      score += commonTags.length * 2;
+    }
+    
+    // Podobieństwo labeli
+    if (currentArticle.label && article.label && currentArticle.label === article.label) {
+      score += 3;
+    }
+    
+    // Podobieństwo projektu
+    if (currentArticle.projectId && article.projectId && currentArticle.projectId === article.projectId) {
+      score += 2;
+    }
+    
+    // Podobieństwo typu artykułu
+    if ((currentArticle as any).articleType === (article as any).articleType) {
+      score += 1;
+    }
+    
+    return { article, score };
+  });
+  
+  // Sortuj po score i zwróć top N
+  return scoredArticles
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(item => item.article);
+}
+
+export async function createKnowledgeBaseLink(data: {
+  fromArticleId: number;
+  toArticleId: number;
+  linkType: "manual" | "suggested";
+}) {
+  const database = await getDb();
+  if (!database) return 0;
+  
+  // Sprawdź czy link już istnieje
+  const existing = await database
+    .select()
+    .from(knowledgeBaseLinks)
+    .where(
+      and(
+        eq(knowledgeBaseLinks.fromArticleId, data.fromArticleId),
+        eq(knowledgeBaseLinks.toArticleId, data.toArticleId)
+      )
+    )
+    .limit(1);
+  
+  if (existing.length > 0) {
+    return existing[0].id;
+  }
+  
+  const result = await database.insert(knowledgeBaseLinks).values({
+    fromArticleId: data.fromArticleId,
+    toArticleId: data.toArticleId,
+    linkType: data.linkType,
+    createdAt: new Date(),
+  });
+  
+  return result[0].insertId;
+}
+
+export async function deleteKnowledgeBaseLink(fromArticleId: number, toArticleId: number) {
+  const database = await getDb();
+  if (!database) return;
+  
+  await database
+    .delete(knowledgeBaseLinks)
+    .where(
+      and(
+        eq(knowledgeBaseLinks.fromArticleId, fromArticleId),
+        eq(knowledgeBaseLinks.toArticleId, toArticleId)
+      )
+    );
+}
+
+export async function getKnowledgeBaseLinkGraph(articleId: number) {
+  const database = await getDb();
+  if (!database) return { incoming: [], outgoing: [] };
+  
+  const outgoing = await database
+    .select()
+    .from(knowledgeBaseLinks)
+    .where(eq(knowledgeBaseLinks.fromArticleId, articleId));
+  
+  const incoming = await database
+    .select()
+    .from(knowledgeBaseLinks)
+    .where(eq(knowledgeBaseLinks.toArticleId, articleId));
+  
+  return { incoming, outgoing };
 }
 
 // ============ EMPLOYEE CV HELPERS ============

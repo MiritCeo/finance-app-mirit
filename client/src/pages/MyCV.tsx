@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Edit, Plus, Trash2, FileCheck, LogOut } from "lucide-react";
+import { Loader2, Edit, Plus, Trash2, FileCheck, LogOut, ArrowLeft } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -310,6 +310,15 @@ export default function MyCV() {
 
   return (
     <div className="container mx-auto max-w-7xl py-8 space-y-6">
+      <div className="mb-4">
+        <Button
+          variant="ghost"
+          onClick={() => setLocation("/")}
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Powrót do Dashboard
+        </Button>
+      </div>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Moje CV</h1>

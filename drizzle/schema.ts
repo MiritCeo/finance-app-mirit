@@ -238,12 +238,72 @@ export const knowledgeBase = mysqlTable("knowledgeBase", {
   title: varchar("title", { length: 500 }).notNull(),
   content: text("content").notNull(),
   label: varchar("label", { length: 100 }), // Kolorowa labelka (np. "Finanse", "HR", "IT")
+  tags: varchar("tags", { length: 500 }), // Tagi oddzielone przecinkami (np. "onboarding,procedury,hr")
+  viewCount: int("viewCount").default(0).notNull(), // Licznik odczytów
+  isPinned: boolean("isPinned").default(false).notNull(), // Czy przypięty na górze
+  authorId: int("authorId"), // ID użytkownika, który utworzył artykuł
+  articleType: mysqlEnum("articleType", ["admin", "employee"]).default("admin").notNull(), // Typ artykułu: admin lub employee
+  projectId: int("projectId"), // Opcjonalne przypisanie do projektu
+  status: mysqlEnum("status", ["draft", "published", "archived"]).default("published").notNull(), // Status artykułu
+  publishedAt: timestamp("publishedAt"), // Data publikacji (null dla draft)
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/**
+ * Ulubione artykuły użytkowników
+ */
+export const knowledgeBaseFavorites = mysqlTable("knowledgeBaseFavorites", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(), // ID użytkownika (z tabeli users)
+  knowledgeBaseId: int("knowledgeBaseId").notNull(), // ID artykułu
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/**
+ * Historia odczytów artykułów (dla statystyk)
+ */
+export const knowledgeBaseViews = mysqlTable("knowledgeBaseViews", {
+  id: int("id").autoincrement().primaryKey(),
+  knowledgeBaseId: int("knowledgeBaseId").notNull(),
+  userId: int("userId"), // Opcjonalne - może być null dla anonimowych odczytów
+  viewedAt: timestamp("viewedAt").defaultNow().notNull(),
+});
+
+/**
+ * Komentarze pod artykułami
+ */
+export const knowledgeBaseComments = mysqlTable("knowledgeBaseComments", {
+  id: int("id").autoincrement().primaryKey(),
+  knowledgeBaseId: int("knowledgeBaseId").notNull(), // ID artykułu
+  userId: int("userId").notNull(), // ID użytkownika, który dodał komentarz
+  parentId: int("parentId"), // ID komentarza nadrzędnego (null dla komentarzy głównych)
+  content: text("content").notNull(), // Treść komentarza
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/**
+ * Powiązania między artykułami
+ */
+export const knowledgeBaseLinks = mysqlTable("knowledgeBaseLinks", {
+  id: int("id").autoincrement().primaryKey(),
+  fromArticleId: int("fromArticleId").notNull(), // Artykuł źródłowy
+  toArticleId: int("toArticleId").notNull(), // Artykuł docelowy
+  linkType: mysqlEnum("linkType", ["manual", "suggested"]).default("manual").notNull(), // Typ linku: ręczny lub sugerowany
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export type KnowledgeBase = typeof knowledgeBase.$inferSelect;
 export type InsertKnowledgeBase = typeof knowledgeBase.$inferInsert;
+export type KnowledgeBaseFavorite = typeof knowledgeBaseFavorites.$inferSelect;
+export type InsertKnowledgeBaseFavorite = typeof knowledgeBaseFavorites.$inferInsert;
+export type KnowledgeBaseView = typeof knowledgeBaseViews.$inferSelect;
+export type InsertKnowledgeBaseView = typeof knowledgeBaseViews.$inferInsert;
+export type KnowledgeBaseComment = typeof knowledgeBaseComments.$inferSelect;
+export type InsertKnowledgeBaseComment = typeof knowledgeBaseComments.$inferInsert;
+export type KnowledgeBaseLink = typeof knowledgeBaseLinks.$inferSelect;
+export type InsertKnowledgeBaseLink = typeof knowledgeBaseLinks.$inferInsert;
 
 /**
  * Employee CV - stores CV data for employees

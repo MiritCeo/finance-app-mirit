@@ -11,46 +11,63 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 export function registerOAuthRoutes(app: Express) {
-  // Lokalne logowanie dla developmentu (bez OAuth)
-  app.get("/api/auth/local-login", async (req: Request, res: Response) => {
+  // Logowanie dla administratorów (email + hasło)
+  app.post("/api/auth/admin-login", async (req: Request, res: Response) => {
     try {
-      const ownerOpenId = process.env.OWNER_OPEN_ID || "admin";
-      const ownerName = process.env.OWNER_NAME || "Administrator";
-      
-      // Sprawdź czy JWT_SECRET jest ustawiony
-      if (!process.env.JWT_SECRET) {
-        console.error("[Auth] JWT_SECRET is not set in environment variables");
-        res.status(500).json({ error: "JWT_SECRET is not configured. Please set JWT_SECRET in .env file." });
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        res.status(400).json({ error: "Email i hasło są wymagane" });
         return;
       }
 
-      // Utwórz lub zaktualizuj użytkownika
+      // Znajdź administratora po emailu w tabeli employees
+      // Administrator powinien mieć konto w employees z email i passwordHash
+      const adminEmployee = await db.getEmployeeByEmail(email);
+      if (!adminEmployee || !adminEmployee.isActive) {
+        res.status(401).json({ error: "Nieprawidłowy email lub hasło" });
+        return;
+      }
+
+      // Sprawdź czy administrator ma ustawione hasło
+      if (!adminEmployee.passwordHash) {
+        res.status(401).json({ error: "Hasło nie zostało ustawione. Skontaktuj się z administratorem systemu." });
+        return;
+      }
+
+      // Sprawdź hasło
+      const isValidPassword = await bcrypt.compare(password, adminEmployee.passwordHash);
+      if (!isValidPassword) {
+        res.status(401).json({ error: "Nieprawidłowy email lub hasło" });
+        return;
+      }
+
+      // Sprawdź czy ten employee ma powiązany user z rolą admin
+      // Jeśli nie, utwórz/aktualizuj user z rolą admin
+      const openId = `admin_${adminEmployee.id}`;
       await db.upsertUser({
-        openId: ownerOpenId,
-        name: ownerName,
-        email: "admin@localhost",
-        loginMethod: "local",
+        openId,
+        name: `${adminEmployee.firstName} ${adminEmployee.lastName}`,
+        email: adminEmployee.email || null,
+        loginMethod: "admin",
         role: "admin",
+        employeeId: adminEmployee.id,
         lastSignedIn: new Date(),
       });
 
       // Utwórz token sesji
-      const sessionToken = await sdk.createSessionToken(ownerOpenId, {
-        name: ownerName,
+      const sessionToken = await sdk.createSessionToken(openId, {
+        name: `${adminEmployee.firstName} ${adminEmployee.lastName}`,
         expiresInMs: ONE_YEAR_MS,
       });
 
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.redirect(302, "/");
-    } catch (error: any) {
-      console.error("[Auth] Local login failed", error);
-      console.error("[Auth] Error details:", error.message, error.stack);
-      res.status(500).json({ 
-        error: "Local login failed",
-        details: error.message || "Unknown error"
-      });
+      res.json({ success: true, employeeId: adminEmployee.id });
+    } catch (error) {
+      console.error("[Auth] Admin login failed", error);
+      res.status(500).json({ error: "Błąd logowania" });
     }
   });
 

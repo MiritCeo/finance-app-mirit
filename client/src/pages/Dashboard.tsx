@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, DollarSign, Users, TrendingUp, TrendingDown, Calendar, ArrowUp, ArrowDown, Minus, Plus, Trophy, Briefcase, Award, Medal, TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon, Zap, Clock, Building2, Calculator, Receipt, Moon, Sun, Filter, Target, Activity, Sparkles } from "lucide-react";
+import { Loader2, DollarSign, Users, TrendingUp, TrendingDown, Calendar, ArrowUp, ArrowDown, Minus, Plus, Trophy, Briefcase, Award, Medal, TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon, Zap, Clock, Building2, Calculator, Receipt, Moon, Sun, Filter, Target, Activity, Sparkles, UserCircle, BookOpen } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
@@ -73,22 +73,8 @@ export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
   const { theme, toggleTheme } = useTheme();
   
-  // Sprawdź czy użytkownik jest administratorem
-  if (!authLoading && user && user.role !== "admin") {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Brak dostępu</h1>
-          <p className="text-muted-foreground mb-4">
-            Ta strona jest dostępna tylko dla administratorów.
-          </p>
-          <Button onClick={() => window.location.href = "/my-cv"}>
-            Przejdź do Moje CV
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  // Jeśli użytkownik nie jest administratorem, pokaż uproszczony dashboard
+  const isEmployee = !authLoading && user && user.role === "employee";
   // Pobierz bieżący miesiąc i rok
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -232,6 +218,77 @@ export default function Dashboard() {
     { value: 11, label: "Listopad" },
     { value: 12, label: "Grudzień" },
   ];
+
+  // Uproszczony dashboard dla pracowników
+  if (isEmployee) {
+    return (
+      <div className="container mx-auto max-w-7xl space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold">Dashboard</h1>
+              <Badge variant="secondary" className="bg-green-600 text-white">
+                Pracownik
+              </Badge>
+            </div>
+            <p className="text-muted-foreground flex items-center gap-2">
+              <span>👋</span>
+              <span>Witaj, <span className="font-semibold text-foreground">{user.name || user.email}</span>!</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Menu szybkiego startu dla pracowników */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = "/my-cv"}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserCircle className="h-5 w-5 text-blue-600" />
+                Moje CV
+              </CardTitle>
+              <CardDescription>
+                Zarządzaj swoim CV i danymi zawodowymi
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Aktualizuj swoje umiejętności, doświadczenie i projekty
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = "/knowledge"}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-indigo-600" />
+                Baza Wiedzy
+              </CardTitle>
+              <CardDescription>
+                Przeglądaj i dodawaj informacje firmowe
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Znajdź ważne informacje i dodaj swoje notatki
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Informacja o dostępności */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Witaj w systemie Mirit Software house sp. z o.o.</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              Jako pracownik masz dostęp do zarządzania swoim CV oraz przeglądania bazy wiedzy firmy.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto max-w-7xl space-y-6">

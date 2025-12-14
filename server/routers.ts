@@ -690,7 +690,7 @@ export const appRouter = router({
 
   // ============ PROJECTS ============
   projects: router({
-    list: adminProcedure.query(async () => {
+    list: protectedProcedure.query(async () => {
       return await db.getAllProjects();
     }),
     
@@ -2173,30 +2173,134 @@ export const appRouter = router({
 
   // ============ KNOWLEDGE BASE ============
   knowledgeBase: router({
-    getAll: adminProcedure.query(async () => {
-      return db.getAllKnowledgeBase();
+    // Pracownicy mogą czytać, ale tylko admin może edytować
+    getAll: protectedProcedure.query(async () => {
+      const articles = await db.getAllKnowledgeBase();
+      // Dodaj informacje o autorach dla artykułów pracowników
+      for (const article of articles) {
+        if ((article as any).authorId && (article as any).articleType === "employee") {
+          const author = await db.getUserById((article as any).authorId);
+          if (author && author.employeeId) {
+            const employee = await db.getEmployeeById(author.employeeId);
+            if (employee) {
+              (article as any).authorName = `${employee.firstName} ${employee.lastName}`;
+            }
+          } else if (author) {
+            (article as any).authorName = author.name || author.email || "Nieznany";
+          }
+        }
+      }
+      return articles;
     }),
     
-    create: adminProcedure
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input, ctx }) => {
+        // Zwiększ licznik odczytów
+        await db.incrementKnowledgeBaseViewCount(input.id, ctx.user?.id || null);
+        return db.getKnowledgeBaseById(input.id);
+      }),
+    
+    search: protectedProcedure
+      .input(z.object({
+        query: z.string().optional(),
+        label: z.string().optional(),
+        tags: z.string().optional(),
+        projectId: z.number().optional(),
+        status: z.enum(["draft", "published", "archived"]).optional(),
+        sortBy: z.enum(["newest", "oldest", "title", "views"]).default("newest"),
+      }))
+      .query(async ({ input }) => {
+        const articles = await db.searchKnowledgeBase(input);
+        // Dodaj informacje o autorach dla artykułów pracowników
+        for (const article of articles) {
+          if ((article as any).authorId && (article as any).articleType === "employee") {
+            const author = await db.getUserById((article as any).authorId);
+            if (author && author.employeeId) {
+              const employee = await db.getEmployeeById(author.employeeId);
+              if (employee) {
+                (article as any).authorName = `${employee.firstName} ${employee.lastName}`;
+              }
+            } else if (author) {
+              (article as any).authorName = author.name || author.email || "Nieznany";
+            }
+          }
+        }
+        return articles;
+      }),
+    
+    getFavorites: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.id) return [];
+        return db.getKnowledgeBaseFavorites(ctx.user.id);
+      }),
+    
+    toggleFavorite: protectedProcedure
+      .input(z.object({ knowledgeBaseId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.user?.id) throw new TRPCError({ code: "UNAUTHORIZED" });
+        return db.toggleKnowledgeBaseFavorite(ctx.user.id, input.knowledgeBaseId);
+      }),
+    
+    getStats: adminProcedure
+      .query(async () => {
+        return db.getKnowledgeBaseStats();
+      }),
+    
+    create: protectedProcedure
       .input(z.object({
         title: z.string().min(1).max(500),
         content: z.string().min(1),
         label: z.string().max(100).optional(),
+        tags: z.string().max(500).optional(),
+        isPinned: z.boolean().optional(),
+        projectId: z.number().optional().nullable(),
+        status: z.enum(["draft", "published", "archived"]).optional(),
+        publishedAt: z.date().optional().nullable(),
       }))
-      .mutation(async ({ input }) => {
-        const id = await db.createKnowledgeBase(input);
+      .mutation(async ({ input, ctx }) => {
+        // Określ typ artykułu na podstawie roli użytkownika
+        const articleType = ctx.user?.role === "admin" ? "admin" : "employee";
+        const id = await db.createKnowledgeBase({
+          ...input,
+          authorId: ctx.user?.id || null,
+          articleType: articleType as "admin" | "employee",
+          projectId: input.projectId || null,
+          status: (input.status || "published") as "draft" | "published" | "archived",
+          publishedAt: input.publishedAt || null,
+        });
         return { id, success: true };
       }),
     
-    update: adminProcedure
+    update: protectedProcedure
       .input(z.object({
         id: z.number(),
         title: z.string().min(1).max(500).optional(),
         content: z.string().min(1).optional(),
         label: z.string().max(100).optional(),
+        tags: z.string().max(500).optional(),
+        isPinned: z.boolean().optional(),
+        projectId: z.number().optional().nullable(),
+        status: z.enum(["draft", "published", "archived"]).optional(),
+        publishedAt: z.date().optional().nullable(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const { id, ...data } = input;
+        
+        // Sprawdź czy artykuł istnieje i kto jest jego autorem
+        const article = await db.getKnowledgeBaseById(id);
+        if (!article) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Artykuł nie został znaleziony" });
+        }
+        
+        // Pracownik może edytować tylko swoje artykuły, admin może edytować wszystkie
+        if (ctx.user?.role !== "admin" && article.authorId !== ctx.user?.id) {
+          throw new TRPCError({ 
+            code: "FORBIDDEN", 
+            message: "Nie masz uprawnień do edycji tego artykułu" 
+          });
+        }
+        
         await db.updateKnowledgeBase(id, data);
         return { success: true };
       }),
@@ -2207,6 +2311,88 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         await db.deleteKnowledgeBase(input.id);
+        return { success: true };
+      }),
+    
+    // ============ COMMENTS ============
+    getComments: protectedProcedure
+      .input(z.object({ articleId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getKnowledgeBaseComments(input.articleId);
+      }),
+    
+    createComment: protectedProcedure
+      .input(z.object({
+        articleId: z.number(),
+        parentId: z.number().optional().nullable(),
+        content: z.string().min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.user?.id) throw new TRPCError({ code: "UNAUTHORIZED" });
+        const id = await db.createKnowledgeBaseComment({
+          knowledgeBaseId: input.articleId,
+          userId: ctx.user.id,
+          parentId: input.parentId || null,
+          content: input.content,
+        });
+        return { id, success: true };
+      }),
+    
+    updateComment: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        content: z.string().min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.user?.id) throw new TRPCError({ code: "UNAUTHORIZED" });
+        // TODO: Sprawdź czy użytkownik jest autorem komentarza
+        await db.updateKnowledgeBaseComment(input.id, input.content);
+        return { success: true };
+      }),
+    
+    deleteComment: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.user?.id) throw new TRPCError({ code: "UNAUTHORIZED" });
+        // TODO: Sprawdź czy użytkownik jest autorem komentarza lub adminem
+        await db.deleteKnowledgeBaseComment(input.id);
+        return { success: true };
+      }),
+    
+    // ============ LINKS ============
+    getRelated: protectedProcedure
+      .input(z.object({ articleId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getRelatedArticles(input.articleId);
+      }),
+    
+    suggestSimilar: protectedProcedure
+      .input(z.object({ 
+        articleId: z.number(),
+        limit: z.number().min(1).max(10).optional().default(5),
+      }))
+      .query(async ({ input }) => {
+        return db.suggestSimilarArticles(input.articleId, input.limit);
+      }),
+    
+    createLink: protectedProcedure
+      .input(z.object({
+        fromArticleId: z.number(),
+        toArticleId: z.number(),
+        linkType: z.enum(["manual", "suggested"]).default("manual"),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createKnowledgeBaseLink(input);
+        return { id, success: true };
+      }),
+    
+    deleteLink: protectedProcedure
+      .input(z.object({
+        fromArticleId: z.number(),
+        toArticleId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.deleteKnowledgeBaseLink(input.fromArticleId, input.toArticleId);
         return { success: true };
       }),
   }),

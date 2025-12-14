@@ -232,8 +232,22 @@ class SDKServer {
         appId,
         name,
       };
-    } catch (error) {
-      console.warn("[Auth] Session verification failed", String(error));
+    } catch (error: any) {
+      // Nie loguj szczegółowo w trybie standalone - to jest oczekiwane zachowanie
+      // gdy nie ma poprawnej sesji (np. po restarcie serwera z innym JWT_SECRET)
+      if (ENV.isStandalone) {
+        // W trybie standalone nie loguj - to normalne, że nie ma sesji
+        return null;
+      }
+      // W trybie produkcyjnym loguj szczegóły
+      const errorName = error?.name || "UnknownError";
+      const errorMessage = error?.message || String(error);
+      if (errorName.includes("JWT") || errorName.includes("signature")) {
+        // To jest błąd weryfikacji JWT - prawdopodobnie zmieniono JWT_SECRET lub token jest nieprawidłowy
+        console.warn(`[Auth] Session verification failed (${errorName}): ${errorMessage}`);
+      } else {
+        console.warn("[Auth] Session verification failed:", errorMessage);
+      }
       return null;
     }
   }

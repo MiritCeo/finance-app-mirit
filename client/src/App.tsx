@@ -15,6 +15,8 @@ import FixedCosts from "./pages/FixedCosts";
 import Clients from "./pages/Clients";
 import TasksPage from "./pages/TasksPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
+import KnowledgeBaseEditPage from "./pages/KnowledgeBaseEditPage";
+import KnowledgeBaseViewPage from "./pages/KnowledgeBaseViewPage";
 import AIFinancialInsights from "./pages/AIFinancialInsights";
 import EmployeeLogin from "./pages/EmployeeLogin";
 import MyCV from "./pages/MyCV";
@@ -29,7 +31,7 @@ function Router() {
       <Route path={"/employee-login"} component={EmployeeLogin} />
       <Route path={"/my-cv"} component={MyCV} />
       <Route path={"/"}>
-        <ProtectedRoute requiredRole="admin">
+        <ProtectedRoute>
           <DashboardLayout>
             <Dashboard />
           </DashboardLayout>
@@ -103,9 +105,30 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path={"/knowledge"}>
-        <ProtectedRoute requiredRole="admin">
+        <ProtectedRoute>
           <DashboardLayout>
             <KnowledgeBasePage />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/knowledge/new"}>
+        <ProtectedRoute>
+          <DashboardLayout>
+            <KnowledgeBaseEditPage />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/knowledge/:id/edit"}>
+        <ProtectedRoute>
+          <DashboardLayout>
+            <KnowledgeBaseEditPage />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/knowledge/:id"}>
+        <ProtectedRoute>
+          <DashboardLayout>
+            <KnowledgeBaseViewPage />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>
