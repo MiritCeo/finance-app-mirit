@@ -75,6 +75,8 @@ export default function Dashboard() {
   
   // Jeśli użytkownik nie jest administratorem, pokaż uproszczony dashboard
   const isEmployee = !authLoading && user && user.role === "employee";
+  // Warunek: zapytania dashboardowe tylko dla administratorów
+  const isAdmin = Boolean(!authLoading && user && user.role === "admin");
   // Pobierz bieżący miesiąc i rok
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -86,7 +88,7 @@ export default function Dashboard() {
   
   const { data: kpi, isLoading, error: kpiError } = trpc.dashboard.kpi.useQuery(
     { year: currentYear, month: currentMonth },
-    { enabled: !!user }
+    { enabled: isAdmin }
   );
   
   // Funkcja pomocnicza do obliczania poprzedniego miesiąca
@@ -98,7 +100,7 @@ export default function Dashboard() {
   // Dokładne wyniki miesięczne - bieżący miesiąc
   const { data: accurateResults, isLoading: accurateLoading } = trpc.dashboard.getAccurateMonthlyResults.useQuery(
     { year: currentYear, month: currentMonth },
-    { enabled: !!user }
+    { enabled: isAdmin }
   );
   
   // Dokładne wyniki miesięczne - poprzednie 3 miesiące
@@ -108,17 +110,17 @@ export default function Dashboard() {
   
   const { data: accurateResults1, isLoading: accurateLoading1 } = trpc.dashboard.getAccurateMonthlyResults.useQuery(
     { year: prevMonth1.year, month: prevMonth1.month },
-    { enabled: !!user }
+    { enabled: isAdmin }
   );
   
   const { data: accurateResults2, isLoading: accurateLoading2 } = trpc.dashboard.getAccurateMonthlyResults.useQuery(
     { year: prevMonth2.year, month: prevMonth2.month },
-    { enabled: !!user }
+    { enabled: isAdmin }
   );
   
   const { data: accurateResults3, isLoading: accurateLoading3 } = trpc.dashboard.getAccurateMonthlyResults.useQuery(
     { year: prevMonth3.year, month: prevMonth3.month },
-    { enabled: !!user }
+    { enabled: isAdmin }
   );
   
   // Funkcja pomocnicza do nazwy miesiąca
@@ -135,7 +137,7 @@ export default function Dashboard() {
   // Pobierz dane z poprzedniego miesiąca dla porównania
   const { data: prevMonthKpi } = trpc.dashboard.getAccurateMonthlyResults.useQuery(
     { year: prevMonth.year, month: prevMonth.month },
-    { enabled: !!user }
+    { enabled: isAdmin }
   );
   
   // Funkcja pomocnicza do obliczania zmiany procentowej
@@ -153,25 +155,25 @@ export default function Dashboard() {
   // Ranking pracowników (miesięczny)
   const { data: topEmployees, isLoading: topEmployeesLoading } = trpc.dashboard.getTopEmployees.useQuery(
     { limit: 5, year: currentYear, month: currentMonth },
-    { enabled: !!user }
+    { enabled: isAdmin }
   );
   
   // Ranking pracowników (roczny)
   const { data: topEmployeesByYear, isLoading: topEmployeesByYearLoading } = trpc.dashboard.getTopEmployeesByYear.useQuery(
     { limit: 5, year: currentYear },
-    { enabled: !!user }
+    { enabled: isAdmin }
   );
   
   // Analiza rentowności projektów
   const { data: projectProfitability, isLoading: projectProfitabilityLoading } = trpc.dashboard.getProjectProfitability.useQuery(
     { year: currentYear, month: currentMonth },
-    { enabled: !!user }
+    { enabled: isAdmin }
   );
   
   // Trendy zysków/strat (ostatnie 12 miesięcy)
   const { data: profitTrends, isLoading: trendsLoading } = trpc.dashboard.getProfitTrends.useQuery(
     { months: 12 },
-    { enabled: !!user }
+    { enabled: isAdmin }
   );
 
   if (authLoading || isLoading) {
