@@ -4,6 +4,8 @@ import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
 import bcrypt from "bcrypt";
+import { users } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -42,6 +44,19 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
 
+      // Sprawdź czy istnieje użytkownik z employee_ prefixem (stary format)
+      // Jeśli tak, usuń go lub zaktualizuj
+      const oldEmployeeOpenId = `employee_${adminEmployee.id}`;
+      const oldUser = await db.getUserByOpenId(oldEmployeeOpenId);
+      if (oldUser) {
+        console.log("[Auth] Admin login - found old employee user, deleting:", oldEmployeeOpenId);
+        // Usuń starego użytkownika z employee_ prefixem
+        const dbInstance = await db.getDb();
+        if (dbInstance) {
+          await dbInstance.delete(users).where(eq(users.openId, oldEmployeeOpenId));
+        }
+      }
+      
       // Sprawdź czy ten employee ma powiązany user z rolą admin
       // Jeśli nie, utwórz/aktualizuj user z rolą admin
       const openId = `admin_${adminEmployee.id}`;
@@ -58,7 +73,14 @@ export function registerOAuthRoutes(app: Express) {
       
       // Sprawdź czy użytkownik został poprawnie utworzony/zaktualizowany
       const createdUser = await db.getUserByOpenId(openId);
-      console.log("[Auth] Admin login - user after upsert:", createdUser);
+      console.log("[Auth] Admin login - user after upsert:", JSON.stringify({
+        id: createdUser?.id,
+        openId: createdUser?.openId,
+        role: createdUser?.role,
+        employeeId: createdUser?.employeeId,
+        email: createdUser?.email,
+        loginMethod: createdUser?.loginMethod
+      }, null, 2));
 
       // Utwórz token sesji
       const sessionToken = await sdk.createSessionToken(openId, {
