@@ -313,9 +313,15 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
+    // Aktualizuj tylko lastSignedIn, zachowując istniejącą rolę
     await db.upsertUser({
       openId: user.openId,
       lastSignedIn: signedInAt,
+      role: user.role, // Zachowaj istniejącą rolę
+      employeeId: user.employeeId, // Zachowaj employeeId
+      name: user.name, // Zachowaj name
+      email: user.email, // Zachowaj email
+      loginMethod: user.loginMethod, // Zachowaj loginMethod
     });
 
     return user;

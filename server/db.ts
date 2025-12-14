@@ -122,7 +122,14 @@ export async function getUserByOpenId(openId: string) {
   }
 
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  const user = result.length > 0 ? result[0] : undefined;
+  
+  // Debug: loguj rolę użytkownika
+  if (user) {
+    console.log(`[DB] getUserByOpenId(${openId}) - role: ${user.role}, employeeId: ${user.employeeId}`);
+  }
+  
+  return user;
 }
 
 export async function getUserById(id: number) {
