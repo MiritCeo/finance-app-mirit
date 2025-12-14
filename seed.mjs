@@ -255,7 +255,7 @@ async function seed() {
     const existingAdmin = await db.select().from(employees).where(eq(employees.email, adminEmail)).limit(1);
     
     if (existingAdmin.length === 0) {
-      const [adminEmployee] = await db.insert(employees).values({
+      const result = await db.insert(employees).values({
         firstName: "Administrator",
         lastName: "Systemu",
         position: "Administrator",
@@ -270,18 +270,38 @@ async function seed() {
         isActive: true,
       });
       
-      const adminEmployeeId = adminEmployee.insertId;
-      
-      // Utwórz użytkownika z rolą admin
-      await db.insert(users).values({
-        openId: `admin_${adminEmployeeId}`,
-        name: "Administrator Systemu",
-        email: adminEmail,
-        loginMethod: "admin",
-        role: "admin",
-        employeeId: adminEmployeeId,
-        lastSignedIn: new Date(),
-      });
+      // Pobierz ID utworzonego pracownika
+      const adminEmployeeId = result[0]?.insertId;
+      if (!adminEmployeeId) {
+        // Jeśli insertId nie jest dostępne, pobierz pracownika z bazy po emailu
+        const createdAdmin = await db.select().from(employees).where(eq(employees.email, adminEmail)).limit(1);
+        if (createdAdmin.length === 0) {
+          throw new Error("Nie udało się utworzyć konta administratora");
+        }
+        const adminEmployeeIdFromDb = createdAdmin[0].id;
+        
+        // Utwórz użytkownika z rolą admin
+        await db.insert(users).values({
+          openId: `admin_${adminEmployeeIdFromDb}`,
+          name: "Administrator Systemu",
+          email: adminEmail,
+          loginMethod: "admin",
+          role: "admin",
+          employeeId: adminEmployeeIdFromDb,
+          lastSignedIn: new Date(),
+        });
+      } else {
+        // Utwórz użytkownika z rolą admin
+        await db.insert(users).values({
+          openId: `admin_${adminEmployeeId}`,
+          name: "Administrator Systemu",
+          email: adminEmail,
+          loginMethod: "admin",
+          role: "admin",
+          employeeId: adminEmployeeId,
+          lastSignedIn: new Date(),
+        });
+      }
       
       console.log(`✅ Konto administratora utworzone:`);
       console.log(`   Email: ${adminEmail}`);

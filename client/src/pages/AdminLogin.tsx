@@ -34,10 +34,11 @@ export default function AdminLogin() {
       }
 
       toast.success("Zalogowano pomyślnie");
-      // Przekieruj do dashboardu
-      setLocation("/");
-      // Odśwież stronę aby załadować nową sesję
-      window.location.reload();
+      // Odśwież stronę aby załadować nową sesję i dane użytkownika
+      // Użyj setTimeout aby dać czas na zapisanie cookie
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 100);
     } catch (error: any) {
       toast.error(error.message || "Błąd logowania");
     } finally {

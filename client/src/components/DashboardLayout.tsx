@@ -146,6 +146,13 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   
   // Wybierz menu w zależności od roli użytkownika
+  // Debug: sprawdź rolę użytkownika
+  useEffect(() => {
+    if (user) {
+      console.log("[DashboardLayout] User role:", user.role, "User:", user);
+    }
+  }, [user]);
+  
   const menuItems = user?.role === 'employee' ? employeeMenuItems : adminMenuItems;
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();

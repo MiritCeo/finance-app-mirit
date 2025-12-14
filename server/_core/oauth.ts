@@ -45,6 +45,7 @@ export function registerOAuthRoutes(app: Express) {
       // Sprawdź czy ten employee ma powiązany user z rolą admin
       // Jeśli nie, utwórz/aktualizuj user z rolą admin
       const openId = `admin_${adminEmployee.id}`;
+      console.log("[Auth] Admin login - upserting user with role 'admin'", { openId, email: adminEmployee.email });
       await db.upsertUser({
         openId,
         name: `${adminEmployee.firstName} ${adminEmployee.lastName}`,
@@ -54,6 +55,10 @@ export function registerOAuthRoutes(app: Express) {
         employeeId: adminEmployee.id,
         lastSignedIn: new Date(),
       });
+      
+      // Sprawdź czy użytkownik został poprawnie utworzony/zaktualizowany
+      const createdUser = await db.getUserByOpenId(openId);
+      console.log("[Auth] Admin login - user after upsert:", createdUser);
 
       // Utwórz token sesji
       const sessionToken = await sdk.createSessionToken(openId, {
