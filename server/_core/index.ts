@@ -7,6 +7,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { sql } from "drizzle-orm";
+import { sdk } from "./sdk";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -99,11 +100,133 @@ async function startServer() {
         return res.status(400).send("Invalid CV ID");
       }
       
+      // Sprawdź uprawnienia użytkownika
+      let user = null;
+      try {
+        user = await sdk.authenticateRequest(req);
+      } catch (error) {
+        // Użytkownik nie jest zalogowany
+        return res.status(401).send(`
+          <!DOCTYPE html>
+          <html lang="pl">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Brak dostępu</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
+                background: #f3f4f6;
+              }
+              .error-container {
+                text-align: center;
+                padding: 2rem;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+              }
+              h1 { color: #dc2626; }
+            </style>
+          </head>
+          <body>
+            <div class="error-container">
+              <h1>401 - Brak autoryzacji</h1>
+              <p>Musisz być zalogowany, aby zobaczyć to CV.</p>
+            </div>
+          </body>
+          </html>
+        `);
+      }
+      
+      if (!user) {
+        return res.status(401).send(`
+          <!DOCTYPE html>
+          <html lang="pl">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Brak dostępu</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
+                background: #f3f4f6;
+              }
+              .error-container {
+                text-align: center;
+                padding: 2rem;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+              }
+              h1 { color: #dc2626; }
+            </style>
+          </head>
+          <body>
+            <div class="error-container">
+              <h1>401 - Brak autoryzacji</h1>
+              <p>Musisz być zalogowany, aby zobaczyć to CV.</p>
+            </div>
+          </body>
+          </html>
+        `);
+      }
+      
       const { getCVHistoryById } = await import("../db");
       const history = await getCVHistoryById(cvId);
       
       if (!history) {
         return res.status(404).send("CV not found");
+      }
+      
+      // Sprawdź uprawnienia: admin może zobaczyć każde CV, pracownik tylko swoje
+      if (user.role !== "admin") {
+        if (!user.employeeId || history.employeeId !== user.employeeId) {
+          return res.status(403).send(`
+            <!DOCTYPE html>
+            <html lang="pl">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Brak dostępu</title>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  min-height: 100vh;
+                  margin: 0;
+                  background: #f3f4f6;
+                }
+                .error-container {
+                  text-align: center;
+                  padding: 2rem;
+                  background: white;
+                  border-radius: 8px;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+                h1 { color: #dc2626; }
+              </style>
+            </head>
+            <body>
+              <div class="error-container">
+                <h1>403 - Brak uprawnień</h1>
+                <p>Nie masz uprawnień do przeglądania tego CV.</p>
+              </div>
+            </body>
+            </html>
+          `);
+        }
       }
       
       // HTML z możliwością edycji
