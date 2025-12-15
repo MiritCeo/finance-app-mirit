@@ -2559,11 +2559,22 @@ export const appRouter = router({
       .input(z.object({
         id: z.number(),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const history = await db.getCVHistoryById(input.id);
         if (!history) {
           throw new Error("CV history not found");
         }
+        
+        // Zabezpieczenie: pracownik może zobaczyć tylko własną historię CV
+        if (ctx.user?.role === "employee") {
+          if (!ctx.user.employeeId || history.employeeId !== ctx.user.employeeId) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Nie masz uprawnień do podglądu tej wersji CV",
+            });
+          }
+        }
+        
         return history;
       }),
     
@@ -2571,11 +2582,22 @@ export const appRouter = router({
       .input(z.object({
         id: z.number(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const history = await db.getCVHistoryById(input.id);
         if (!history) {
           throw new Error("CV history not found");
         }
+        
+        // Zabezpieczenie: pracownik może usuwać tylko własną historię CV
+        if (ctx.user?.role === "employee") {
+          if (!ctx.user.employeeId || history.employeeId !== ctx.user.employeeId) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Nie masz uprawnień do usunięcia tej wersji CV",
+            });
+          }
+        }
+        
         await db.deleteCVHistory(input.id);
         return { success: true };
       }),
