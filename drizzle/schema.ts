@@ -489,6 +489,7 @@ export const employeePoints = mysqlTable("employeePoints", {
     "innovation",
     "vacation_planning",
     "office_presence",
+    "hrappka_daily_hours",
   ]).notNull(),
   description: text("description"),
   month: int("month"),
@@ -624,3 +625,19 @@ export type VacationPlan = typeof vacationPlans.$inferSelect;
 export type InsertVacationPlan = typeof vacationPlans.$inferInsert;
 export type KnowledgeBasePoint = typeof knowledgeBasePoints.$inferSelect;
 export type InsertKnowledgeBasePoint = typeof knowledgeBasePoints.$inferInsert;
+
+/**
+ * Cache dla danych HRappka - przechowuje informacje o pracownikach
+ */
+export const hrappkaEmployeeInfoCache = mysqlTable("hrappkaEmployeeInfoCache", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull().unique(), // ID pracownika w HRappka
+  data: text("data").notNull(), // JSON z danymi HRappkaEmployeeInfo
+  cachedAt: timestamp("cachedAt").defaultNow().notNull(), // Kiedy dane zostały zapisane
+  expiresAt: timestamp("expiresAt").notNull(), // Kiedy cache wygasa (np. za 1 godzinę)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type HRappkaEmployeeInfoCache = typeof hrappkaEmployeeInfoCache.$inferSelect;
+export type InsertHRappkaEmployeeInfoCache = typeof hrappkaEmployeeInfoCache.$inferInsert;

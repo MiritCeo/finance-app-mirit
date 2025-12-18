@@ -1,16 +1,36 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Clock, Calendar, FileText, AlertCircle, CheckCircle2, TrendingUp, DollarSign, BarChart3 } from "lucide-react";
+import { Loader2, Clock, Calendar, FileText, AlertCircle, CheckCircle2, TrendingUp, DollarSign, BarChart3, AlertTriangle, RefreshCw, Trophy, Sparkles } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 export function HRappkaInfoPanel() {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const utils = trpc.useUtils();
+  
   const { data, isLoading, error } = trpc.hrappka.getEmployeeInfo.useQuery(
-    {},
+    { forceRefresh: false },
     {
-      refetchInterval: 5 * 60 * 1000, // Odśwież co 5 minut
+      refetchInterval: false, // Nie odświeżaj automatycznie - używamy cache
       retry: 1,
     }
   );
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      // Wymuś odświeżenie danych
+      await utils.hrappka.getEmployeeInfo.fetch({ forceRefresh: true });
+      // Odśwież query
+      await utils.hrappka.getEmployeeInfo.invalidate();
+    } catch (error) {
+      console.error("Error refreshing HRappka data:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -53,10 +73,35 @@ export function HRappkaInfoPanel() {
   }
 
   if (!data?.info) {
-    return null;
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-blue-600" />
+              Informacje z HRappka
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+              Odśwież
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Brak danych do wyświetlenia</p>
+        </CardContent>
+      </Card>
+    );
   }
 
   const info = data.info;
+  const isCached = data.cached === true;
+  const cachedAt = data.cachedAt ? new Date(data.cachedAt) : null;
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayFormatted = yesterday.toLocaleDateString("pl-PL", {
@@ -68,12 +113,28 @@ export function HRappkaInfoPanel() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Clock className="h-5 w-5 text-blue-600" />
-          Informacje z HRappka
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-blue-600" />
+            Informacje z HRappka
+            {isCached && cachedAt && (
+              <span className="text-xs text-muted-foreground font-normal ml-2">
+                (cache: {cachedAt.toLocaleTimeString("pl-PL")})
+              </span>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing || isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing || isLoading ? "animate-spin" : ""}`} />
+            Odśwież
+          </Button>
         </CardTitle>
         <CardDescription>
-          Twoje dane z systemu HRappka
+          Twoje dane z systemu HRappka {isCached && "(z cache)"}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -83,21 +144,52 @@ export function HRappkaInfoPanel() {
             <AlertCircle className="h-4 w-4 text-red-600" />
             <AlertTitle className="text-red-800 dark:text-red-200">Brak godzin za wczoraj!</AlertTitle>
             <AlertDescription className="text-red-700 dark:text-red-300">
-              Nie uzupełniłeś godzin za dzień <strong>{yesterdayFormatted}</strong>. 
-              Pamiętaj o uzupełnieniu godzin w systemie HRappka.
+              Nie uzupełniłeś godzin za dzień <strong>{yesterdayFormatted}</strong>
+              <br />
+              <strong className="text-yellow-700 dark:text-yellow-300">Uzupełnij godziny w systemie HRappka, aby odebrać 15 punktów!</strong>
             </AlertDescription>
           </Alert>
         )}
 
         {/* Potwierdzenie uzupełnienia godzin wczoraj */}
         {info.yesterdayHoursReported && info.yesterdayHours && (
-          <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-800 dark:text-green-200">Godziny uzupełnione</AlertTitle>
-            <AlertDescription className="text-green-700 dark:text-green-300">
-              Wczoraj ({yesterdayFormatted}) zaraportowałeś <strong>{info.yesterdayHours.toFixed(1)}h</strong>.
-            </AlertDescription>
-          </Alert>
+          <div className="space-y-2">
+            <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertTitle className="text-green-800 dark:text-green-200">Godziny uzupełnione</AlertTitle>
+              <AlertDescription className="text-green-700 dark:text-green-300">
+                Wczoraj ({yesterdayFormatted}) zaraportowałeś <strong>{info.yesterdayHours.toFixed(1)}h</strong>
+              </AlertDescription>
+            </Alert>
+            
+            {/* Karta z punktami */}
+            <div className="relative overflow-hidden rounded-lg border-2 border-yellow-400 bg-gradient-to-r from-yellow-50 via-amber-50 to-yellow-50 dark:from-yellow-950/50 dark:via-amber-950/50 dark:to-yellow-950/50 p-4 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0">
+                  <div className="rounded-full bg-yellow-400 p-3 dark:bg-yellow-500">
+                    <Trophy className="h-6 w-6 text-yellow-900 dark:text-yellow-950" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                    <span className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
+                      Punkty przyznane!
+                    </span>
+                  </div>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                    Otrzymałeś <strong className="text-yellow-900 dark:text-yellow-100 text-base">15 punktów</strong> za uzupełnienie godzin wczoraj
+                  </p>
+                </div>
+                <div className="flex-shrink-0">
+                  <div className="rounded-lg bg-yellow-400/20 dark:bg-yellow-500/20 px-3 py-2 border border-yellow-400/30 dark:border-yellow-500/30">
+                    <span className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">+15</span>
+                    <span className="text-xs text-yellow-700 dark:text-yellow-300 block text-center">pkt</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Statystyki godzin */}
@@ -134,6 +226,50 @@ export function HRappkaInfoPanel() {
             <p className="text-xl font-bold">{info.averageHoursPerDay.toFixed(1)}h</p>
           </div>
         </div>
+
+        {/* Podsumowanie miesięczne */}
+        {info.monthlySummary && info.monthlySummary.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Podsumowanie godzin per miesiąc ({new Date().getFullYear()})
+            </h3>
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[120px]">Miesiąc</TableHead>
+                    <TableHead className="text-right">Zarejestrowane</TableHead>
+                    <TableHead className="text-right font-semibold">Razem</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {info.monthlySummary.map((summary) => {
+                    const monthNames = [
+                      "Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
+                      "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"
+                    ];
+                    const isCurrentMonth = summary.month === new Date().getMonth() + 1;
+                    return (
+                      <TableRow key={`${summary.year}-${summary.month}`} className={isCurrentMonth ? "bg-blue-50 dark:bg-blue-950" : ""}>
+                        <TableCell className="font-medium">
+                          {monthNames[summary.month - 1]}
+                          {isCurrentMonth && <span className="ml-2 text-xs text-blue-600">(bieżący)</span>}
+                        </TableCell>
+                        <TableCell className="text-right text-green-600 font-medium">
+                          {summary.acceptedHours.toFixed(1)}h
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          {summary.acceptedHours.toFixed(1)}h
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
 
         {/* Ostatnie rozliczenie */}
         {info.lastSettlement && (

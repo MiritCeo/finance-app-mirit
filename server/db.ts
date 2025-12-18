@@ -36,6 +36,7 @@ import {
   teamGoals, InsertTeamGoal, TeamGoal,
   vacationPlans, InsertVacationPlan, VacationPlan,
   knowledgeBasePoints, InsertKnowledgeBasePoint, KnowledgeBasePoint,
+  hrappkaEmployeeInfoCache, InsertHRappkaEmployeeInfoCache, HRappkaEmployeeInfoCache,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -845,7 +846,8 @@ export type GamificationSource =
   | "team_goal"
   | "innovation"
   | "vacation_planning"
-  | "office_presence";
+  | "office_presence"
+  | "hrappka_daily_hours";
 
 /**
  * Simple leveling curve: each level requires 1,000 total points.
@@ -1020,7 +1022,11 @@ export async function getGamificationSummaryForEmployee(
     points: Number(row.total ?? 0),
   }));
 
+  // Loguj breakdown dla debugowania
+  console.log(`[Gamification] Breakdown by source for employee ${employeeId}:`, breakdownBySource);
+
   const totalPoints = breakdownBySource.reduce((sum, row) => sum + row.points, 0);
+  console.log(`[Gamification] Total points for employee ${employeeId}: ${totalPoints} (from ${breakdownBySource.length} sources)`);
   const { pointsInCurrentLevel, nextLevelThreshold } = calculateLevelFromTotalPoints(totalPoints);
 
   const officeSource = breakdownBySource.find((r) => r.source === "office_presence");
@@ -2899,4 +2905,160 @@ export async function endOfficeSessionForUser(userId: number): Promise<OfficePre
   }
 
   return await getOfficePresenceStatusForUser(userId);
+}
+
+/**
+ * Pobiera cache danych HRappka dla pracownika
+ */
+export async function getHRappkaEmployeeInfoCache(employeeId: number): Promise<HRappkaEmployeeInfoCache | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const cache = await db
+    .select()
+    .from(hrappkaEmployeeInfoCache)
+    .where(eq(hrappkaEmployeeInfoCache.employeeId, employeeId))
+    .limit(1);
+
+  if (cache.length === 0) {
+    return null;
+  }
+
+  const cached = cache[0];
+  
+  // Sprawdź czy cache nie wygasł
+  const now = new Date();
+  const expiresAt = new Date(cached.expiresAt);
+  
+  if (expiresAt < now) {
+    // Cache wygasł - usuń go
+    await db
+      .delete(hrappkaEmployeeInfoCache)
+      .where(eq(hrappkaEmployeeInfoCache.employeeId, employeeId));
+    return null;
+  }
+
+  return cached;
+}
+
+/**
+ * Zapisuje cache danych HRappka dla pracownika
+ */
+export async function setHRappkaEmployeeInfoCache(
+  employeeId: number,
+  data: unknown,
+  cacheDurationHours: number = 1
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + cacheDurationHours * 60 * 60 * 1000); // cacheDurationHours godzin
+
+  const cacheData: InsertHRappkaEmployeeInfoCache = {
+    employeeId,
+    data: JSON.stringify(data),
+    cachedAt: now,
+    expiresAt,
+  };
+
+  // Sprawdź czy już istnieje cache dla tego pracownika
+  const existing = await getHRappkaEmployeeInfoCache(employeeId);
+  
+  if (existing) {
+    // Aktualizuj istniejący cache
+    await db
+      .update(hrappkaEmployeeInfoCache)
+      .set({
+        data: cacheData.data,
+        cachedAt: now,
+        expiresAt,
+        updatedAt: now,
+      })
+      .where(eq(hrappkaEmployeeInfoCache.employeeId, employeeId));
+  } else {
+    // Utwórz nowy cache
+    await db.insert(hrappkaEmployeeInfoCache).values(cacheData);
+  }
+}
+
+/**
+ * Usuwa cache danych HRappka dla pracownika (force refresh)
+ */
+export async function deleteHRappkaEmployeeInfoCache(employeeId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .delete(hrappkaEmployeeInfoCache)
+    .where(eq(hrappkaEmployeeInfoCache.employeeId, employeeId));
+}
+
+/**
+ * Sprawdza czy punkty za uzupełnienie godzin wczoraj już zostały przyznane
+ */
+export async function hasHRappkaDailyHoursPointsForDate(
+  employeeId: number,
+  date: Date
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const startOfDay = new Date(dateStr + "T00:00:00");
+  const endOfDay = new Date(dateStr + "T23:59:59");
+
+  const points = await db
+    .select()
+    .from(employeePoints)
+    .where(
+      and(
+        eq(employeePoints.employeeId, employeeId),
+        eq(employeePoints.source, "hrappka_daily_hours" as any),
+        gte(employeePoints.createdAt, startOfDay),
+        lte(employeePoints.createdAt, endOfDay)
+      )
+    )
+    .limit(1);
+
+  return points.length > 0;
+}
+
+/**
+ * Przyznaje punkty za uzupełnienie godzin wczoraj w HRappka
+ */
+export async function awardHRappkaDailyHoursPoints(
+  employeeId: number,
+  date: Date,
+  hours: number
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Sprawdź czy punkty już zostały przyznane
+  const alreadyAwarded = await hasHRappkaDailyHoursPointsForDate(employeeId, date);
+  if (alreadyAwarded) {
+    console.log(`[Gamification] Points already awarded for HRappka daily hours on ${date.toISOString().split('T')[0]} for employee ${employeeId}`);
+    return false;
+  }
+
+  // Przyznaj 15 punktów
+  const points = 15;
+  const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  
+  try {
+    await applyGamificationPointsForEmployee({
+      employeeId,
+      points,
+      source: "hrappka_daily_hours" as GamificationSource,
+      description: `Uzupełnienie godzin w HRappka za dzień ${dateStr} (${hours.toFixed(1)}h)`,
+      date,
+    });
+    
+    console.log(`[Gamification] Awarded ${points} points for HRappka daily hours on ${dateStr} for employee ${employeeId}`);
+    return true;
+  } catch (error) {
+    console.error(`[Gamification] Failed to award HRappka daily hours points for employee ${employeeId}:`, error);
+    return false;
+  }
 }

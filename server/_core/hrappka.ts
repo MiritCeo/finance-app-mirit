@@ -159,6 +159,17 @@ export interface HRappkaSettlement {
 }
 
 /**
+ * Podsumowanie godzin dla miesiąca
+ */
+export interface HRappkaMonthlySummary {
+  month: number; // 1-12
+  year: number;
+  acceptedHours: number; // Zaakceptowane godziny
+  unacceptedHours: number; // Niezaakceptowane godziny
+  totalHours: number; // Wszystkie godziny (zaakceptowane + niezaakceptowane)
+}
+
+/**
  * Informacje o pracowniku z HRappka (dla panelu pracownika)
  */
 export interface HRappkaEmployeeInfo {
@@ -166,6 +177,7 @@ export interface HRappkaEmployeeInfo {
   totalHoursThisYear: number; // Łączna ilość zaraportowanych godzin w bieżącym roku
   totalHoursThisWeek: number; // Łączna ilość zaraportowanych godzin w bieżącym tygodniu
   averageHoursPerDay: number; // Średnia godzin dziennie w bieżącym miesiącu
+  monthlySummary?: HRappkaMonthlySummary[]; // Podsumowanie godzin per miesiąc
   vacationDaysRemaining?: number; // Pozostałe dni urlopu (jeśli dostępne w API)
   contractEndDate?: string; // Data zakończenia umowy (YYYY-MM-DD)
   contractStartDate?: string; // Data rozpoczęcia umowy (YYYY-MM-DD)
@@ -928,7 +940,8 @@ export async function getHRappkaTimeReports(
   employeeId: number,
   startDate?: string,
   endDate?: string,
-  type: "REAL" | "NORMALIZED" = "REAL"
+  type: "REAL" | "NORMALIZED" = "REAL",
+  includeUnaccepted: boolean = false
 ): Promise<HRappkaTimeReport[]> {
   try {
     // Endpoint zgodnie z dokumentacją: POST /api/employees/calendar
@@ -1028,13 +1041,18 @@ export async function getHRappkaTimeReports(
                 return;
               }
               
-              // Pomiń wydarzenia które nie są zrealizowane
+              // Jeśli includeUnaccepted jest false, pomiń wydarzenia które nie są zrealizowane
               // REALIZED i REALIZED_FROM_REPORT są prawidłowymi stanami
-              if (event.cuce_realization_state && 
-                  event.cuce_realization_state !== "REALIZED" && 
-                  event.cuce_realization_state !== "REALIZED_FROM_REPORT") {
-                console.log(`[HRappka] Skipping event with state: ${event.cuce_realization_state}`);
-                return;
+              if (!includeUnaccepted) {
+                if (event.cuce_realization_state && 
+                    event.cuce_realization_state !== "REALIZED" && 
+                    event.cuce_realization_state !== "REALIZED_FROM_REPORT") {
+                  console.log(`[HRappka] Skipping event with state: ${event.cuce_realization_state}`);
+                  return;
+                }
+              } else {
+                // Jeśli includeUnaccepted jest true, pomiń tylko usunięte
+                // Wszystkie inne stany (w tym niezaakceptowane) są uwzględniane
               }
               
               // Parsuj godziny z cuce_quantity (nowy format) lub cuce_amount (stary format)
@@ -1045,12 +1063,24 @@ export async function getHRappkaTimeReports(
                 return;
               }
               
+              // Określ czy godziny są zaakceptowane
+              // Zaakceptowane to: REALIZED, REALIZED_FROM_REPORT, lub brak stanu (domyślnie zaakceptowane)
+              let isAccepted = true;
+              if (includeUnaccepted && event.cuce_realization_state) {
+                isAccepted = event.cuce_realization_state === "REALIZED" || event.cuce_realization_state === "REALIZED_FROM_REPORT";
+                // Loguj niezaakceptowane dla debugowania
+                if (!isAccepted) {
+                  console.log(`[HRappka] Unaccepted event: cuce_id=${event.cuce_id}, date=${event.cuce_date || date}, state=${event.cuce_realization_state}, hours=${hours}`);
+                }
+              }
+              
               reports.push({
                 employeeId: employeeId,
                 date: event.cuce_date || date,
                 hours: hours,
                 description: event.cuce_description || event.cuce_category_detail_additional || event.title,
                 projectName: event.cuce_category_detail_additional,
+                isAccepted,
               });
             });
           });
@@ -1068,10 +1098,29 @@ export async function getHRappkaTimeReports(
           
           eventsArray.forEach((event) => {
             if (event.cuce_deleted) return;
-            if (event.cuce_realization_state && event.cuce_realization_state !== "REALIZED") return;
             
-            const hours = parseFloat(event.cuce_amount || "0");
+            // Jeśli includeUnaccepted jest false, pomiń niezaakceptowane
+            if (!includeUnaccepted) {
+              if (event.cuce_realization_state && 
+                  event.cuce_realization_state !== "REALIZED" && 
+                  event.cuce_realization_state !== "REALIZED_FROM_REPORT") return;
+            }
+            
+            // Parsuj godziny z cuce_quantity (nowy format) lub cuce_amount (stary format)
+            const hoursStr = event.cuce_quantity || event.cuce_amount || "0";
+            const hours = parseFloat(hoursStr);
             if (hours <= 0) return;
+            
+            // Określ czy godziny są zaakceptowane
+            // Zaakceptowane to: REALIZED, REALIZED_FROM_REPORT, lub brak stanu (domyślnie zaakceptowane)
+            let isAccepted = true;
+            if (includeUnaccepted && event.cuce_realization_state) {
+              isAccepted = event.cuce_realization_state === "REALIZED" || event.cuce_realization_state === "REALIZED_FROM_REPORT";
+              // Loguj niezaakceptowane dla debugowania
+              if (!isAccepted) {
+                console.log(`[HRappka] Unaccepted event: cuce_id=${event.cuce_id}, date=${event.cuce_date || date}, state=${event.cuce_realization_state}, hours=${hours}`);
+              }
+            }
             
             reports.push({
               employeeId: employeeId,
@@ -1079,6 +1128,7 @@ export async function getHRappkaTimeReports(
               hours: hours,
               description: event.cuce_description || event.cuce_category_detail_additional || event.title,
               projectName: event.cuce_category_detail_additional,
+              isAccepted,
             });
           });
         });
@@ -1094,12 +1144,29 @@ export async function getHRappkaTimeReports(
       }
     }
     
-    console.log(`[HRappka] Fetched ${reports.length} time reports for employee ${employeeId}`);
+    console.log(`[HRappka] Fetched ${reports.length} time reports for employee ${employeeId} (date range: ${startDate || "all"} to ${endDate || "all"})`);
+    
+    // Sprawdź czy wszystkie daty są w zakresie
+    if (startDate && endDate) {
+      const outOfRange = reports.filter(r => {
+        const reportDate = r.date;
+        return reportDate < startDate || reportDate > endDate;
+      });
+      if (outOfRange.length > 0) {
+        console.warn(`[HRappka] Found ${outOfRange.length} reports outside date range (${startDate} to ${endDate}):`, outOfRange.slice(0, 5).map(r => r.date));
+      }
+      
+      // Pokaż sumę godzin dla debugowania
+      const totalHours = reports.reduce((sum, r) => sum + (r.hours || 0), 0);
+      console.log(`[HRappka] Total hours in range for employee ${employeeId}: ${totalHours.toFixed(2)}h (from ${reports.length} reports)`);
+    }
+    
     if (reports.length === 0) {
       console.warn("[HRappka] No reports found. Response structure:", {
         hasResponse: !!response,
         responseType: typeof response,
         responseKeys: response && typeof response === "object" ? Object.keys(response) : [],
+        dateRange: `${startDate || "all"} to ${endDate || "all"}`,
       });
     }
     return reports;
@@ -1168,7 +1235,14 @@ export async function getHRappkaSettlements(
     console.log(`[HRappka] No settlements found in response`);
     return [];
   } catch (error) {
-    console.error(`[HRappka] Error fetching settlements for employee ${employeeId}:`, error);
+    // Sprawdź czy to błąd 403 (brak dostępu) - to jest oczekiwane dla niektórych kont
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("403") || errorMessage.includes("Forbidden") || errorMessage.includes("No access to method")) {
+      console.log(`[HRappka] Settlements endpoint not accessible (403) for employee ${employeeId} - this is expected for some accounts without proper permissions`);
+      return [];
+    }
+    // Dla innych błędów loguj jako warning, ale nie przerywaj działania
+    console.warn(`[HRappka] Could not fetch settlements for employee ${employeeId}:`, errorMessage);
     // Nie rzucaj błędu - zwróć pustą listę jeśli nie udało się pobrać
     return [];
   }
@@ -1184,7 +1258,8 @@ export async function getHRappkaContracts(employeeId: number): Promise<HRappkaCo
   try {
     const contractsEndpoint = "/api/contracts/list";
     
-    const response = await callHRappkaApi<{ contracts?: HRappkaContract[] }>(
+    console.log(`[HRappka] Fetching contracts for employee ${employeeId}`);
+    const response = await callHRappkaApi<unknown>(
       contractsEndpoint,
       {
         method: "GET",
@@ -1194,13 +1269,55 @@ export async function getHRappkaContracts(employeeId: number): Promise<HRappkaCo
       }
     );
     
-    if (response && typeof response === "object" && "contracts" in response) {
-      const contracts = response.contracts || [];
-      // Filtruj tylko aktywne umowy (nieusunięte)
-      return contracts.filter(c => !c.cuc_deleted);
+    console.log(`[HRappka] Contracts API response type:`, typeof response);
+    console.log(`[HRappka] Contracts API response preview:`, JSON.stringify(response).substring(0, 1000));
+    
+    // Sprawdź różne możliwe formaty odpowiedzi
+    let contracts: HRappkaContract[] = [];
+    
+    if (response && typeof response === "object") {
+      // Format 1: { contracts: [...] }
+      if ("contracts" in response && Array.isArray((response as { contracts?: unknown }).contracts)) {
+        contracts = (response as { contracts: HRappkaContract[] }).contracts;
+        console.log(`[HRappka] Found contracts array with ${contracts.length} items`);
+      }
+      // Format 2: Tablica bezpośrednio
+      else if (Array.isArray(response)) {
+        contracts = response as HRappkaContract[];
+        console.log(`[HRappka] Response is direct array with ${contracts.length} items`);
+      }
+      // Format 3: { data: [...] }
+      else if ("data" in response && Array.isArray((response as { data?: unknown }).data)) {
+        contracts = (response as { data: HRappkaContract[] }).data;
+        console.log(`[HRappka] Found data array with ${contracts.length} items`);
+      }
+      // Format 4: Obiekt z kluczami będącymi ID umów
+      else {
+        const keys = Object.keys(response);
+        if (keys.length > 0) {
+          contracts = Object.values(response) as HRappkaContract[];
+          console.log(`[HRappka] Found contracts object with ${contracts.length} items`);
+        }
+      }
     }
     
-    return [];
+    // Loguj szczegóły umów dla debugowania
+    if (contracts.length > 0) {
+      console.log(`[HRappka] Sample contracts (first 3):`, contracts.slice(0, 3).map(c => ({
+        id: c.cuc_id,
+        type: c.cuc_type,
+        startDate: c.cuc_start_date,
+        endDate: c.cuc_end_date,
+        state: c.cuc_state,
+        deleted: c.cuc_deleted,
+      })));
+    }
+    
+    // Filtruj tylko aktywne umowy (nieusunięte)
+    const activeContracts = contracts.filter(c => !c.cuc_deleted);
+    console.log(`[HRappka] Filtered ${activeContracts.length} active contracts (out of ${contracts.length} total)`);
+    
+    return activeContracts;
   } catch (error) {
     console.error(`[HRappka] Error fetching contracts for employee ${employeeId}:`, error);
     // Nie rzucaj błędu - zwróć pustą listę jeśli nie udało się pobrać
@@ -1238,13 +1355,39 @@ export async function getHRappkaEmployeeInfo(employeeId: number): Promise<HRappk
     const weekStart = `${weekStartDate.getFullYear()}-${String(weekStartDate.getMonth() + 1).padStart(2, '0')}-${String(weekStartDate.getDate()).padStart(2, '0')}`;
     const weekEnd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     
-    // Pobierz godziny dla bieżącego miesiąca
-    const monthReports = await getHRappkaTimeReports(employeeId, monthStart, monthEnd, "REAL");
-    const totalHoursThisMonth = monthReports.reduce((sum, report) => sum + (report.hours || 0), 0);
+    // Pobierz podsumowanie godzin per miesiąc dla całego roku (użyjemy tego do obliczenia totalHoursThisYear)
+    // To zapewni spójność z tabelą miesięczną
+    const monthlySummary: HRappkaMonthlySummary[] = [];
+    let totalAcceptedHoursThisYear = 0;
     
-    // Pobierz godziny dla bieżącego roku
-    const yearReports = await getHRappkaTimeReports(employeeId, yearStart, yearEnd, "REAL");
-    const totalHoursThisYear = yearReports.reduce((sum, report) => sum + (report.hours || 0), 0);
+    console.log(`[HRappka] Fetching monthly summary for employee ${employeeId} for year ${currentYear}`);
+    for (let month = 1; month <= 12; month++) {
+      const monthStart = `${currentYear}-${String(month).padStart(2, '0')}-01`;
+      const lastDay = new Date(currentYear, month, 0).getDate();
+      const monthEnd = `${currentYear}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      
+      // Pobierz zaakceptowane godziny
+      const monthAcceptedReports = await getHRappkaTimeReports(employeeId, monthStart, monthEnd, "REAL", false);
+      const acceptedHours = monthAcceptedReports.reduce((sum, report) => sum + (report.hours || 0), 0);
+      totalAcceptedHoursThisYear += acceptedHours;
+      
+      monthlySummary.push({
+        month,
+        year: currentYear,
+        acceptedHours,
+        unacceptedHours: 0, // Nie pobieramy niezaakceptowanych godzin
+        totalHours: acceptedHours,
+      });
+    }
+    
+    // Oblicz totalHoursThisYear jako suma zaakceptowanych godzin (zgodnie z tabelą)
+    const totalHoursThisYear = totalAcceptedHoursThisYear;
+    console.log(`[HRappka] Total hours this year for employee ${employeeId}: ${totalHoursThisYear.toFixed(2)}h`);
+    
+    // Pobierz godziny dla bieżącego miesiąca (użyj danych z monthlySummary dla bieżącego miesiąca)
+    const currentMonthSummary = monthlySummary.find(m => m.month === currentMonth);
+    const totalHoursThisMonth = currentMonthSummary?.acceptedHours || 0;
+    console.log(`[HRappka] Total hours this month for employee ${employeeId}: ${totalHoursThisMonth.toFixed(2)}h`);
     
     // Pobierz godziny dla bieżącego tygodnia
     const weekReports = await getHRappkaTimeReports(employeeId, weekStart, weekEnd, "REAL");
@@ -1256,31 +1399,111 @@ export async function getHRappkaEmployeeInfo(employeeId: number): Promise<HRappk
     const daysPassed = Math.min(todayDay, daysInMonth);
     const averageHoursPerDay = daysPassed > 0 ? totalHoursThisMonth / daysPassed : 0;
     
+    console.log(`[HRappka] Current month summary: ${totalHoursThisMonth.toFixed(2)}h, average: ${averageHoursPerDay.toFixed(2)}h/day`);
+    
     // Sprawdź czy wczoraj były uzupełnione godziny
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
     
+    console.log(`[HRappka] Checking yesterday hours for employee ${employeeId}, date: ${yesterdayStr}`);
+    
+    // Pobierz wszystkie raporty za wczoraj (w tym niezaakceptowane) - użytkownik może mieć niezaakceptowane godziny
     const yesterdayReports = await getHRappkaTimeReports(
       employeeId,
       yesterdayStr,
       yesterdayStr,
-      "REAL"
+      "REAL",
+      true // includeUnaccepted: true - sprawdzamy też niezaakceptowane godziny
     );
+    
+    console.log(`[HRappka] Found ${yesterdayReports.length} reports for yesterday (${yesterdayStr}):`, yesterdayReports.map(r => ({
+      date: r.date,
+      hours: r.hours,
+      isAccepted: r.isAccepted,
+      description: r.description?.substring(0, 50)
+    })));
+    
     const yesterdayHours = yesterdayReports.reduce((sum, report) => sum + (report.hours || 0), 0);
     const yesterdayHoursReported = yesterdayHours > 0;
+    
+    console.log(`[HRappka] Yesterday hours summary for employee ${employeeId}: total=${yesterdayHours.toFixed(2)}h, reported=${yesterdayHoursReported}`);
     
     // Pobierz umowy pracownika
     const contracts = await getHRappkaContracts(employeeId);
     
-    // Znajdź aktywną umowę (najnowszą, nieusuniętą, z najpóźniejszą datą rozpoczęcia)
-    const activeContract = contracts
-      .filter(c => c.cuc_state !== "SETTLED" && !c.cuc_deleted)
-      .sort((a, b) => {
-        const dateA = new Date(a.cuc_start_date).getTime();
-        const dateB = new Date(b.cuc_start_date).getTime();
+    // Loguj wszystkie umowy przed filtrowaniem
+    console.log(`[HRappka] All contracts for employee ${employeeId} (${contracts.length} total):`, contracts.map(c => ({
+      id: c.cuc_id,
+      type: c.cuc_type,
+      startDate: c.cuc_start_date,
+      endDate: c.cuc_end_date,
+      state: c.cuc_state,
+      deleted: c.cuc_deleted,
+    })));
+    
+    // Znajdź aktywne umowy (nieusunięte, nie rozliczone, z datą rozpoczęcia)
+    // Używamy zmiennej 'now' zadeklarowanej na początku funkcji
+    const activeContracts = contracts
+      .filter(c => {
+        // Filtruj tylko umowy które nie są rozliczone i nie są usunięte
+        const isNotSettled = !c.cuc_state || c.cuc_state !== "SETTLED";
+        const isNotDeleted = !c.cuc_deleted;
+        const hasStartDate = !!c.cuc_start_date;
+        
+        // Sprawdź czy umowa nie jest zakończona (jeśli ma datę zakończenia, musi być w przyszłości)
+        let isNotEnded = true;
+        if (c.cuc_end_date) {
+          const endDate = new Date(c.cuc_end_date);
+          isNotEnded = endDate >= now;
+        }
+        
+        return isNotSettled && isNotDeleted && hasStartDate && isNotEnded;
+      });
+    
+    console.log(`[HRappka] Filtered ${activeContracts.length} active contracts (not settled, not deleted, not ended)`);
+    
+    // Wybierz aktywną umowę według priorytetu:
+    // 1. Najpierw sprawdź czy jest umowa zlecenie (ORDER_CONTRACT)
+    // 2. Jeśli nie, wybierz umowę o pracę (EMPLOYMENT_CONTRACT)
+    // 3. Jeśli nie ma żadnej z powyższych, wybierz najnowszą (po dacie rozpoczęcia)
+    let activeContract = activeContracts.find(c => 
+      c.cuc_type === "ORDER_CONTRACT" || c.cuc_type === "order_contract" || c.cuc_type === "Zlecenie"
+    );
+    
+    if (!activeContract) {
+      // Jeśli nie ma umowy zlecenie, szukaj umowy o pracę
+      activeContract = activeContracts.find(c => 
+        c.cuc_type === "EMPLOYMENT_CONTRACT" || c.cuc_type === "employment_contract" || c.cuc_type === "Umowa o pracę"
+      );
+    }
+    
+    if (!activeContract && activeContracts.length > 0) {
+      // Jeśli nie ma żadnej z powyższych, wybierz najnowszą (po dacie rozpoczęcia)
+      activeContracts.sort((a, b) => {
+        const dateA = a.cuc_start_date ? new Date(a.cuc_start_date).getTime() : 0;
+        const dateB = b.cuc_start_date ? new Date(b.cuc_start_date).getTime() : 0;
         return dateB - dateA; // Najnowsza pierwsza
-      })[0];
+      });
+      activeContract = activeContracts[0];
+    }
+    
+    if (activeContract) {
+      console.log(`[HRappka] Selected active contract:`, {
+        id: activeContract.cuc_id,
+        type: activeContract.cuc_type,
+        startDate: activeContract.cuc_start_date,
+        endDate: activeContract.cuc_end_date,
+        state: activeContract.cuc_state,
+        selectionReason: activeContract.cuc_type === "ORDER_CONTRACT" || activeContract.cuc_type === "order_contract" || activeContract.cuc_type === "Zlecenie" 
+          ? "ORDER_CONTRACT priority" 
+          : activeContract.cuc_type === "EMPLOYMENT_CONTRACT" || activeContract.cuc_type === "employment_contract" || activeContract.cuc_type === "Umowa o pracę"
+          ? "EMPLOYMENT_CONTRACT priority"
+          : "Latest by start date"
+      });
+    } else {
+      console.log(`[HRappka] No active contract found for employee ${employeeId}. Total contracts: ${contracts.length}, Active after filtering: ${activeContracts.length}`);
+    }
     
     const contractEndDate = activeContract?.cuc_end_date || undefined;
     const contractStartDate = activeContract?.cuc_start_date || undefined;
@@ -1334,6 +1557,7 @@ export async function getHRappkaEmployeeInfo(employeeId: number): Promise<HRappk
       // Nie rzucaj błędu - rozliczenia są opcjonalne
     }
     
+    
     // TODO: Pobierz informacje o urlopach z HRappka API
     // Na razie zwracamy undefined - można to rozszerzyć gdy znajdziemy odpowiedni endpoint
     const vacationDaysRemaining = undefined;
@@ -1343,6 +1567,7 @@ export async function getHRappkaEmployeeInfo(employeeId: number): Promise<HRappk
       totalHoursThisYear,
       totalHoursThisWeek,
       averageHoursPerDay,
+      monthlySummary,
       vacationDaysRemaining,
       contractEndDate,
       contractStartDate,

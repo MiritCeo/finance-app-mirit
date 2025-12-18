@@ -4658,7 +4658,10 @@ Odpowiadaj na pytania w sposób zwięzły, profesjonalny i pomocny. Jeśli pytan
      * Pobiera informacje o pracowniku z HRappka (dla panelu pracownika)
      */
     getEmployeeInfo: publicProcedure
-      .input(z.object({ employeeId: z.number().optional() }))
+      .input(z.object({ 
+        employeeId: z.number().optional(),
+        forceRefresh: z.boolean().optional().default(false), // Opcjonalny parametr do wymuszenia odświeżenia
+      }))
       .query(async ({ input, ctx }) => {
         try {
           // Jeśli employeeId nie jest podane, spróbuj pobrać z kontekstu użytkownika
@@ -4679,10 +4682,111 @@ Odpowiadaj na pytania w sposób zwięzły, profesjonalny i pomocny. Jeśli pytan
             });
           }
           
+          // Jeśli forceRefresh jest false, sprawdź cache
+          // UWAGA: Dla danych "wczoraj" zawsze pobieramy świeże dane, ponieważ mogą się zmieniać w ciągu dnia
+          // Cache używamy tylko dla danych statystycznych (miesięczne, roczne podsumowania)
+          const shouldUseCache = !input.forceRefresh;
+          
+          if (shouldUseCache) {
+            const cached = await db.getHRappkaEmployeeInfoCache(targetEmployeeId);
+            if (cached) {
+              // Sprawdź czy cache nie jest zbyt stary dla danych "wczoraj" (max 1 godzina)
+              const cacheAge = new Date().getTime() - new Date(cached.cachedAt).getTime();
+              const maxCacheAge = 60 * 60 * 1000; // 1 godzina
+              
+              if (cacheAge < maxCacheAge) {
+                console.log(`[HRappka] Using cached data for employee ${targetEmployeeId} (cached at: ${cached.cachedAt}, age: ${Math.round(cacheAge / 1000 / 60)}min)`);
+                try {
+                  const info = JSON.parse(cached.data);
+                  
+                  // Sprawdź czy dane "wczoraj" w cache są aktualne (czy wczoraj to nadal ten sam dzień)
+                  const now = new Date();
+                  const yesterday = new Date(now);
+                  yesterday.setDate(yesterday.getDate() - 1);
+                  const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+                  
+                  // Jeśli cache jest starszy niż 1 godzina lub jeśli wczoraj mogło się zmienić, pobierz świeże dane
+                  // (np. jeśli cache był zrobiony przed północą, a teraz jest po północy, to "wczoraj" to inny dzień)
+                  const cacheDate = new Date(cached.cachedAt);
+                  const cacheYesterday = new Date(cacheDate);
+                  cacheYesterday.setDate(cacheYesterday.getDate() - 1);
+                  const cacheYesterdayStr = `${cacheYesterday.getFullYear()}-${String(cacheYesterday.getMonth() + 1).padStart(2, '0')}-${String(cacheYesterday.getDate()).padStart(2, '0')}`;
+                  
+                  if (yesterdayStr === cacheYesterdayStr && cacheAge < maxCacheAge) {
+                    // Cache jest aktualny - użyj go
+                    return {
+                      success: true,
+                      info,
+                      cached: true,
+                      cachedAt: cached.cachedAt,
+                    };
+                  } else {
+                    console.log(`[HRappka] Cache outdated for yesterday check (cache yesterday: ${cacheYesterdayStr}, current yesterday: ${yesterdayStr}) - fetching fresh data`);
+                  }
+                } catch (parseError) {
+                  console.error(`[HRappka] Error parsing cached data for employee ${targetEmployeeId}:`, parseError);
+                  // Jeśli nie można sparsować cache, usuń go i pobierz nowe dane
+                  await db.deleteHRappkaEmployeeInfoCache(targetEmployeeId);
+                }
+              } else {
+                console.log(`[HRappka] Cache too old (${Math.round(cacheAge / 1000 / 60)}min) - fetching fresh data`);
+              }
+            }
+          } else {
+            // Usuń cache jeśli wymuszamy odświeżenie
+            await db.deleteHRappkaEmployeeInfoCache(targetEmployeeId);
+            console.log(`[HRappka] Force refresh requested for employee ${targetEmployeeId} - cache cleared`);
+          }
+          
+          // Pobierz nowe dane z HRappka
+          console.log(`[HRappka] Fetching fresh data from HRappka API for employee ${targetEmployeeId}`);
           const info = await getHRappkaEmployeeInfo(targetEmployeeId);
+          
+          // Sprawdź czy pracownik ma przypisane employeeId w naszej bazie (do przyznawania punktów)
+          let localEmployeeId: number | undefined = undefined;
+          if (ctx.user?.employeeId) {
+            localEmployeeId = ctx.user.employeeId;
+          } else if (input.employeeId) {
+            // Jeśli employeeId jest podane jako parametr, znajdź lokalnego pracownika
+            const employee = await db.getEmployeeByHRappkaId(targetEmployeeId);
+            if (employee) {
+              localEmployeeId = employee.id;
+            }
+          }
+          
+          // Jeśli wczoraj były uzupełnione godziny i mamy lokalnego pracownika, przyznaj punkty
+          if (info.yesterdayHoursReported && info.yesterdayHours && localEmployeeId) {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            try {
+              const awarded = await db.awardHRappkaDailyHoursPoints(
+                localEmployeeId,
+                yesterday,
+                info.yesterdayHours
+              );
+              if (awarded) {
+                console.log(`[HRappka] Awarded gamification points for daily hours to employee ${localEmployeeId}`);
+              }
+            } catch (pointsError) {
+              console.error(`[HRappka] Error awarding gamification points:`, pointsError);
+              // Nie rzucaj błędu - przyznawanie punktów jest opcjonalne
+            }
+          }
+          
+          // Zapisz do cache (cache na 1 godzinę)
+          try {
+            await db.setHRappkaEmployeeInfoCache(targetEmployeeId, info, 1);
+            console.log(`[HRappka] Cached data for employee ${targetEmployeeId}`);
+          } catch (cacheError) {
+            console.error(`[HRappka] Error caching data for employee ${targetEmployeeId}:`, cacheError);
+            // Nie rzucaj błędu - cache jest opcjonalny
+          }
+          
           return {
             success: true,
             info,
+            cached: false,
           };
         } catch (error) {
           console.error("[HRappka] Error fetching employee info:", error);
