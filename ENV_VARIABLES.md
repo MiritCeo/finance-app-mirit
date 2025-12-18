@@ -306,6 +306,144 @@ LOG_LEVEL="info"
 
 ---
 
+### HRAPPKA_BASE_URL
+
+**Typ**: String  
+**Wymagane**: Tak (tylko jeśli używasz integracji z HRappka)  
+**Opis**: Bazowy URL API HRappka
+
+**Przykład**:
+```bash
+HRAPPKA_BASE_URL="https://app.hrappka.pl"
+```
+
+**Uwaga**: URL nie powinien kończyć się na `/`
+
+---
+
+### HRAPPKA_EMAIL
+
+**Typ**: String  
+**Wymagane**: Tak (tylko jeśli używasz integracji z HRappka)  
+**Opis**: Email administratora do logowania w HRappka API
+
+**Przykład**:
+```bash
+HRAPPKA_EMAIL="admin@firma.pl"
+```
+
+**Uwaga**: Wymaga również ustawienia `HRAPPKA_PASSWORD` i `HRAPPKA_COMPANY_ID`
+
+---
+
+### HRAPPKA_PASSWORD
+
+**Typ**: String  
+**Wymagane**: Tak (tylko jeśli używasz integracji z HRappka)  
+**Opis**: Hasło administratora do logowania w HRappka API
+
+**Przykład**:
+```bash
+HRAPPKA_PASSWORD="VeryStrongPassword1#"
+```
+
+**Uwaga**: 
+- Wymaga również ustawienia `HRAPPKA_EMAIL` i `HRAPPKA_COMPANY_ID`
+- Hasło jest poufne - nie udostępniaj go publicznie
+- System automatycznie pobierze token przy pierwszym użyciu
+
+---
+
+### HRAPPKA_COMPANY_ID
+
+**Typ**: Number  
+**Wymagane**: Tak (tylko jeśli używasz integracji z HRappka)  
+**Opis**: ID firmy w systemie HRappka
+
+**Przykład**:
+```bash
+HRAPPKA_COMPANY_ID="1"
+```
+
+**Uwaga**: Wymaga również ustawienia `HRAPPKA_EMAIL` i `HRAPPKA_PASSWORD`
+
+---
+
+### HRAPPKA_AUTHENTICATE_OLD_API
+
+**Typ**: Boolean (string "true"/"false")  
+**Wymagane**: Nie  
+**Opis**: Czy używać starego API do autentykacji
+
+**Przykład**:
+```bash
+HRAPPKA_AUTHENTICATE_OLD_API="false"
+```
+
+**Domyślnie**: `false`
+
+---
+
+### HRAPPKA_TOKEN
+
+**Typ**: String  
+**Wymagane**: Nie (opcjonalnie - jeśli masz już wygenerowany token)  
+**Opis**: Token autentykacji HRappka (jeśli masz już wygenerowany token, możesz go użyć zamiast logowania)
+
+**Przykład**:
+```bash
+HRAPPKA_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+**Uwaga**: Token może wygasnąć - wtedy system automatycznie użyje EMAIL/PASSWORD do odświeżenia
+
+---
+
+### HRAPPKA_EMPLOYEES_ENDPOINT
+
+**Typ**: String  
+**Wymagane**: Nie  
+**Opis**: Endpoint do pobierania listy pracowników (domyślnie: "/api/v1/employees")
+
+**Przykład**:
+```bash
+HRAPPKA_EMPLOYEES_ENDPOINT="/api/employees"
+```
+
+**Uwaga**: Sprawdź dokumentację API: https://hrappka.docs.apiary.io/# aby znaleźć właściwy endpoint
+
+---
+
+### HRAPPKA_TIME_REPORTS_ENDPOINT
+
+**Typ**: String  
+**Wymagane**: Nie  
+**Opis**: Endpoint do pobierania raportów godzinowych dla pracownika (domyślnie: "/api/v1/employees/{employeeId}/time-reports"). Użyj `{employeeId}` jako placeholder.
+
+**Przykład**:
+```bash
+HRAPPKA_TIME_REPORTS_ENDPOINT="/api/employees/{employeeId}/reports"
+```
+
+**Uwaga**: Sprawdź dokumentację API: https://hrappka.docs.apiary.io/# aby znaleźć właściwy endpoint
+
+---
+
+### HRAPPKA_ALL_TIME_REPORTS_ENDPOINT
+
+**Typ**: String  
+**Wymagane**: Nie  
+**Opis**: Endpoint do pobierania wszystkich raportów godzinowych (domyślnie: "/api/v1/time-reports")
+
+**Przykład**:
+```bash
+HRAPPKA_ALL_TIME_REPORTS_ENDPOINT="/api/time-reports"
+```
+
+**Uwaga**: Sprawdź dokumentację API: https://hrappka.docs.apiary.io/# aby znaleźć właściwy endpoint
+
+---
+
 ### SESSION_COOKIE_NAME
 
 **Typ**: String  
@@ -441,6 +579,29 @@ BUILT_IN_FORGE_API_URL="https://forge.manus.im"
 BUILT_IN_FORGE_API_KEY="your-backend-key"
 VITE_FRONTEND_FORGE_API_URL="https://forge.manus.im"
 VITE_FRONTEND_FORGE_API_KEY="your-frontend-key"
+```
+
+---
+
+### Konfiguracja z HRappka API
+
+```bash
+DATABASE_URL="mysql://profitflow:haslo123@localhost:3306/profitflow"
+JWT_SECRET="xK9mP2vL8qN4rT6wY3zA5bC7dE9fG1hJ3kM5nP7qR9sT1uV3wX5yZ7aB9cD1eF3g"
+NODE_ENV="production"
+PORT=3000
+
+# HRappka API - Wymagane zmienne
+HRAPPKA_BASE_URL="https://app.hrappka.pl"
+HRAPPKA_EMAIL="admin@firma.pl"
+HRAPPKA_PASSWORD="VeryStrongPassword1#"
+HRAPPKA_COMPANY_ID="1"
+
+# HRappka API - Opcjonalne
+HRAPPKA_AUTHENTICATE_OLD_API="false"
+
+# HRappka API - Opcjonalnie: Token (jeśli masz już wygenerowany, możesz użyć zamiast logowania)
+# HRAPPKA_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
 ---

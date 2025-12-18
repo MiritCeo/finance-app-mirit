@@ -11,6 +11,7 @@ import { CheckCircle2, Circle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useState } from "react";
+import { HRappkaInfoPanel } from "@/components/HRappkaInfoPanel";
 
 function UrgentTasksList() {
   const { data: urgentTasks, isLoading } = trpc.tasks.getUrgent.useQuery({ limit: 10 });
@@ -223,6 +224,10 @@ export default function Dashboard() {
 
   // Uproszczony dashboard dla pracowników
   if (isEmployee) {
+    const { data: gamificationSummary } = trpc.gamification.mySummary.useQuery(undefined, {
+      staleTime: 60_000,
+    });
+
     return (
       <div className="container mx-auto max-w-7xl space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -239,6 +244,32 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
+
+        {gamificationSummary && (
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Mój poziom i punkty
+                </CardTitle>
+                <CardDescription>Podstawowe podsumowanie grywalizacji.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Poziom</p>
+                  <p className="text-2xl font-bold">{gamificationSummary.level}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Łączne punkty</p>
+                  <p className="text-2xl font-bold text-primary">
+                    {gamificationSummary.totalPoints}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Menu szybkiego startu dla pracowników */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -276,6 +307,9 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Panel informacji z HRappka */}
+        <HRappkaInfoPanel />
 
         {/* Informacja o dostępności */}
         <Card>

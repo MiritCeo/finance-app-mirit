@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, or, isNull } from "drizzle-orm";
+import { eq, and, desc, sql, or, isNull, isNotNull, gte, lte, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, users,
@@ -23,7 +23,19 @@ import {
   employeeTechnologies, InsertEmployeeTechnology, EmployeeTechnology,
   employeeCVProjects, InsertEmployeeCVProject, EmployeeCVProject,
   employeeCVHistory, InsertEmployeeCVHistory, EmployeeCVHistory,
-  employeeLanguages, InsertEmployeeLanguage, EmployeeLanguage
+  employeeLanguages, InsertEmployeeLanguage, EmployeeLanguage,
+  officeLocations, InsertOfficeLocation, OfficeLocation,
+  officePresenceSettings, OfficePresenceSetting,
+  officeSessions, InsertOfficeSession, OfficeSession,
+  employeeLevels, InsertEmployeeLevel, EmployeeLevel,
+  employeePoints, InsertEmployeePoint, EmployeePoint,
+  badges, InsertBadge, Badge,
+  employeeBadges, InsertEmployeeBadge, EmployeeBadge,
+  quests, InsertQuest, Quest,
+  employeeQuests, InsertEmployeeQuest, EmployeeQuest,
+  teamGoals, InsertTeamGoal, TeamGoal,
+  vacationPlans, InsertVacationPlan, VacationPlan,
+  knowledgeBasePoints, InsertKnowledgeBasePoint, KnowledgeBasePoint,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -202,6 +214,51 @@ export async function deleteEmployee(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(employees).where(eq(employees.id, id));
+}
+
+/**
+ * Pobiera pracownika po HRappka ID
+ */
+export async function getEmployeeByHRappkaId(hrappkaId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(employees).where(eq(employees.hrappkaId, hrappkaId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/**
+ * Przypisuje HRappka ID do pracownika
+ */
+export async function assignHRappkaId(employeeId: number, hrappkaId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Sprawdź czy hrappkaId nie jest już przypisany do innego pracownika
+  const existing = await getEmployeeByHRappkaId(hrappkaId);
+  if (existing && existing.id !== employeeId) {
+    throw new Error(`HRappka ID ${hrappkaId} jest już przypisany do pracownika ${existing.firstName} ${existing.lastName}`);
+  }
+  
+  await db.update(employees).set({ hrappkaId }).where(eq(employees.id, employeeId));
+}
+
+/**
+ * Usuwa przypisanie HRappka ID z pracownika
+ */
+export async function unassignHRappkaId(employeeId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(employees).set({ hrappkaId: null }).where(eq(employees.id, employeeId));
+}
+
+/**
+ * Pobiera wszystkich pracowników z przypisanym HRappka ID
+ */
+export async function getEmployeesWithHRappkaId() {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select().from(employees).where(isNotNull(employees.hrappkaId));
+  return result;
 }
 
 // ============ CLIENT HELPERS ============
@@ -394,6 +451,62 @@ export async function deleteTimeEntry(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(timeEntries).where(eq(timeEntries.id, id));
+}
+
+/**
+ * Usuwa wszystkie wpisy godzinowe dla danego assignment w danym miesiącu
+ */
+export async function deleteTimeEntriesForAssignmentInMonth(
+  assignmentId: number,
+  month: number,
+  year: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { sql } = await import("drizzle-orm");
+  
+  await db.delete(timeEntries).where(
+    and(
+      eq(timeEntries.assignmentId, assignmentId),
+      sql`YEAR(${timeEntries.workDate}) = ${year}`,
+      sql`MONTH(${timeEntries.workDate}) = ${month}`
+    )
+  );
+}
+
+/**
+ * Usuwa wszystkie wpisy godzinowe dla danego pracownika w danym miesiącu
+ */
+export async function deleteTimeEntriesForEmployeeInMonth(
+  employeeId: number,
+  month: number,
+  year: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { sql, inArray } = await import("drizzle-orm");
+  const { employeeProjectAssignments } = await import("../drizzle/schema");
+  
+  // Pobierz wszystkie assignments dla pracownika
+  const assignments = await db
+    .select({ id: employeeProjectAssignments.id })
+    .from(employeeProjectAssignments)
+    .where(eq(employeeProjectAssignments.employeeId, employeeId));
+  
+  const assignmentIds = assignments.map(a => a.id);
+  
+  if (assignmentIds.length === 0) {
+    return; // Brak assignments, nic do usunięcia
+  }
+  
+  // Usuń wszystkie wpisy dla tych assignments w danym miesiącu
+  await db.delete(timeEntries).where(
+    and(
+      inArray(timeEntries.assignmentId, assignmentIds),
+      sql`YEAR(${timeEntries.workDate}) = ${year}`,
+      sql`MONTH(${timeEntries.workDate}) = ${month}`
+    )
+  );
 }
 
 // ============ FIXED COST HELPERS ============
@@ -724,6 +837,780 @@ export async function deleteTask(id: number) {
   await database.delete(tasks).where(eq(tasks.id, id));
 }
 
+// ============ GAMIFICATION HELPERS ============
+
+export type GamificationSource =
+  | "hours"
+  | "quest"
+  | "team_goal"
+  | "innovation"
+  | "vacation_planning"
+  | "office_presence";
+
+/**
+ * Simple leveling curve: each level requires 1,000 total points.
+ * Level 1: 0–999, Level 2: 1,000–1,999, etc.
+ */
+function calculateLevelFromTotalPoints(totalPoints: number) {
+  const pointsPerLevel = 1000;
+  const level = Math.max(1, Math.floor(totalPoints / pointsPerLevel) + 1);
+  const previousLevelsThreshold = (level - 1) * pointsPerLevel;
+  const pointsInCurrentLevel = totalPoints - previousLevelsThreshold;
+  const nextLevelThreshold = level * pointsPerLevel;
+  return {
+    level,
+    pointsInCurrentLevel,
+    nextLevelThreshold,
+  };
+}
+
+/**
+ * Calculate points for monthly hours based on GAMIFICATION_CONCEPT_V3:
+ * - 1 pkt za każdą godzinę do 160h
+ * - 160-180h: +0.5 pkt za każdą godzinę powyżej 160h
+ * - 180-200h: +1 pkt za każdą godzinę powyżej 180h
+ * - 200h+: +1.5 pkt za każdą godzinę powyżej 200h
+ * Wynik jest zaokrąglany do najbliższej liczby całkowitej.
+ */
+export function calculateHoursGamificationPoints(hours: number): number {
+  if (hours <= 0) return 0;
+
+  let points = 0;
+
+  // Podstawowe punkty do 160h
+  const baseHours = Math.min(hours, 160);
+  points += baseHours * 1;
+
+  // Bonus 0.5 pkt za 160-180h
+  if (hours > 160) {
+    const bonusHours1 = Math.min(hours, 180) - 160;
+    if (bonusHours1 > 0) {
+      points += bonusHours1 * 0.5;
+    }
+  }
+
+  // Bonus 1 pkt za 180-200h
+  if (hours > 180) {
+    const bonusHours2 = Math.min(hours, 200) - 180;
+    if (bonusHours2 > 0) {
+      points += bonusHours2 * 1;
+    }
+  }
+
+  // Bonus 1.5 pkt powyżej 200h
+  if (hours > 200) {
+    const bonusHours3 = hours - 200;
+    if (bonusHours3 > 0) {
+      points += bonusHours3 * 1.5;
+    }
+  }
+
+  return Math.round(points);
+}
+
+export async function getOrCreateEmployeeLevel(employeeId: number): Promise<EmployeeLevel> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const existing = await database
+    .select()
+    .from(employeeLevels)
+    .where(eq(employeeLevels.employeeId, employeeId))
+    .limit(1);
+
+  if (existing.length > 0) {
+    return existing[0];
+  }
+
+  const now = new Date();
+  const result = await database.insert(employeeLevels).values({
+    employeeId,
+    level: 1,
+    points: 0,
+    totalPoints: 0,
+    createdAt: now,
+    updatedAt: now,
+  } as InsertEmployeeLevel);
+
+  const insertedId = Number(result[0].insertId);
+  const created = await database
+    .select()
+    .from(employeeLevels)
+    .where(eq(employeeLevels.id, insertedId))
+    .limit(1);
+
+  return created[0];
+}
+
+export async function applyGamificationPointsForEmployee(params: {
+  employeeId: number;
+  points: number;
+  source: GamificationSource;
+  description?: string;
+  date?: Date;
+}) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  if (params.points === 0) return;
+
+  const createdAt = params.date ?? new Date();
+  const month = createdAt.getMonth() + 1;
+  const year = createdAt.getFullYear();
+
+  const insertData: InsertEmployeePoint = {
+    employeeId: params.employeeId,
+    points: params.points,
+    source: params.source,
+    description: params.description ?? null,
+    month,
+    year,
+    createdAt,
+  };
+
+  await database.insert(employeePoints).values(insertData);
+
+  // Update or create employee level
+  const levelRow = await getOrCreateEmployeeLevel(params.employeeId);
+  const newTotal = levelRow.totalPoints + params.points;
+  const { level, pointsInCurrentLevel } = calculateLevelFromTotalPoints(newTotal);
+
+  await database
+    .update(employeeLevels)
+    .set({
+      level,
+      totalPoints: newTotal,
+      points: pointsInCurrentLevel,
+      updatedAt: new Date(),
+    })
+    .where(eq(employeeLevels.id, levelRow.id));
+}
+
+export type EmployeeGamificationSummary = {
+  level: number;
+  totalPoints: number;
+  pointsInCurrentLevel: number;
+  nextLevelThreshold: number;
+  breakdownBySource: { source: GamificationSource; points: number }[];
+  officePresence: {
+    totalPoints: number;
+    qualifiedDays: number;
+  };
+};
+
+export async function getGamificationSummaryForEmployee(
+  employeeId: number
+): Promise<EmployeeGamificationSummary> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const levelRow = await getOrCreateEmployeeLevel(employeeId);
+
+  // Aggregate points by source from history
+  const rows = await database
+    .select({
+      source: employeePoints.source,
+      total: sql<number>`SUM(${employeePoints.points})`,
+    })
+    .from(employeePoints)
+    .where(eq(employeePoints.employeeId, employeeId))
+    .groupBy(employeePoints.source);
+
+  const breakdownBySource = rows.map((row) => ({
+    source: row.source as GamificationSource,
+    points: Number(row.total ?? 0),
+  }));
+
+  const totalPoints = breakdownBySource.reduce((sum, row) => sum + row.points, 0);
+  const { pointsInCurrentLevel, nextLevelThreshold } = calculateLevelFromTotalPoints(totalPoints);
+
+  const officeSource = breakdownBySource.find((r) => r.source === "office_presence");
+  const officeTotalPoints = officeSource?.points ?? 0;
+  const qualifiedDays = await database
+    .select({ count: sql<number>`COUNT(*) as count` })
+    .from(employeePoints)
+    .where(
+      and(
+        eq(employeePoints.employeeId, employeeId),
+        eq(employeePoints.source, "office_presence" as any)
+      )
+    );
+
+  return {
+    level: levelRow.level,
+    totalPoints,
+    pointsInCurrentLevel,
+    nextLevelThreshold,
+    breakdownBySource,
+    officePresence: {
+      totalPoints: officeTotalPoints,
+      qualifiedDays: qualifiedDays[0] ? Number((qualifiedDays[0] as any).count ?? 0) : 0,
+    },
+  };
+}
+
+/**
+ * Award or sync points for a single monthlyEmployeeReports row.
+ * Uses calculateHoursGamificationPoints(hours) and only adds the difference
+ * compared to already awarded "hours" points for given month/year.
+ */
+export async function awardHoursPointsForMonthlyReport(
+  report: MonthlyEmployeeReport
+): Promise<{ awarded: number; totalForMonth: number }> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  if (!report.hoursWorked || report.hoursWorked <= 0) {
+    return { awarded: 0, totalForMonth: 0 };
+  }
+
+  const hours = report.hoursWorked / 100; // reports store godziny * 100
+  const targetPoints = calculateHoursGamificationPoints(hours);
+  if (targetPoints <= 0) {
+    return { awarded: 0, totalForMonth: 0 };
+  }
+
+  const existingRows = await database
+    .select({
+      total: sql<number>`COALESCE(SUM(${employeePoints.points}), 0)`,
+    })
+    .from(employeePoints)
+    .where(
+      and(
+        eq(employeePoints.employeeId, report.employeeId),
+        eq(employeePoints.source, "hours" as any),
+        eq(employeePoints.year, report.year),
+        eq(employeePoints.month, report.month)
+      )
+    );
+
+  const existingTotal = existingRows[0]?.total ?? 0;
+
+  if (existingTotal >= targetPoints) {
+    return { awarded: 0, totalForMonth: existingTotal };
+  }
+
+  const delta = targetPoints - existingTotal;
+
+  await applyGamificationPointsForEmployee({
+    employeeId: report.employeeId,
+    points: delta,
+    source: "hours",
+    description: `Punkty za godziny: ${hours.toFixed(1)}h (${report.month}/${report.year})`,
+    date: new Date(report.year, report.month - 1, 1),
+  });
+
+  return { awarded: delta, totalForMonth: targetPoints };
+}
+
+export async function awardHoursPointsForMonth(year: number, month: number) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const reports = await database
+    .select()
+    .from(monthlyEmployeeReports)
+    .where(
+      and(
+        eq(monthlyEmployeeReports.year, year),
+        eq(monthlyEmployeeReports.month, month)
+      )
+    );
+
+  let processed = 0;
+  let totalAwarded = 0;
+
+  for (const report of reports) {
+    const { awarded, totalForMonth } = await awardHoursPointsForMonthlyReport(
+      report
+    );
+    if (totalForMonth > 0) {
+      processed += 1;
+    }
+    totalAwarded += awarded;
+  }
+
+  return {
+    processedReports: processed,
+    totalPointsAwarded: totalAwarded,
+  };
+}
+
+// ============ QUESTS & TEAM GOALS ============
+
+export async function getAllQuests() {
+  const database = await getDb();
+  if (!database) return [];
+  return database.select().from(quests).orderBy(desc(quests.createdAt));
+}
+
+export async function createQuest(data: InsertQuest) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  const result = await database.insert(quests).values(data);
+  return Number(result[0].insertId);
+}
+
+export async function assignQuestToEmployee(data: {
+  employeeId: number;
+  questId: number;
+}): Promise<number> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const existing = await database
+    .select()
+    .from(employeeQuests)
+    .where(
+      and(
+        eq(employeeQuests.employeeId, data.employeeId),
+        eq(employeeQuests.questId, data.questId)
+      )
+    )
+    .limit(1);
+
+  if (existing[0]) {
+    return existing[0].id;
+  }
+
+  const result = await database.insert(employeeQuests).values({
+    employeeId: data.employeeId,
+    questId: data.questId,
+    status: "active",
+    progress: 0,
+    createdAt: new Date(),
+  } as InsertEmployeeQuest);
+
+  return Number(result[0].insertId);
+}
+
+export async function getQuestsForEmployee(employeeId: number) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const rows = await database
+    .select({
+      quest: quests,
+      assignment: employeeQuests,
+    })
+    .from(employeeQuests)
+    .innerJoin(quests, eq(employeeQuests.questId, quests.id))
+    .where(eq(employeeQuests.employeeId, employeeId));
+
+  return rows;
+}
+
+export async function completeQuestForEmployee(params: {
+  employeeId: number;
+  questId: number;
+}) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const [assignment] = await database
+    .select()
+    .from(employeeQuests)
+    .where(
+      and(
+        eq(employeeQuests.employeeId, params.employeeId),
+        eq(employeeQuests.questId, params.questId)
+      )
+    )
+    .limit(1);
+
+  if (!assignment) {
+    return { success: false as const, reason: "not_assigned" as const };
+  }
+
+  if (assignment.status === "completed") {
+    return { success: false as const, reason: "already_completed" as const };
+  }
+
+  const [quest] = await database
+    .select()
+    .from(quests)
+    .where(eq(quests.id, params.questId))
+    .limit(1);
+
+  if (!quest) {
+    return { success: false as const, reason: "quest_not_found" as const };
+  }
+
+  const now = new Date();
+
+  await database
+    .update(employeeQuests)
+    .set({
+      status: "completed",
+      progress: quest.targetValue,
+      completedAt: now,
+    })
+    .where(eq(employeeQuests.id, assignment.id));
+
+  if (quest.rewardPoints && quest.rewardPoints > 0) {
+    await applyGamificationPointsForEmployee({
+      employeeId: params.employeeId,
+      points: quest.rewardPoints,
+      source: "quest",
+      description: `Quest: ${quest.name}`,
+      date: now,
+    });
+  }
+
+  return { success: true as const };
+}
+
+export async function createTeamGoal(data: InsertTeamGoal) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  const result = await database.insert(teamGoals).values(data);
+  return Number(result[0].insertId);
+}
+
+export async function getActiveTeamGoals() {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  return database
+    .select()
+    .from(teamGoals)
+    .where(
+      or(
+        eq(teamGoals.status, "planned" as any),
+        eq(teamGoals.status, "active" as any)
+      )
+    )
+    .orderBy(desc(teamGoals.createdAt));
+}
+
+export async function updateTeamGoalProgress(goalId: number, currentHours: number, status?: TeamGoal["status"]) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const update: Partial<InsertTeamGoal> = {
+    currentHours,
+  };
+  if (status) {
+    (update as any).status = status;
+  }
+
+  await database
+    .update(teamGoals)
+    .set(update)
+    .where(eq(teamGoals.id, goalId));
+}
+
+// ============ KNOWLEDGE BASE & VACATION GAMIFICATION ============
+
+export async function awardKnowledgeBasePoints(params: {
+  employeeId: number;
+  knowledgeBaseId: number;
+  points: number;
+  reason: KnowledgeBasePoint["reason"];
+}) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  if (params.points === 0) return;
+
+  const createdAt = new Date();
+
+  const insertData: InsertKnowledgeBasePoint = {
+    employeeId: params.employeeId,
+    knowledgeBaseId: params.knowledgeBaseId,
+    points: params.points,
+    reason: params.reason,
+    createdAt,
+  };
+
+  await database.insert(knowledgeBasePoints).values(insertData);
+
+  await applyGamificationPointsForEmployee({
+    employeeId: params.employeeId,
+    points: params.points,
+    source: "innovation",
+    description: `Baza wiedzy: ${params.reason}`,
+    date: createdAt,
+  });
+}
+
+export function calculateVacationPlanningPoints(input: {
+  plannedMonthsAhead: number;
+  isSplit: boolean;
+  conflictLevel: "low" | "medium" | "high";
+}): number {
+  let points = 0;
+
+  if (input.plannedMonthsAhead >= 3) {
+    points += 20;
+  } else if (input.plannedMonthsAhead >= 2) {
+    points += 10;
+  } else if (input.plannedMonthsAhead >= 1) {
+    points += 5;
+  }
+
+  if (input.isSplit) {
+    points += 30;
+  }
+
+  if (input.conflictLevel === "low") {
+    points += 10;
+  }
+
+  return points;
+}
+
+export async function createVacationPlanWithPoints(params: {
+  employeeId: number;
+  startDate: Date;
+  endDate: Date;
+  plannedMonthsAhead: number;
+  isSplit: boolean;
+  conflictLevel: "low" | "medium" | "high";
+}) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const points = calculateVacationPlanningPoints({
+    plannedMonthsAhead: params.plannedMonthsAhead,
+    isSplit: params.isSplit,
+    conflictLevel: params.conflictLevel,
+  });
+
+  const createdAt = new Date();
+
+  const result = await database.insert(vacationPlans).values({
+    employeeId: params.employeeId,
+    startDate: params.startDate,
+    endDate: params.endDate,
+    plannedMonthsAhead: params.plannedMonthsAhead,
+    isSplit: params.isSplit,
+    conflictLevel: params.conflictLevel,
+    pointsAwarded: points,
+    createdAt,
+  } as InsertVacationPlan);
+
+  const id = Number(result[0].insertId);
+
+  return { id, pointsAwarded: points };
+}
+
+// ============ VACATION REQUESTS & SUMMARY ============
+
+export type EmployeeVacationSummary = {
+  year: number;
+  totalDaysPerYear: number;
+  usedDays: number;
+  pendingDays: number;
+  availableDays: number;
+};
+
+export async function getVacationSummaryForEmployee(
+  employeeId: number,
+  year: number
+): Promise<EmployeeVacationSummary> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const employee = await getEmployeeById(employeeId);
+  const totalDaysPerYear = employee?.vacationDaysPerYear ?? 21;
+
+  const approved = await database
+    .select({
+      days: sql<number>`COALESCE(SUM(${vacations.daysCount}), 0)`,
+    })
+    .from(vacations)
+    .where(
+      and(
+        eq(vacations.employeeId, employeeId),
+        eq(vacations.status, "approved" as any),
+        sql`YEAR(${vacations.startDate}) = ${year}`
+      )
+    );
+
+  const pending = await database
+    .select({
+      days: sql<number>`COALESCE(SUM(${vacations.daysCount}), 0)`,
+    })
+    .from(vacations)
+    .where(
+      and(
+        eq(vacations.employeeId, employeeId),
+        eq(vacations.status, "pending" as any),
+        sql`YEAR(${vacations.startDate}) = ${year}`
+      )
+    );
+
+  const usedDays = Number(approved[0]?.days ?? 0);
+  const pendingDays = Number(pending[0]?.days ?? 0);
+  const availableDays = Math.max(0, totalDaysPerYear - usedDays - pendingDays);
+
+  return {
+    year,
+    totalDaysPerYear,
+    usedDays,
+    pendingDays,
+    availableDays,
+  };
+}
+
+export async function getVacationsForEmployee(employeeId: number, year: number) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  return database
+    .select()
+    .from(vacations)
+    .where(
+      and(
+        eq(vacations.employeeId, employeeId),
+        sql`YEAR(${vacations.startDate}) = ${year}`
+      )
+    )
+    .orderBy(vacations.startDate);
+}
+
+export async function requestVacationWithPlan(params: {
+  employeeId: number;
+  startDate: Date;
+  endDate: Date;
+}) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const start = new Date(params.startDate);
+  const end = new Date(params.endDate);
+  const rawDays = Math.round((end.getTime() - start.getTime()) / msPerDay) + 1;
+  const daysCount = Math.max(0, rawDays);
+
+  const year = start.getFullYear();
+  const summary = await getVacationSummaryForEmployee(params.employeeId, year);
+
+  if (daysCount <= 0) {
+    throw new Error("Zakres dat urlopu jest nieprawidłowy.");
+  }
+
+  if (daysCount > summary.availableDays) {
+    throw new Error(
+      `Brak wystarczającej liczby dni urlopu. Dostępne: ${summary.availableDays}, wniosek: ${daysCount}.`
+    );
+  }
+
+  // Oblicz wyprzedzenie w miesiącach
+  const plannedMonthsAhead =
+    (start.getFullYear() - new Date().getFullYear()) * 12 +
+    (start.getMonth() - new Date().getMonth());
+
+  // Oblicz poziom konfliktu na podstawie innych urlopów (pending + approved) w tym okresie
+  const overlapping = await database
+    .select()
+    .from(vacations)
+    .where(
+      and(
+        sql`${vacations.employeeId} != ${params.employeeId}`,
+        sql`${vacations.status} IN ('pending','approved')`,
+        sql`${vacations.startDate} <= ${end}`,
+        sql`${vacations.endDate} >= ${start}`
+      )
+    );
+
+  const overlappingEmployees = new Set(overlapping.map((v) => v.employeeId));
+  let conflictLevel: "low" | "medium" | "high" = "low";
+  if (overlappingEmployees.size >= 3) {
+    conflictLevel = "high";
+  } else if (overlappingEmployees.size === 2) {
+    conflictLevel = "medium";
+  }
+
+  // Na tym etapie nie wiemy jeszcze, czy urlop jest "rozłożony" w skali roku – każdy wniosek to jeden blok
+  const isSplit = false;
+
+  // Stwórz wniosek urlopowy (pending)
+  const vacationResult = await database.insert(vacations).values({
+    employeeId: params.employeeId,
+    startDate: start,
+    endDate: end,
+    daysCount,
+    status: "pending",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as InsertVacation);
+
+  const vacationId = Number(vacationResult[0].insertId);
+
+  // Zapisz meta-informacje do vacationPlans (bez przyznawania punktów)
+  const { id: vacationPlanId, pointsAwarded } = await createVacationPlanWithPoints({
+    employeeId: params.employeeId,
+    startDate: start,
+    endDate: end,
+    plannedMonthsAhead: plannedMonthsAhead,
+    isSplit,
+    conflictLevel,
+  });
+
+  return {
+    vacationId,
+    vacationPlanId,
+    pointsPreview: pointsAwarded,
+    conflictLevel,
+    daysCount,
+    summary,
+  };
+}
+
+export async function changeVacationStatus(params: {
+  vacationId: number;
+  status: "approved" | "rejected";
+}) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const [vacation] = await database
+    .select()
+    .from(vacations)
+    .where(eq(vacations.id, params.vacationId))
+    .limit(1);
+
+  if (!vacation) {
+    throw new Error("Wniosek urlopowy nie został znaleziony.");
+  }
+
+  await database
+    .update(vacations)
+    .set({
+      status: params.status,
+      updatedAt: new Date(),
+    })
+    .where(eq(vacations.id, params.vacationId));
+
+  // Przy zatwierdzeniu przyznaj punkty według wcześniej zapisanych parametrów planu
+  if (params.status === "approved") {
+    const plans = await database
+      .select()
+      .from(vacationPlans)
+      .where(
+        and(
+          eq(vacationPlans.employeeId, vacation.employeeId),
+          eq(vacationPlans.startDate, vacation.startDate),
+          eq(vacationPlans.endDate, vacation.endDate)
+        )
+      )
+      .limit(1);
+
+    const plan = plans[0] as VacationPlan | undefined;
+    if (plan && plan.pointsAwarded > 0) {
+      await applyGamificationPointsForEmployee({
+        employeeId: vacation.employeeId,
+        points: plan.pointsAwarded,
+        source: "vacation_planning",
+        description: `Zatwierdzony urlop (${vacation.startDate.toISOString().slice(0, 10)} - ${vacation.endDate
+          .toISOString()
+          .slice(0, 10)})`,
+        date: vacation.startDate instanceof Date ? vacation.startDate : new Date(vacation.startDate),
+      });
+    }
+  }
+}
+
 // Knowledge Base
 export async function getAllKnowledgeBase(filters?: { status?: "draft" | "published" | "archived" }) {
   const database = await getDb();
@@ -761,7 +1648,26 @@ export async function createKnowledgeBase(data: InsertKnowledgeBase) {
   }
   
   const result = await database.insert(knowledgeBase).values(insertData);
-  return result[0].insertId;
+  const id = result[0].insertId;
+
+  // Award basic gamification points for employee-authored articles
+  if ((data as any).authorId) {
+    const author = await getUserById((data as any).authorId);
+    if (author && author.employeeId) {
+      try {
+        await awardKnowledgeBasePoints({
+          employeeId: author.employeeId,
+          knowledgeBaseId: Number(id),
+          points: 30, // baseline for now; can be adjusted by article type later
+          reason: "article_created",
+        });
+      } catch (error) {
+        console.error("[Gamification] Failed to award knowledge base points", error);
+      }
+    }
+  }
+
+  return id;
 }
 
 export async function updateKnowledgeBase(id: number, data: Partial<InsertKnowledgeBase>) {
@@ -1554,4 +2460,443 @@ export async function deleteCVHistory(id: number) {
     .where(eq(employeeCVHistory.id, id));
   
   return { success: true };
+}
+
+// ============ OFFICE PRESENCE HELPERS ============
+
+export type OfficePresenceStatus = {
+  hasActiveSession: boolean;
+  sessionId: number | null;
+  isFromOffice: boolean;
+  minSessionMinutes: number;
+  dayPoints: number;
+  streakLengthDays: number;
+  streakPoints: number;
+  // For active sessions we return how many minutes already passed on server
+  elapsedMinutes?: number;
+  // For finished/qualified sessions today
+  todayQualified?: boolean;
+  todayPointsAwarded?: number;
+  todayStreakPointsAwarded?: number;
+};
+
+/**
+ * Returns single active office presence settings row or creates a default one.
+ */
+export async function getOrCreateOfficePresenceSettings(): Promise<OfficePresenceSetting> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const existing = await database.select().from(officePresenceSettings).limit(1);
+  if (existing.length > 0) {
+    return existing[0];
+  }
+
+  const now = new Date();
+  const result = await database.insert(officePresenceSettings).values({
+    minSessionMinutes: 240,
+    dayPoints: 10,
+    streakLengthDays: 14,
+    streakPoints: 100,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const insertedId = Number(result[0].insertId);
+  const created = await database
+    .select()
+    .from(officePresenceSettings)
+    .where(eq(officePresenceSettings.id, insertedId))
+    .limit(1);
+
+  if (!created[0]) {
+    throw new Error("Failed to create default office presence settings");
+  }
+  return created[0];
+}
+
+/**
+ * Find nearest active office location within its radius based on coordinates.
+ * We keep logic in TypeScript as number of offices is expected to be small.
+ */
+export async function findNearestOfficeLocation(
+  latitude: number,
+  longitude: number
+): Promise<OfficeLocation | null> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const locations = await database
+    .select()
+    .from(officeLocations)
+    .where(eq(officeLocations.isActive, true));
+
+  if (locations.length === 0) {
+    return null;
+  }
+
+  // Haversine formula helpers
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const R = 6371000; // Earth radius in meters
+
+  let nearest: OfficeLocation | null = null;
+  let nearestDistance = Infinity;
+
+  for (const loc of locations) {
+    const lat = Number(loc.latitude);
+    const lng = Number(loc.longitude);
+
+    const dLat = toRad(latitude - lat);
+    const dLng = toRad(longitude - lng);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat)) *
+        Math.cos(toRad(latitude)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c;
+
+    if (distance <= loc.radiusMeters && distance < nearestDistance) {
+      nearest = loc;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearest;
+}
+
+// ============ OFFICE LOCATIONS MANAGEMENT ============
+
+export async function getAllOfficeLocations(): Promise<OfficeLocation[]> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  return database
+    .select()
+    .from(officeLocations)
+    .orderBy(officeLocations.name);
+}
+
+export async function createOfficeLocation(params: {
+  name: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  isActive?: boolean;
+}): Promise<OfficeLocation> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const now = new Date();
+  const result = await database.insert(officeLocations).values({
+    name: params.name,
+    latitude: params.latitude.toString(),
+    longitude: params.longitude.toString(),
+    radiusMeters: params.radiusMeters,
+    isActive: params.isActive ?? true,
+    createdAt: now,
+    updatedAt: now,
+  } as InsertOfficeLocation);
+
+  const insertedId = Number(result[0].insertId);
+  const created = await database
+    .select()
+    .from(officeLocations)
+    .where(eq(officeLocations.id, insertedId))
+    .limit(1);
+
+  if (!created[0]) {
+    throw new Error("Failed to create office location");
+  }
+  return created[0];
+}
+
+export async function updateOfficeLocation(params: {
+  id: number;
+  name?: string;
+  latitude?: number;
+  longitude?: number;
+  radiusMeters?: number;
+  isActive?: boolean;
+}): Promise<OfficeLocation> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const now = new Date();
+  const updateData: Partial<InsertOfficeLocation> = {
+    updatedAt: now,
+  };
+
+  if (params.name !== undefined) updateData.name = params.name;
+  if (params.latitude !== undefined) updateData.latitude = params.latitude.toString();
+  if (params.longitude !== undefined) updateData.longitude = params.longitude.toString();
+  if (params.radiusMeters !== undefined) updateData.radiusMeters = params.radiusMeters;
+  if (params.isActive !== undefined) updateData.isActive = params.isActive;
+
+  await database
+    .update(officeLocations)
+    .set(updateData)
+    .where(eq(officeLocations.id, params.id));
+
+  const updated = await database
+    .select()
+    .from(officeLocations)
+    .where(eq(officeLocations.id, params.id))
+    .limit(1);
+
+  if (!updated[0]) {
+    throw new Error("Failed to update office location");
+  }
+  return updated[0];
+}
+
+export async function deleteOfficeLocation(id: number): Promise<void> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  await database.delete(officeLocations).where(eq(officeLocations.id, id));
+}
+
+/**
+ * Get current office presence status for logged-in user (e.g. for dashboard widget).
+ */
+export async function getOfficePresenceStatusForUser(userId: number): Promise<OfficePresenceStatus> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const settings = await getOrCreateOfficePresenceSettings();
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  // Active session (no endTime yet)
+  const activeSessions = await database
+    .select()
+    .from(officeSessions)
+    .where(and(eq(officeSessions.userId, userId), isNull(officeSessions.endTime)));
+
+  const activeSession = activeSessions[0] || null;
+
+  // Qualified session today
+  const todaySessions = await database
+    .select()
+    .from(officeSessions)
+    .where(
+      and(
+        eq(officeSessions.userId, userId),
+        gte(officeSessions.startTime, todayStart),
+        lte(officeSessions.startTime, todayEnd)
+      )
+    );
+
+  const todayQualifiedSession = todaySessions.find(s => s.isQualified) || null;
+
+  let elapsedMinutes: number | undefined;
+  if (activeSession) {
+    const now = new Date();
+    const start = activeSession.startTime instanceof Date ? activeSession.startTime : new Date(activeSession.startTime);
+    elapsedMinutes = Math.floor((now.getTime() - start.getTime()) / 60000);
+  }
+
+  return {
+    hasActiveSession: !!activeSession,
+    sessionId: activeSession ? activeSession.id : null,
+    isFromOffice: !!activeSession, // if we created it, it was from office
+    minSessionMinutes: settings.minSessionMinutes,
+    dayPoints: settings.dayPoints,
+    streakLengthDays: settings.streakLengthDays,
+    streakPoints: settings.streakPoints,
+    elapsedMinutes,
+    todayQualified: !!todayQualifiedSession,
+    todayPointsAwarded: todayQualifiedSession?.dayPointsAwarded ?? 0,
+    todayStreakPointsAwarded: todayQualifiedSession?.streakPointsAwarded ?? 0,
+  };
+}
+
+/**
+ * Starts office session if user is within any active office location.
+ */
+export async function startOfficeSessionForUser(params: {
+  userId: number;
+  employeeId?: number | null;
+  latitude: number;
+  longitude: number;
+}): Promise<OfficePresenceStatus> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const settings = await getOrCreateOfficePresenceSettings();
+
+  // First, check if user already has active session
+  const existingActive = await database
+    .select()
+    .from(officeSessions)
+    .where(and(eq(officeSessions.userId, params.userId), isNull(officeSessions.endTime)));
+
+  if (existingActive.length > 0) {
+    // Just return status instead of creating another session
+    return await getOfficePresenceStatusForUser(params.userId);
+  }
+
+  const office = await findNearestOfficeLocation(params.latitude, params.longitude);
+  if (!office) {
+    // Not in office - no session created, but return settings for UI
+    return {
+      hasActiveSession: false,
+      sessionId: null,
+      isFromOffice: false,
+      minSessionMinutes: settings.minSessionMinutes,
+      dayPoints: settings.dayPoints,
+      streakLengthDays: settings.streakLengthDays,
+      streakPoints: settings.streakPoints,
+    };
+  }
+
+  const now = new Date();
+  const result = await database.insert(officeSessions).values({
+    userId: params.userId,
+    employeeId: params.employeeId ?? null,
+    officeLocationId: office.id,
+    startTime: now,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const insertedId = Number(result[0].insertId);
+
+  return {
+    hasActiveSession: true,
+    sessionId: insertedId,
+    isFromOffice: true,
+    minSessionMinutes: settings.minSessionMinutes,
+    dayPoints: settings.dayPoints,
+    streakLengthDays: settings.streakLengthDays,
+    streakPoints: settings.streakPoints,
+    elapsedMinutes: 0,
+  };
+}
+
+/**
+ * Ends latest active office session for user and calculates points (day + optional streak).
+ */
+export async function endOfficeSessionForUser(userId: number): Promise<OfficePresenceStatus> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const settings = await getOrCreateOfficePresenceSettings();
+
+  const activeSessions = await database
+    .select()
+    .from(officeSessions)
+    .where(and(eq(officeSessions.userId, userId), isNull(officeSessions.endTime)));
+
+  const active = activeSessions[0];
+  if (!active) {
+    // Nothing to close, just return current status
+    return await getOfficePresenceStatusForUser(userId);
+  }
+
+  const now = new Date();
+  const start = active.startTime instanceof Date ? active.startTime : new Date(active.startTime);
+  const durationMinutes = Math.floor((now.getTime() - start.getTime()) / 60000);
+
+  let isQualified = false;
+  let dayPointsAwarded = 0;
+  let streakPointsAwarded = 0;
+  let streakDays = 0;
+
+  if (durationMinutes >= settings.minSessionMinutes) {
+    isQualified = true;
+    dayPointsAwarded = settings.dayPoints;
+
+    // Check streak: consecutive qualified days including today
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+
+    // Get qualified sessions ordered by day descending
+    const qualifiedSessions = await database
+      .select()
+      .from(officeSessions)
+      .where(and(eq(officeSessions.userId, userId), eq(officeSessions.isQualified, true)))
+      .orderBy(desc(officeSessions.startTime));
+
+    // Add today's session at the beginning (we'll treat it as qualified already)
+    const allDays: Date[] = [];
+    allDays.push(startOfToday);
+
+    for (const session of qualifiedSessions) {
+      const d = session.startTime instanceof Date ? session.startTime : new Date(session.startTime);
+      const day = new Date(d);
+      day.setHours(0, 0, 0, 0);
+      // Avoid duplicates for same calendar day
+      if (!allDays.some(existing => existing.getTime() === day.getTime())) {
+        allDays.push(day);
+      }
+    }
+
+    // Compute current streak from today backwards
+    allDays.sort((a, b) => b.getTime() - a.getTime()); // newest first
+
+    let streak = 0;
+    let cursor = new Date(startOfToday);
+
+    for (const day of allDays) {
+      const diffDays = Math.round((cursor.getTime() - day.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) {
+        streak += 1;
+        // Move cursor one day back
+        cursor.setDate(cursor.getDate() - 1);
+      } else if (diffDays === 1) {
+        // Missing a day - break streak
+        break;
+      } else if (diffDays > 1) {
+        break;
+      }
+    }
+
+    streakDays = streak;
+
+    if (streak >= settings.streakLengthDays) {
+      streakPointsAwarded = settings.streakPoints;
+    }
+  }
+
+  await database
+    .update(officeSessions)
+    .set({
+      endTime: now,
+      durationMinutes,
+      isQualified,
+      dayPointsAwarded,
+      streakPointsAwarded,
+      updatedAt: now,
+    })
+    .where(eq(officeSessions.id, active.id));
+
+  // If session qualified and we know employeeId, award gamification points for office presence
+  if (isQualified && (dayPointsAwarded > 0 || streakPointsAwarded > 0) && active.employeeId) {
+    const totalPointsAwarded = dayPointsAwarded + streakPointsAwarded;
+    const descriptionParts = [`Obecność w biurze - kwalifikowany dzień (${durationMinutes} min)`];
+    if (streakPointsAwarded > 0 && streakDays > 0) {
+      descriptionParts.push(`streak ${streakDays} dni`);
+    }
+    const description = descriptionParts.join(", ");
+
+    try {
+      await applyGamificationPointsForEmployee({
+        employeeId: active.employeeId,
+        points: totalPointsAwarded,
+        source: "office_presence",
+        description,
+        date: now,
+      });
+    } catch (error) {
+      console.error("[Gamification] Failed to award office presence points", error);
+    }
+  }
+
+  return await getOfficePresenceStatusForUser(userId);
 }

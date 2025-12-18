@@ -5,7 +5,8 @@ import { publicProcedure, protectedProcedure, adminProcedure, employeeProcedure,
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
-import { employeeProjectAssignments } from "../drizzle/schema";
+import { employeeProjectAssignments, officePresenceSettings, officeLocations } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 import { 
   calculateUOP, 
   calculateB2B, 
@@ -19,6 +20,15 @@ import {
   simulateOwnerSalary
 } from "./salaryCalculator";
 import XLSX from "xlsx";
+import {
+  testHRappkaConnection,
+  getHRappkaEmployees,
+  getHRappkaTimeReports,
+  getAllHRappkaTimeReports,
+  callHRappkaApi,
+  authenticateHRappka,
+  getHRappkaEmployeeInfo,
+} from "./_core/hrappka";
 
 export const appRouter = router({
   system: systemRouter,
@@ -127,6 +137,719 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await db.deleteEmployee(input.id);
         return { success: true };
+      }),
+
+    /**
+     * Przypisuje HRappka ID do pracownika
+     */
+    assignHRappkaId: adminProcedure
+      .input(z.object({
+        employeeId: z.number().int().positive(),
+        hrappkaId: z.number().int().positive(),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          await db.assignHRappkaId(input.employeeId, input.hrappkaId);
+          return { success: true };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: errorMessage,
+          });
+        }
+      }),
+
+    /**
+     * Usuwa przypisanie HRappka ID z pracownika
+     */
+    unassignHRappkaId: adminProcedure
+      .input(z.object({
+        employeeId: z.number().int().positive(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.unassignHRappkaId(input.employeeId);
+        return { success: true };
+      }),
+
+    /**
+     * Pobiera listę pracowników z HRappka do mapowania
+     */
+    getHRappkaEmployeesForMapping: adminProcedure.query(async () => {
+      try {
+        // Pobierz lokalnych pracowników (zawsze dostępne)
+        const localEmployees = await db.getAllEmployees();
+        
+        // Spróbuj pobrać pracowników z HRappka (może nie być dostępne)
+        let hrappkaEmployees: any[] = [];
+        try {
+          hrappkaEmployees = await getHRappkaEmployees();
+        } catch (hrappkaError) {
+          console.warn("[HRappka] Could not fetch employees from HRappka, using empty list:", hrappkaError);
+          // Kontynuuj z pustą listą - użytkownik zobaczy tylko lokalnych pracowników
+        }
+        
+        // Stwórz mapę lokalnych pracowników z hrappkaId
+        const mappedHRappkaIds = new Set(
+          localEmployees
+            .filter(emp => emp.hrappkaId !== null)
+            .map(emp => emp.hrappkaId)
+        );
+        
+        return {
+          success: true,
+          hrappkaEmployees: hrappkaEmployees.map(emp => ({
+            ...emp,
+            isMapped: mappedHRappkaIds.has(emp.id),
+            localEmployeeId: localEmployees.find(le => le.hrappkaId === emp.id)?.id,
+          })),
+          localEmployees: localEmployees.map(emp => ({
+            id: emp.id,
+            firstName: emp.firstName,
+            lastName: emp.lastName,
+            email: emp.email,
+            hrappkaId: emp.hrappkaId,
+            hrappkaEmployee: emp.hrappkaId 
+              ? hrappkaEmployees.find(he => he.id === emp.hrappkaId)
+              : null,
+          })),
+        };
+      } catch (error) {
+        console.error("[HRappka] Error in getHRappkaEmployeesForMapping:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Nie udało się pobrać danych do mapowania: ${errorMessage}`,
+        });
+      }
+    }),
+
+    /**
+     * Pobiera raporty godzinowe dla pracownika z naszej aplikacji (używając jego hrappkaId)
+     */
+    getTimeReportsFromHRappka: adminProcedure
+      .input(
+        z.object({
+          employeeId: z.number().int().positive(),
+          startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data musi być w formacie YYYY-MM-DD").optional(),
+          endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data musi być w formacie YYYY-MM-DD").optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        try {
+          // Pobierz pracownika z naszej aplikacji
+          const employee = await db.getEmployeeById(input.employeeId);
+          if (!employee) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Pracownik nie został znaleziony",
+            });
+          }
+
+          if (!employee.hrappkaId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Pracownik nie ma przypisanego HRappka ID. Najpierw przypisz HRappka ID do pracownika.",
+            });
+          }
+
+          // Pobierz raporty z HRappka używając hrappkaId
+          // Daty są opcjonalne - jeśli nie podano, pobierz wszystkie dostępne dane
+          const reports = await getHRappkaTimeReports(
+            employee.hrappkaId,
+            input.startDate,
+            input.endDate
+          );
+
+          return {
+            success: true,
+            employee: {
+              id: employee.id,
+              firstName: employee.firstName,
+              lastName: employee.lastName,
+              hrappkaId: employee.hrappkaId,
+            },
+            reports,
+            count: reports.length,
+          };
+        } catch (error) {
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          console.error(`[HRappka] Error fetching time reports for employee ${input.employeeId}:`, error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Nie udało się pobrać raportów godzinowych: ${errorMessage}`,
+          });
+        }
+      }),
+
+    /**
+     * Synchronizuje godziny z HRappka dla pojedynczego pracownika
+     */
+    syncHoursFromHRappka: adminProcedure
+      .input(z.object({
+        employeeId: z.number().int().positive(),
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const { employeeId, month, year } = input;
+          
+          // Pobierz pracownika
+          const employee = await db.getEmployeeById(employeeId);
+          if (!employee) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Pracownik nie został znaleziony",
+            });
+          }
+
+          if (!employee.hrappkaId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Pracownik nie ma przypisanego HRappka ID. Najpierw przypisz HRappka ID do pracownika.",
+            });
+          }
+
+          // Pobierz przypisania pracownika do projektów
+          const assignments = await db.getAssignmentsByEmployee(employeeId);
+          const activeAssignments = assignments.filter(a => a.isActive);
+          
+          if (activeAssignments.length === 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Pracownik nie ma aktywnych przypisań do projektów. Najpierw przypisz pracownika do projektu.",
+            });
+          }
+
+          // Oblicz daty początku i końca miesiąca
+          const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+          const lastDay = new Date(year, month, 0).getDate();
+          const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+          console.log(`[HRappka Sync] Fetching hours for employee ${employee.id} (HRappka ID: ${employee.hrappkaId}), month: ${month}/${year}, dates: ${startDate} to ${endDate}`);
+
+          // Pobierz godziny z HRappka (najpierw REAL)
+          let reports = await getHRappkaTimeReports(
+            employee.hrappkaId,
+            startDate,
+            endDate,
+            "REAL"
+          );
+
+          console.log(`[HRappka Sync] Received ${reports.length} REAL reports for employee ${employee.id}`);
+
+          // Jeśli brak danych w REAL, spróbuj NORMALIZED
+          if (reports.length === 0) {
+            console.log(`[HRappka Sync] No REAL reports, trying NORMALIZED type for employee ${employee.id}`);
+            const normalizedReports = await getHRappkaTimeReports(
+              employee.hrappkaId,
+              startDate,
+              endDate,
+              "NORMALIZED"
+            );
+            console.log(`[HRappka Sync] Received ${normalizedReports.length} NORMALIZED reports for employee ${employee.id}`);
+            
+            if (normalizedReports.length > 0) {
+              reports = normalizedReports; // Użyj znormalizowanych raportów
+            }
+          }
+
+          if (reports.length === 0) {
+            return {
+              success: true,
+              message: "Brak godzin do synchronizacji. Sprawdź logi serwera dla szczegółów lub czy pracownik ma zarejestrowane godziny w HRappka dla wybranego miesiąca.",
+              syncedCount: 0,
+            };
+          }
+
+          // Grupuj godziny per dzień (suma godzin w danym dniu)
+          const hoursByDate = new Map<string, number>();
+          for (const report of reports) {
+            const date = report.date;
+            const hours = report.hours || 0;
+            if (hours > 0) {
+              const current = hoursByDate.get(date) || 0;
+              hoursByDate.set(date, current + hours);
+            }
+          }
+
+          // Dla każdego dnia, rozdziel godziny między projekty
+          // Jeśli jest tylko jeden projekt, przypisz wszystkie godziny do niego
+          // Jeśli jest więcej projektów, rozdziel równo (można później ulepszyć)
+          let syncedCount = 0;
+          const workDate = new Date(year, month - 1, lastDay);
+
+          for (const [date, totalHours] of hoursByDate.entries()) {
+            // Jeśli jest tylko jeden projekt, przypisz wszystkie godziny
+            if (activeAssignments.length === 1) {
+              const assignment = activeAssignments[0];
+              const hoursInGrosze = Math.round(totalHours * 100); // Konwersja do groszy
+              
+              // Sprawdź czy już istnieje wpis dla tego assignment i daty
+              const existingEntries = await db.getTimeEntriesByAssignment(assignment.id);
+              const dateObj = new Date(date);
+              const exists = existingEntries.some(e => {
+                const eDate = new Date(e.workDate);
+                return eDate.getFullYear() === dateObj.getFullYear() &&
+                       eDate.getMonth() === dateObj.getMonth() &&
+                       eDate.getDate() === dateObj.getDate();
+              });
+
+              if (!exists) {
+                await db.createTimeEntry({
+                  assignmentId: assignment.id,
+                  workDate: dateObj,
+                  hoursWorked: hoursInGrosze,
+                  description: `Synchronizacja z HRappka - ${date}`,
+                });
+                syncedCount++;
+              }
+            } else {
+              // Jeśli jest więcej projektów, rozdziel równo
+              const hoursPerProject = totalHours / activeAssignments.length;
+              for (const assignment of activeAssignments) {
+                const hoursInGrosze = Math.round(hoursPerProject * 100);
+                
+                // Sprawdź czy już istnieje wpis
+                const existingEntries = await db.getTimeEntriesByAssignment(assignment.id);
+                const dateObj = new Date(date);
+                const exists = existingEntries.some(e => {
+                  const eDate = new Date(e.workDate);
+                  return eDate.getFullYear() === dateObj.getFullYear() &&
+                         eDate.getMonth() === dateObj.getMonth() &&
+                         eDate.getDate() === dateObj.getDate();
+                });
+
+                if (!exists && hoursInGrosze > 0) {
+                  await db.createTimeEntry({
+                    assignmentId: assignment.id,
+                    workDate: dateObj,
+                    hoursWorked: hoursInGrosze,
+                    description: `Synchronizacja z HRappka - ${date}`,
+                  });
+                  syncedCount++;
+                }
+              }
+            }
+          }
+
+          return {
+            success: true,
+            message: `Zsynchronizowano ${syncedCount} wpisów godzinowych`,
+            syncedCount,
+            totalHoursFromHRappka: Array.from(hoursByDate.values()).reduce((a, b) => a + b, 0),
+          };
+        } catch (error) {
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          console.error(`[HRappka] Error syncing hours for employee ${input.employeeId}:`, error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Nie udało się zsynchronizować godzin: ${errorMessage}`,
+          });
+        }
+      }),
+
+    /**
+     * Synchronizuje godziny z HRappka dla wszystkich zmapowanych pracowników w danym miesiącu
+     */
+    syncHoursFromHRappkaForMonth: adminProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const { month, year } = input;
+          
+          // Pobierz wszystkich pracowników z hrappkaId
+          const employees = await db.getEmployeesWithHRappkaId();
+          
+          if (employees.length === 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Brak pracowników z przypisanym HRappka ID. Najpierw przypisz HRappka ID do pracowników.",
+            });
+          }
+
+          // Oblicz daty
+          const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+          const lastDay = new Date(year, month, 0).getDate();
+          const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+          const results = [];
+          let totalSynced = 0;
+
+          // Synchronizuj dla każdego pracownika
+          for (const employee of employees) {
+            try {
+              // Pobierz przypisania
+              const assignments = await db.getAssignmentsByEmployee(employee.id);
+              const activeAssignments = assignments.filter(a => a.isActive);
+              
+              if (activeAssignments.length === 0) {
+                results.push({
+                  employeeId: employee.id,
+                  employeeName: `${employee.firstName} ${employee.lastName}`,
+                  success: false,
+                  message: "Brak aktywnych przypisań do projektów",
+                });
+                continue;
+              }
+
+              // Pobierz godziny z HRappka
+              const reports = await getHRappkaTimeReports(
+                employee.hrappkaId!,
+                startDate,
+                endDate
+              );
+
+              if (reports.length === 0) {
+                results.push({
+                  employeeId: employee.id,
+                  employeeName: `${employee.firstName} ${employee.lastName}`,
+                  success: true,
+                  message: "Brak godzin do synchronizacji",
+                  syncedCount: 0,
+                });
+                continue;
+              }
+
+              // Grupuj godziny per dzień
+              const hoursByDate = new Map<string, number>();
+              for (const report of reports) {
+                const date = report.date;
+                const hours = report.hours || 0;
+                if (hours > 0) {
+                  const current = hoursByDate.get(date) || 0;
+                  hoursByDate.set(date, current + hours);
+                }
+              }
+
+              // Zapisz wpisy
+              let syncedCount = 0;
+              for (const [date, totalHours] of hoursByDate.entries()) {
+                if (activeAssignments.length === 1) {
+                  const assignment = activeAssignments[0];
+                  const hoursInGrosze = Math.round(totalHours * 100);
+                  
+                  const existingEntries = await db.getTimeEntriesByAssignment(assignment.id);
+                  const dateObj = new Date(date);
+                  const exists = existingEntries.some(e => {
+                    const eDate = new Date(e.workDate);
+                    return eDate.getFullYear() === dateObj.getFullYear() &&
+                           eDate.getMonth() === dateObj.getMonth() &&
+                           eDate.getDate() === dateObj.getDate();
+                  });
+
+                  if (!exists) {
+                    await db.createTimeEntry({
+                      assignmentId: assignment.id,
+                      workDate: dateObj,
+                      hoursWorked: hoursInGrosze,
+                      description: `Synchronizacja z HRappka - ${date}`,
+                    });
+                    syncedCount++;
+                  }
+                } else {
+                  const hoursPerProject = totalHours / activeAssignments.length;
+                  for (const assignment of activeAssignments) {
+                    const hoursInGrosze = Math.round(hoursPerProject * 100);
+                    
+                    const existingEntries = await db.getTimeEntriesByAssignment(assignment.id);
+                    const dateObj = new Date(date);
+                    const exists = existingEntries.some(e => {
+                      const eDate = new Date(e.workDate);
+                      return eDate.getFullYear() === dateObj.getFullYear() &&
+                             eDate.getMonth() === dateObj.getMonth() &&
+                             eDate.getDate() === dateObj.getDate();
+                    });
+
+                    if (!exists && hoursInGrosze > 0) {
+                      await db.createTimeEntry({
+                        assignmentId: assignment.id,
+                        workDate: dateObj,
+                        hoursWorked: hoursInGrosze,
+                        description: `Synchronizacja z HRappka - ${date}`,
+                      });
+                      syncedCount++;
+                    }
+                  }
+                }
+              }
+
+              totalSynced += syncedCount;
+              results.push({
+                employeeId: employee.id,
+                employeeName: `${employee.firstName} ${employee.lastName}`,
+                success: true,
+                message: `Zsynchronizowano ${syncedCount} wpisów`,
+                syncedCount,
+              });
+            } catch (error) {
+              results.push({
+                employeeId: employee.id,
+                employeeName: `${employee.firstName} ${employee.lastName}`,
+                success: false,
+                message: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+
+          return {
+            success: true,
+            message: `Zsynchronizowano godziny dla ${results.filter(r => r.success).length} z ${results.length} pracowników`,
+            totalSynced,
+            results,
+          };
+        } catch (error) {
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          console.error(`[HRappka] Error syncing hours for month ${input.month}/${input.year}:`, error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Nie udało się zsynchronizować godzin: ${errorMessage}`,
+          });
+        }
+      }),
+
+    /**
+     * Synchronizuje godziny z HRappka dla wszystkich zmapowanych pracowników w danym miesiącu z nadpisaniem istniejących
+     */
+    syncHoursFromHRappkaForMonthWithOverwrite: adminProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const { month, year } = input;
+          
+          // Pobierz wszystkich pracowników z hrappkaId
+          const employees = await db.getEmployeesWithHRappkaId();
+          
+          if (employees.length === 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Brak pracowników z przypisanym HRappka ID. Najpierw przypisz HRappka ID do pracowników.",
+            });
+          }
+
+          // Oblicz daty
+          const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+          const lastDay = new Date(year, month, 0).getDate();
+          const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+          const results = [];
+          let totalSynced = 0;
+          let totalDeleted = 0;
+
+          // Synchronizuj dla każdego pracownika
+          for (const employee of employees) {
+            try {
+              // Pobierz przypisania
+              const assignments = await db.getAssignmentsByEmployee(employee.id);
+              const activeAssignments = assignments.filter(a => a.isActive);
+              
+              if (activeAssignments.length === 0) {
+                results.push({
+                  employeeId: employee.id,
+                  employeeName: `${employee.firstName} ${employee.lastName}`,
+                  success: false,
+                  message: "Brak aktywnych przypisań do projektów",
+                });
+                continue;
+              }
+
+              // USUŃ istniejące wpisy dla tego pracownika w danym miesiącu
+              await db.deleteTimeEntriesForEmployeeInMonth(employee.id, month, year);
+              totalDeleted++;
+
+              // Pobierz godziny z HRappka
+              const reports = await getHRappkaTimeReports(
+                employee.hrappkaId!,
+                startDate,
+                endDate
+              );
+
+              if (reports.length === 0) {
+                results.push({
+                  employeeId: employee.id,
+                  employeeName: `${employee.firstName} ${employee.lastName}`,
+                  success: true,
+                  message: "Brak godzin do synchronizacji (stare wpisy zostały usunięte)",
+                  syncedCount: 0,
+                });
+                continue;
+              }
+
+              // Grupuj godziny per dzień
+              const hoursByDate = new Map<string, number>();
+              for (const report of reports) {
+                const date = report.date;
+                const hours = report.hours || 0;
+                if (hours > 0) {
+                  const current = hoursByDate.get(date) || 0;
+                  hoursByDate.set(date, current + hours);
+                }
+              }
+
+              // Zapisz nowe wpisy
+              let syncedCount = 0;
+              for (const [date, totalHours] of hoursByDate.entries()) {
+                if (activeAssignments.length === 1) {
+                  const assignment = activeAssignments[0];
+                  const hoursInGrosze = Math.round(totalHours * 100);
+                  
+                  if (hoursInGrosze > 0) {
+                    await db.createTimeEntry({
+                      assignmentId: assignment.id,
+                      workDate: new Date(date),
+                      hoursWorked: hoursInGrosze,
+                      description: `Synchronizacja z HRappka (nadpisanie) - ${date}`,
+                    });
+                    syncedCount++;
+                  }
+                } else {
+                  const hoursPerProject = totalHours / activeAssignments.length;
+                  for (const assignment of activeAssignments) {
+                    const hoursInGrosze = Math.round(hoursPerProject * 100);
+                    
+                    if (hoursInGrosze > 0) {
+                      await db.createTimeEntry({
+                        assignmentId: assignment.id,
+                        workDate: new Date(date),
+                        hoursWorked: hoursInGrosze,
+                        description: `Synchronizacja z HRappka (nadpisanie) - ${date}`,
+                      });
+                      syncedCount++;
+                    }
+                  }
+                }
+              }
+
+              totalSynced += syncedCount;
+              results.push({
+                employeeId: employee.id,
+                employeeName: `${employee.firstName} ${employee.lastName}`,
+                success: true,
+                message: `Zaktualizowano ${syncedCount} wpisów`,
+                syncedCount,
+              });
+            } catch (error) {
+              results.push({
+                employeeId: employee.id,
+                employeeName: `${employee.firstName} ${employee.lastName}`,
+                success: false,
+                message: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+
+          return {
+            success: true,
+            message: `Zaktualizowano godziny dla ${results.filter(r => r.success).length} z ${results.length} pracowników (usunięto ${totalDeleted} starych wpisów)`,
+            totalSynced,
+            totalDeleted,
+            results,
+          };
+        } catch (error) {
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          console.error(`[HRappka] Error syncing hours with overwrite for month ${input.month}/${input.year}:`, error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Nie udało się zaktualizować godzin: ${errorMessage}`,
+          });
+        }
+      }),
+
+    /**
+     * Synchronizuje dane pracownika z HRappka (pobiera aktualne dane z HRappka)
+     */
+    syncFromHRappka: adminProcedure
+      .input(z.object({
+        employeeId: z.number().int().positive(),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          // Pobierz pracownika z naszej aplikacji
+          const employee = await db.getEmployeeById(input.employeeId);
+          if (!employee) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Pracownik nie został znaleziony",
+            });
+          }
+
+          if (!employee.hrappkaId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Pracownik nie ma przypisanego HRappka ID. Najpierw przypisz HRappka ID do pracownika.",
+            });
+          }
+
+          // Pobierz dane pracownika z HRappka
+          const hrappkaEmployees = await getHRappkaEmployees();
+          const hrappkaEmployee = hrappkaEmployees.find(he => he.id === employee.hrappkaId);
+
+          if (!hrappkaEmployee) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Nie znaleziono pracownika z ID ${employee.hrappkaId} w HRappka`,
+            });
+          }
+
+          // Zaktualizuj dane pracownika (tylko podstawowe informacje, które mogą się zmienić)
+          const updateData: Partial<typeof employee> = {};
+          
+          if (hrappkaEmployee.firstName && hrappkaEmployee.firstName !== employee.firstName) {
+            updateData.firstName = hrappkaEmployee.firstName;
+          }
+          if (hrappkaEmployee.lastName && hrappkaEmployee.lastName !== employee.lastName) {
+            updateData.lastName = hrappkaEmployee.lastName;
+          }
+          if (hrappkaEmployee.email && hrappkaEmployee.email !== employee.email) {
+            updateData.email = hrappkaEmployee.email;
+          }
+          if (hrappkaEmployee.position && hrappkaEmployee.position !== employee.position) {
+            updateData.position = hrappkaEmployee.position;
+          }
+          if (hrappkaEmployee.isActive !== undefined && hrappkaEmployee.isActive !== employee.isActive) {
+            updateData.isActive = hrappkaEmployee.isActive;
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            await db.updateEmployee(input.employeeId, updateData);
+          }
+
+          return {
+            success: true,
+            updated: Object.keys(updateData).length > 0,
+            updateData,
+            hrappkaEmployee,
+          };
+        } catch (error) {
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          console.error(`[HRappka] Error syncing employee ${input.employeeId}:`, error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Nie udało się zsynchronizować danych pracownika: ${errorMessage}`,
+          });
+        }
       }),
     
     updateLoginData: adminProcedure
@@ -643,6 +1366,85 @@ export const appRouter = router({
           console.error('[Import] Błąd podczas importu:', error);
           throw new Error(`Błąd importu: ${error.message || 'Nieznany błąd'}`);
         }
+      }),
+  }),
+
+  vacations: router({
+    // Pracownik: podsumowanie urlopów na dany rok
+    mySummary: employeeProcedure
+      .input(
+        z
+          .object({
+            year: z.number().optional(),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.employeeId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Brak powiązanego pracownika.",
+          });
+        }
+        const year = input?.year ?? new Date().getFullYear();
+        return db.getVacationSummaryForEmployee(ctx.user.employeeId, year);
+      }),
+
+    // Pracownik: lista własnych wniosków urlopowych
+    myVacations: employeeProcedure
+      .input(
+        z
+          .object({
+            year: z.number().optional(),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.employeeId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Brak powiązanego pracownika.",
+          });
+        }
+        const year = input?.year ?? new Date().getFullYear();
+        return db.getVacationsForEmployee(ctx.user.employeeId, year);
+      }),
+
+    // Admin: lista wszystkich wniosków urlopowych
+    list: adminProcedure
+      .input(
+        z
+          .object({
+            year: z.number().optional(),
+          })
+          .optional()
+      )
+      .query(async ({ input }) => {
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
+        const year = input?.year ?? new Date().getFullYear();
+        const { vacations } = await import("../drizzle/schema");
+        return database
+          .select()
+          .from(vacations)
+          .where(sql`YEAR(${vacations.startDate}) = ${year}`)
+          .orderBy(vacations.startDate);
+      }),
+
+    // Admin: zmiana statusu wniosku (zatwierdzenie / odrzucenie)
+    changeStatus: adminProcedure
+      .input(
+        z.object({
+          vacationId: z.number(),
+          status: z.enum(["approved", "rejected"]),
+        })
+      )
+      .mutation(async ({ input }) => {
+        await db.changeVacationStatus({
+          vacationId: input.vacationId,
+          status: input.status,
+        });
+        return { success: true as const };
       }),
   }),
 
@@ -2603,6 +3405,276 @@ export const appRouter = router({
       }),
   }),
 
+  // ============ OFFICE PRESENCE ============
+  officePresence: router({
+    /**
+     * Returns current office presence status for logged-in employee.
+     * Can be used to show whether there is an active session and today's rewards.
+     */
+    status: employeeProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.id) {
+          throw new TRPCError({ code: "UNAUTHORIZED" });
+        }
+        return db.getOfficePresenceStatusForUser(ctx.user.id);
+      }),
+
+    /**
+     * Starts office session for logged-in employee using geolocation coordinates.
+     * If user is not within any active office location, returns isFromOffice=false.
+     */
+    startSession: employeeProcedure
+      .input(z.object({
+        latitude: z.number(),
+        longitude: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user?.id) {
+          throw new TRPCError({ code: "UNAUTHORIZED" });
+        }
+        return db.startOfficeSessionForUser({
+          userId: ctx.user.id,
+          employeeId: ctx.user.employeeId || null,
+          latitude: input.latitude,
+          longitude: input.longitude,
+        });
+      }),
+
+    /**
+     * Ends current active office session for logged-in employee and calculates rewards.
+     */
+    endSession: employeeProcedure
+      .mutation(async ({ ctx }) => {
+        if (!ctx.user?.id) {
+          throw new TRPCError({ code: "UNAUTHORIZED" });
+        }
+        return db.endOfficeSessionForUser(ctx.user.id);
+      }),
+
+    /**
+     * Admin-only: get current office presence settings (thresholds, points).
+     */
+    getSettings: adminProcedure
+      .query(async () => {
+        return db.getOrCreateOfficePresenceSettings();
+      }),
+
+    /**
+     * Admin-only: update office presence settings (thresholds, points).
+     */
+    updateSettings: adminProcedure
+      .input(z.object({
+        minSessionMinutes: z.number().min(30).max(12 * 60).optional(),
+        dayPoints: z.number().min(0).max(10000).optional(),
+        streakLengthDays: z.number().min(1).max(365).optional(),
+        streakPoints: z.number().min(0).max(100000).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const settings = await db.getOrCreateOfficePresenceSettings();
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
+
+        const now = new Date();
+        await database
+          .update(officePresenceSettings)
+          .set({
+            minSessionMinutes: input.minSessionMinutes ?? settings.minSessionMinutes,
+            dayPoints: input.dayPoints ?? settings.dayPoints,
+            streakLengthDays: input.streakLengthDays ?? settings.streakLengthDays,
+            streakPoints: input.streakPoints ?? settings.streakPoints,
+            updatedAt: now,
+          })
+          .where(eq(officePresenceSettings.id, settings.id));
+
+        const updated = await db.getOrCreateOfficePresenceSettings();
+        return { success: true, settings: updated };
+      }),
+
+    /**
+     * Admin-only: list all office locations.
+     */
+    listLocations: adminProcedure.query(async () => {
+      return db.getAllOfficeLocations();
+    }),
+
+    /**
+     * Admin-only: create a new office location.
+     */
+    createLocation: adminProcedure
+      .input(
+        z.object({
+          name: z.string().min(1).max(200),
+          latitude: z.number().min(-90).max(90),
+          longitude: z.number().min(-180).max(180),
+          radiusMeters: z.number().min(10).max(10000),
+          isActive: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const location = await db.createOfficeLocation(input);
+        return { success: true, location };
+      }),
+
+    /**
+     * Admin-only: update an existing office location.
+     */
+    updateLocation: adminProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          name: z.string().min(1).max(200).optional(),
+          latitude: z.number().min(-90).max(90).optional(),
+          longitude: z.number().min(-180).max(180).optional(),
+          radiusMeters: z.number().min(10).max(10000).optional(),
+          isActive: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { id, ...updateData } = input;
+        const location = await db.updateOfficeLocation({ id, ...updateData });
+        return { success: true, location };
+      }),
+
+    /**
+     * Admin-only: delete an office location.
+     */
+    deleteLocation: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteOfficeLocation(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ============ GAMIFICATION ============
+  gamification: router({
+    /**
+     * Employee view: basic overview of level, total points and office presence contribution.
+     */
+    mySummary: employeeProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.employeeId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Brak powiązanego pracownika dla tego konta.",
+        });
+      }
+
+      return db.getGamificationSummaryForEmployee(ctx.user.employeeId);
+    }),
+
+    listQuests: adminProcedure.query(async () => {
+      return db.getAllQuests();
+    }),
+
+    createQuest: adminProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+        type: z.enum(["individual", "team", "company"]).default("individual"),
+        targetType: z.enum(["hours", "knowledge_base"]),
+        targetValue: z.number().min(1),
+        rewardPoints: z.number().min(0),
+        rewardBadgeId: z.number().optional().nullable(),
+        startDate: z.date().optional().nullable(),
+        endDate: z.date().optional().nullable(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createQuest({
+          name: input.name,
+          description: input.description || null,
+          type: input.type,
+          targetType: input.targetType,
+          targetValue: input.targetValue,
+          rewardPoints: input.rewardPoints,
+          rewardBadgeId: input.rewardBadgeId || null,
+          startDate: input.startDate || null,
+          endDate: input.endDate || null,
+          createdAt: new Date(),
+        } as any);
+        return { success: true, id };
+      }),
+
+    listTeamGoals: adminProcedure.query(async () => {
+      return db.getActiveTeamGoals();
+    }),
+
+    createTeamGoal: adminProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+        targetHours: z.number().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createTeamGoal({
+          name: input.name,
+          description: input.description || null,
+          targetHours: input.targetHours,
+          currentHours: 0,
+          status: "planned",
+          startDate: null,
+          endDate: null,
+          createdAt: new Date(),
+        } as any);
+        return { success: true, id };
+      }),
+
+    /**
+     * Admin: award/synchronize points za godziny dla wskazanego miesiąca.
+     */
+    awardHoursForMonth: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number().min(1).max(12),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await db.awardHoursPointsForMonth(input.year, input.month);
+        return { success: true, ...result };
+      }),
+
+    /**
+     * Employee: list assigned quests with basic info.
+     */
+    myQuests: employeeProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user?.employeeId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Brak powiązanego pracownika dla tego konta.",
+          });
+        }
+        return db.getQuestsForEmployee(ctx.user.employeeId);
+      }),
+
+    /**
+     * Employee: register vacation plan and automatically award points
+     * according to planning rules (no penalties). This now tworzy wniosek urlopowy
+     * w tabeli vacations (status: pending) oraz meta-informacje w vacationPlans.
+     * Punkty są przyznawane dopiero po zatwierdzeniu przez admina.
+     */
+    planVacation: employeeProcedure
+      .input(z.object({
+        startDate: z.date(),
+        endDate: z.date(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.user?.employeeId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Brak powiązanego pracownika dla tego konta.",
+          });
+        }
+
+        return {
+          success: true,
+          ...(await db.requestVacationWithPlan({
+            employeeId: ctx.user.employeeId,
+            startDate: input.startDate,
+            endDate: input.endDate,
+          })),
+        };
+      }),
+  }),
+
   // ============ AI FINANCIAL ANALYTICS ============
   aiFinancial: router({
     /**
@@ -3576,6 +4648,275 @@ Odpowiadaj na pytania w sposób zwięzły, profesjonalny i pomocny. Jeśli pytan
           return {
             response: `Przepraszam, wystąpił błąd podczas przetwarzania pytania: ${errorMessage}. Sprawdź czy klucz API jest ustawiony (BUILT_IN_FORGE_API_KEY).`,
           };
+        }
+      }),
+  }),
+
+  // ============ HRAPPKA API ============
+  hrappka: router({
+    /**
+     * Pobiera informacje o pracowniku z HRappka (dla panelu pracownika)
+     */
+    getEmployeeInfo: publicProcedure
+      .input(z.object({ employeeId: z.number().optional() }))
+      .query(async ({ input, ctx }) => {
+        try {
+          // Jeśli employeeId nie jest podane, spróbuj pobrać z kontekstu użytkownika
+          let targetEmployeeId: number | undefined = input.employeeId;
+          
+          if (!targetEmployeeId && ctx.user?.employeeId) {
+            // Pobierz pracownika z bazy danych
+            const employee = await db.getEmployeeById(ctx.user.employeeId);
+            if (employee?.hrappkaId) {
+              targetEmployeeId = employee.hrappkaId;
+            }
+          }
+          
+          if (!targetEmployeeId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Brak HRappka ID dla pracownika. Upewnij się, że pracownik ma przypisane HRappka ID.",
+            });
+          }
+          
+          const info = await getHRappkaEmployeeInfo(targetEmployeeId);
+          return {
+            success: true,
+            info,
+          };
+        } catch (error) {
+          console.error("[HRappka] Error fetching employee info:", error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Nie udało się pobrać informacji z HRappka: ${errorMessage}`,
+          });
+        }
+      }),
+    /**
+     * Testuje połączenie z HRappka API
+     */
+    testConnection: adminProcedure.query(async () => {
+      try {
+        const isConnected = await testHRappkaConnection();
+        return {
+          success: isConnected,
+          message: isConnected
+            ? "Połączenie z HRappka API działa poprawnie"
+            : "Nie udało się połączyć z HRappka API",
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          success: false,
+          message: `Błąd połączenia: ${errorMessage}`,
+        };
+      }
+    }),
+
+    /**
+     * Pobiera listę pracowników z HRappka
+     */
+    getEmployees: adminProcedure.query(async () => {
+      try {
+        const employees = await getHRappkaEmployees();
+        console.log("[HRappka] getEmployees endpoint - returned", employees.length, "employees");
+        return {
+          success: true,
+          employees,
+          count: employees.length,
+        };
+      } catch (error) {
+        console.error("[HRappka] Error fetching employees:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Nie udało się pobrać pracowników z HRappka: ${errorMessage}`,
+        });
+      }
+    }),
+
+    /**
+     * Testuje endpoint HRappka i zwraca surową odpowiedź
+     */
+    testHRappkaEndpoint: adminProcedure
+      .input(z.object({
+        endpoint: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        try {
+          const { getHRappkaConfig, authenticateHRappka } = await import("./_core/hrappka");
+          const config = getHRappkaConfig();
+          
+          console.log("[HRappka Test] Config:", {
+            baseUrl: config.baseUrl,
+            email: config.email ? `${config.email.substring(0, 3)}***` : "NOT SET",
+            hasPassword: !!config.password,
+            companyId: config.companyId,
+          });
+          
+          let token: string;
+          try {
+            token = await authenticateHRappka();
+            console.log("[HRappka Test] Token obtained, length:", token.length);
+          } catch (authError) {
+            console.error("[HRappka Test] Authentication failed:", authError);
+            return {
+              success: false,
+              error: `Authentication failed: ${authError instanceof Error ? authError.message : String(authError)}`,
+            };
+          }
+          
+          // Domyślnie testuj /api/employees/get (właściwy endpoint)
+          const testEndpoint = input.endpoint || "/api/employees/get";
+          const url = new URL(
+            testEndpoint.startsWith("/") ? testEndpoint.slice(1) : testEndpoint,
+            config.baseUrl
+          );
+          
+          let response: Response;
+          try {
+            response = await fetch(url.toString(), {
+              method: "GET",
+              headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+              },
+            });
+          } catch (fetchError) {
+            // Jeśli fetch nie działa (np. problem z SSL), użyj https modułu
+            const https = await import("https");
+            const urlObj = new URL(url.toString());
+            
+            response = await new Promise<Response>((resolve, reject) => {
+              const httpsOptions = {
+                hostname: urlObj.hostname,
+                port: urlObj.port || 443,
+                path: urlObj.pathname + urlObj.search,
+                method: "GET",
+                headers: {
+                  "Accept": "application/json",
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${token}`,
+                },
+                rejectUnauthorized: false, // Wyłącz weryfikację SSL dla testów
+              };
+              
+              const req = https.request(httpsOptions, (res) => {
+                let data = "";
+                res.on("data", (chunk) => {
+                  data += chunk;
+                });
+                res.on("end", () => {
+                  const responseObj = {
+                    ok: res.statusCode && res.statusCode >= 200 && res.statusCode < 300,
+                    status: res.statusCode || 0,
+                    statusText: res.statusMessage || "",
+                    headers: new Headers(Object.entries(res.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(", ") : v || ""])),
+                    text: async () => data,
+                    json: async () => JSON.parse(data),
+                  } as Response;
+                  resolve(responseObj as Response);
+                });
+              });
+              
+              req.on("error", (error) => {
+                reject(error);
+              });
+              
+              req.end();
+            });
+          }
+          
+          const status = response.status;
+          const statusText = response.statusText;
+          const contentType = response.headers.get("content-type");
+          const text = await response.text();
+          
+          let jsonData = null;
+          try {
+            jsonData = JSON.parse(text);
+          } catch {
+            // Nie jest JSON
+          }
+          
+          return {
+            success: response.ok,
+            status,
+            statusText,
+            contentType,
+            text: text.substring(0, 1000), // Pierwsze 1000 znaków
+            json: jsonData,
+            url: url.toString(),
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return {
+            success: false,
+            error: errorMessage,
+          };
+        }
+      }),
+
+    /**
+     * Pobiera raporty godzinowe dla konkretnego pracownika
+     */
+    getTimeReports: adminProcedure
+      .input(
+        z.object({
+          employeeId: z.number().int().positive(),
+          startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data musi być w formacie YYYY-MM-DD").optional(),
+          endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data musi być w formacie YYYY-MM-DD").optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        try {
+          const reports = await getHRappkaTimeReports(
+            input.employeeId,
+            input.startDate,
+            input.endDate
+          );
+          return {
+            success: true,
+            reports,
+            count: reports.length,
+          };
+        } catch (error) {
+          console.error(`[HRappka] Error fetching time reports for employee ${input.employeeId}:`, error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Nie udało się pobrać raportów godzinowych: ${errorMessage}`,
+          });
+        }
+      }),
+
+    /**
+     * Pobiera wszystkie raporty godzinowe dla wszystkich pracowników
+     */
+    getAllTimeReports: adminProcedure
+      .input(
+        z.object({
+          startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data musi być w formacie YYYY-MM-DD"),
+          endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data musi być w formacie YYYY-MM-DD"),
+        })
+      )
+      .query(async ({ input }) => {
+        try {
+          const reports = await getAllHRappkaTimeReports(input.startDate, input.endDate);
+          return {
+            success: true,
+            reports,
+            count: reports.length,
+          };
+        } catch (error) {
+          console.error("[HRappka] Error fetching all time reports:", error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Nie udało się pobrać raportów godzinowych: ${errorMessage}`,
+          });
         }
       }),
   }),

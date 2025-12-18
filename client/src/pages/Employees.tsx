@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
-import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck, Download, Upload, MoreVertical, CheckCircle2, XCircle, TrendingUp, TrendingDown, Minus, Sparkles, AlertTriangle, Calculator, RotateCcw, BarChart3, Lightbulb, Key, Lock } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, FileText, ArrowLeft, Calendar, Briefcase, Users, Search, X, FileCheck, Download, Upload, MoreVertical, CheckCircle2, XCircle, TrendingUp, TrendingDown, Minus, Sparkles, AlertTriangle, Calculator, RotateCcw, BarChart3, Lightbulb, Key, Lock, Link2, Unlink, RefreshCw } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -84,6 +84,7 @@ export default function Employees() {
     enabled: marketTrendsTriggered && scenarioType === "market",
     retry: false,
   });
+
   // Pomocnicze kalkulacje
   const calcMonthlyProfit = (emp: any, rateChangePct = 0, costChangePct = 0) => {
     const rate = (emp.hourlyRateClient || 0) * (1 + rateChangePct / 100);
@@ -808,6 +809,14 @@ export default function Employees() {
           <p className="text-muted-foreground">Zarządzaj pracownikami i ich kosztami</p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            onClick={() => setLocation("/hrappka-mapping")}
+            variant="outline"
+            className="shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+          >
+            <Link2 className="w-4 h-4 mr-2" />
+            Mapuj z HRappka
+          </Button>
           <Button 
             onClick={handleExport} 
             variant="outline"
@@ -2228,6 +2237,7 @@ export default function Employees() {
           )}
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }

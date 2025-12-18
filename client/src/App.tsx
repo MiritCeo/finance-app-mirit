@@ -17,10 +17,15 @@ import TasksPage from "./pages/TasksPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import KnowledgeBaseEditPage from "./pages/KnowledgeBaseEditPage";
 import KnowledgeBaseViewPage from "./pages/KnowledgeBaseViewPage";
+import OfficePresence from "./pages/OfficePresence";
+import Gamification from "./pages/Gamification";
+import GamificationGuide from "./pages/GamificationGuide";
+import VacationPlanning from "./pages/VacationPlanning";
 import AIFinancialInsights from "./pages/AIFinancialInsights";
 import EmployeeLogin from "./pages/EmployeeLogin";
 import MyCV from "./pages/MyCV";
 import AdminLogin from "./pages/AdminLogin";
+import HRappkaMapping from "./pages/HRappkaMapping";
 import DashboardLayout from "./components/DashboardLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -41,6 +46,13 @@ function Router() {
         <ProtectedRoute requiredRole="admin">
           <DashboardLayout>
             <Employees />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/hrappka-mapping"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <HRappkaMapping />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>
@@ -129,6 +141,34 @@ function Router() {
         <ProtectedRoute>
           <DashboardLayout>
             <KnowledgeBaseViewPage />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/office-presence"}>
+        <ProtectedRoute>
+          <DashboardLayout>
+            <OfficePresence />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/gamification"}>
+        <ProtectedRoute>
+          <DashboardLayout>
+            <Gamification />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/gamification-info"}>
+        <ProtectedRoute>
+          <DashboardLayout>
+            <GamificationGuide />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/vacation-planning"}>
+        <ProtectedRoute>
+          <DashboardLayout>
+            <VacationPlanning />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>

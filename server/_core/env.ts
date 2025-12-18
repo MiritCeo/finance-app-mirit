@@ -23,4 +23,11 @@ export const ENV = {
   // Użyj OPENAI_API_KEY jako fallback jeśli BUILT_IN_FORGE_API_KEY nie jest ustawiony
   get forgeApiKey() { return process.env.BUILT_IN_FORGE_API_KEY ?? process.env.OPENAI_API_KEY ?? ""; },
   get openaiApiKey() { return process.env.OPENAI_API_KEY ?? ""; },
+  // HRappka API configuration
+  get hrappkaBaseUrl() { return process.env.HRAPPKA_BASE_URL ?? ""; },
+  get hrappkaEmail() { return process.env.HRAPPKA_EMAIL ?? ""; },
+  get hrappkaPassword() { return process.env.HRAPPKA_PASSWORD ?? ""; },
+  get hrappkaCompanyId() { return process.env.HRAPPKA_COMPANY_ID ?? ""; },
+  get hrappkaAuthenticateOldApi() { return process.env.HRAPPKA_AUTHENTICATE_OLD_API ?? ""; },
+  get hrappkaToken() { return process.env.HRAPPKA_TOKEN ?? ""; }, // Opcjonalnie - jeśli mamy już token
 };

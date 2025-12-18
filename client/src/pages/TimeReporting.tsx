@@ -7,10 +7,62 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Save, Calendar, TrendingUp, ArrowLeft, Edit, Trash2, Clock, Briefcase, Search, X } from "lucide-react";
+import { Loader2, Save, Calendar, TrendingUp, ArrowLeft, Edit, Trash2, Clock, Briefcase, Search, X, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Komponent wyświetlający godziny z HRappka (z bazy danych - zsynchronizowane)
+function HRappkaHoursDisplay({ 
+  employeeId, 
+  assignmentId, 
+  month, 
+  year 
+}: { 
+  employeeId: number; 
+  assignmentId: number; 
+  month?: number; 
+  year?: number;
+}) {
+  const { data: monthlyDetails, isLoading } = trpc.timeEntries.getMonthlyReportDetails.useQuery(
+    {
+      month: month || 1,
+      year: year || new Date().getFullYear(),
+    },
+    {
+      enabled: !!month && !!year,
+      refetchOnWindowFocus: false,
+    }
+  );
+
+  if (isLoading) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        <Loader2 className="w-3 h-3 inline animate-spin mr-1" />
+      </span>
+    );
+  }
+
+  if (!monthlyDetails) {
+    return null;
+  }
+
+  // Znajdź godziny dla tego pracownika i assignment z bazy danych
+  // Uwaga: item.hours już jest w godzinach (nie w groszach), bo getMonthlyReportDetails już konwertuje
+  const assignmentHours = monthlyDetails
+    .filter(d => d.employeeId === employeeId && d.assignmentId === assignmentId)
+    .reduce((sum, item) => sum + item.hours, 0);
+
+  if (assignmentHours === 0) {
+    return null;
+  }
+
+  return (
+    <span className="text-xs text-green-600 font-medium whitespace-nowrap">
+      HRappka: {assignmentHours.toFixed(1)}h
+    </span>
+  );
+}
 
 // Komponent karty pracownika z projektami
 function EmployeeCard({ 
@@ -19,7 +71,11 @@ function EmployeeCard({
   onHoursChange, 
   onViewReport,
   onAssignmentData,
-  projects 
+  projects,
+  onSyncHRappka,
+  selectedMonth,
+  selectedYear,
+  isSyncingHRappka
 }: { 
   employee: any; 
   hoursData: Record<number, string>; 
@@ -27,6 +83,10 @@ function EmployeeCard({
   onViewReport: () => void;
   onAssignmentData?: (assignments: any[]) => void;
   projects?: any[];
+  onSyncHRappka?: (employeeId: number) => void;
+  selectedMonth?: number;
+  selectedYear?: number;
+  isSyncingHRappka?: boolean;
 }) {
   const { data: assignments, isLoading } = trpc.assignments.byEmployee.useQuery(
     { employeeId: employee.id },
@@ -75,16 +135,35 @@ function EmployeeCard({
               </CardDescription>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onViewReport}
-            title="Raport roczny godzinowy"
-            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-          >
-            <Calendar className="w-4 h-4 mr-1.5" />
-            Raport
-          </Button>
+          <div className="flex gap-2">
+            {employee.hrappkaId && onSyncHRappka && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onSyncHRappka(employee.id)}
+                disabled={isSyncingHRappka}
+                title="Pobierz godziny z HRappka"
+                className="text-green-600 hover:text-green-700 hover:bg-green-50"
+              >
+                {isSyncingHRappka ? (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4 mr-1.5" />
+                )}
+                HRappka
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onViewReport}
+              title="Raport roczny godzinowy"
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            >
+              <Calendar className="w-4 h-4 mr-1.5" />
+              Raport
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -111,6 +190,14 @@ function EmployeeCard({
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="flex items-center gap-2">
+                      {employee.hrappkaId && (
+                        <HRappkaHoursDisplay 
+                          employeeId={employee.id}
+                          assignmentId={assignment.id}
+                          month={selectedMonth}
+                          year={selectedYear}
+                        />
+                      )}
                       <Label htmlFor={`hours-${assignment.id}`} className="text-sm text-muted-foreground whitespace-nowrap">
                         Godziny:
                       </Label>
@@ -147,6 +234,8 @@ export default function TimeReporting() {
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   // Struktura: { employeeId: { assignmentId: hours } }
   const [hoursData, setHoursData] = useState<Record<number, Record<number, string>>>({});
+  // Śledź który pracownik jest synchronizowany
+  const [syncingEmployeeId, setSyncingEmployeeId] = useState<number | null>(null);
   // Cache assignments dla obliczeń przychodu: { assignmentId: assignment }
   const [assignmentsCache, setAssignmentsCache] = useState<Record<number, any>>({});
   // Cache assignments per pracownik: { employeeId: assignments[] }
@@ -200,6 +289,187 @@ export default function TimeReporting() {
       toast.error(`Błąd: ${error.message}`);
     },
   });
+
+  const syncHRappkaMutation = trpc.employees.syncHoursFromHRappka.useMutation({
+    onSuccess: async (data, variables) => {
+      toast.success(data.message || `Zsynchronizowano ${data.syncedCount} wpisów godzinowych`);
+      utils.timeEntries.monthlyReports.invalidate();
+      utils.dashboard.kpi.invalidate();
+      utils.dashboard.getAccurateMonthlyResults.invalidate();
+      utils.dashboard.getProfitTrends.invalidate();
+      utils.assignments.byEmployee.invalidate();
+      
+      // Załaduj zsynchronizowane godziny do formularza
+      if (data.syncedCount > 0 && selectedMonth && selectedYear) {
+        try {
+          const details = await utils.timeEntries.getMonthlyReportDetails.fetch({
+            month: selectedMonth,
+            year: selectedYear,
+          });
+          
+          // Zaktualizuj tylko dla zsynchronizowanego pracownika
+          const employeeDetails = details.filter(d => d.employeeId === variables.employeeId);
+          if (employeeDetails.length > 0) {
+            setHoursData(prev => {
+              const updated = { ...prev };
+              if (!updated[variables.employeeId]) {
+                updated[variables.employeeId] = {};
+              }
+              employeeDetails.forEach((item) => {
+                // item.hours już jest w godzinach (nie w groszach), bo getMonthlyReportDetails już konwertuje
+                updated[variables.employeeId][item.assignmentId] = item.hours.toString();
+              });
+              return updated;
+            });
+          }
+        } catch (error) {
+          console.error("Error loading synced hours:", error);
+        }
+      }
+    },
+    onError: (error) => {
+      toast.error(`Błąd synchronizacji: ${error.message}`);
+    },
+  });
+
+  const syncHRappkaForMonthMutation = trpc.employees.syncHoursFromHRappkaForMonth.useMutation({
+    onSuccess: async (data) => {
+      toast.success(data.message || `Zsynchronizowano godziny dla ${data.results.filter(r => r.success).length} pracowników`);
+      utils.timeEntries.monthlyReports.invalidate();
+      utils.dashboard.kpi.invalidate();
+      utils.dashboard.getAccurateMonthlyResults.invalidate();
+      utils.dashboard.getProfitTrends.invalidate();
+      utils.assignments.byEmployee.invalidate();
+      
+      // Załaduj zsynchronizowane godziny do formularza
+      if (data.totalSynced > 0 && selectedMonth && selectedYear) {
+        try {
+          const details = await utils.timeEntries.getMonthlyReportDetails.fetch({
+            month: selectedMonth,
+            year: selectedYear,
+          });
+          
+          // Załaduj wszystkie zsynchronizowane godziny
+          const newHoursData: Record<number, Record<number, string>> = {};
+          details.forEach((item) => {
+            if (!newHoursData[item.employeeId]) {
+              newHoursData[item.employeeId] = {};
+            }
+            // item.hours już jest w godzinach (nie w groszach), bo getMonthlyReportDetails już konwertuje
+            newHoursData[item.employeeId][item.assignmentId] = item.hours.toString();
+          });
+          
+          // Zaktualizuj stan, zachowując istniejące dane
+          setHoursData(prev => {
+            const updated = { ...prev };
+            Object.entries(newHoursData).forEach(([employeeId, assignments]) => {
+              updated[parseInt(employeeId)] = {
+                ...(updated[parseInt(employeeId)] || {}),
+                ...assignments,
+              };
+            });
+            return updated;
+          });
+        } catch (error) {
+          console.error("Error loading synced hours:", error);
+        }
+      }
+    },
+    onError: (error) => {
+      toast.error(`Błąd synchronizacji: ${error.message}`);
+    },
+  });
+
+  const syncHRappkaForMonthOverwriteMutation = trpc.employees.syncHoursFromHRappkaForMonthWithOverwrite.useMutation({
+    onSuccess: async (data) => {
+      toast.success(data.message || `Zaktualizowano godziny dla ${data.results.filter(r => r.success).length} pracowników`);
+      utils.timeEntries.monthlyReports.invalidate();
+      utils.dashboard.kpi.invalidate();
+      utils.dashboard.getAccurateMonthlyResults.invalidate();
+      utils.dashboard.getProfitTrends.invalidate();
+      utils.assignments.byEmployee.invalidate();
+      
+      // Załaduj zaktualizowane godziny do formularza
+      if (data.totalSynced > 0 && selectedMonth && selectedYear) {
+        try {
+          const details = await utils.timeEntries.getMonthlyReportDetails.fetch({
+            month: selectedMonth,
+            year: selectedYear,
+          });
+          
+          // Załaduj wszystkie zaktualizowane godziny
+          const newHoursData: Record<number, Record<number, string>> = {};
+          details.forEach((item) => {
+            if (!newHoursData[item.employeeId]) {
+              newHoursData[item.employeeId] = {};
+            }
+            // item.hours już jest w godzinach (nie w groszach), bo getMonthlyReportDetails już konwertuje
+            newHoursData[item.employeeId][item.assignmentId] = item.hours.toString();
+          });
+          
+          // Zaktualizuj stan, nadpisując istniejące dane dla zaktualizowanych pracowników
+          setHoursData(prev => {
+            const updated = { ...prev };
+            Object.entries(newHoursData).forEach(([employeeId, assignments]) => {
+              updated[parseInt(employeeId)] = {
+                ...(updated[parseInt(employeeId)] || {}),
+                ...assignments,
+              };
+            });
+            return updated;
+          });
+        } catch (error) {
+          console.error("Error loading updated hours:", error);
+        }
+      }
+    },
+    onError: (error) => {
+      toast.error(`Błąd aktualizacji: ${error.message}`);
+    },
+  });
+
+  const handleSyncHRappka = (employeeId: number) => {
+    if (!selectedMonth || !selectedYear) {
+      toast.error("Wybierz miesiąc i rok");
+      return;
+    }
+    setSyncingEmployeeId(employeeId);
+    syncHRappkaMutation.mutate({
+      employeeId,
+      month: selectedMonth,
+      year: selectedYear,
+    }, {
+      onSettled: () => {
+        setSyncingEmployeeId(null);
+      },
+    });
+  };
+
+  const handleSyncHRappkaForMonth = () => {
+    if (!selectedMonth || !selectedYear) {
+      toast.error("Wybierz miesiąc i rok");
+      return;
+    }
+    if (confirm(`Czy na pewno chcesz pobrać godziny z HRappka dla wszystkich zmapowanych pracowników za ${getMonthName(selectedMonth)} ${selectedYear}?\n\nUwaga: Istniejące godziny nie zostaną nadpisane.`)) {
+      syncHRappkaForMonthMutation.mutate({
+        month: selectedMonth,
+        year: selectedYear,
+      });
+    }
+  };
+
+  const handleSyncHRappkaForMonthWithOverwrite = () => {
+    if (!selectedMonth || !selectedYear) {
+      toast.error("Wybierz miesiąc i rok");
+      return;
+    }
+    if (confirm(`Czy na pewno chcesz ZAKTUALIZOWAĆ godziny z HRappka dla wszystkich zmapowanych pracowników za ${getMonthName(selectedMonth)} ${selectedYear}?\n\nUWAGA: Wszystkie istniejące godziny dla tego miesiąca zostaną USUNIĘTE i zastąpione nowymi danymi z HRappka!`)) {
+      syncHRappkaForMonthOverwriteMutation.mutate({
+        month: selectedMonth,
+        year: selectedYear,
+      });
+    }
+  };
 
   const handleHoursChange = (employeeId: number, assignmentId: number, value: string) => {
     setHoursData(prev => ({
@@ -377,6 +647,48 @@ export default function TimeReporting() {
                 </div>
               </div>
 
+              {/* Przyciski synchronizacji dla całego miesiąca */}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleSyncHRappkaForMonth}
+                  disabled={syncHRappkaForMonthMutation.isPending || syncHRappkaForMonthOverwriteMutation.isPending}
+                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                >
+                  {syncHRappkaForMonthMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Synchronizowanie...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 mr-2" />
+                      Pobierz godziny HRappka - cały miesiąc
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleSyncHRappkaForMonthWithOverwrite}
+                  disabled={syncHRappkaForMonthMutation.isPending || syncHRappkaForMonthOverwriteMutation.isPending}
+                  className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                >
+                  {syncHRappkaForMonthOverwriteMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Aktualizowanie...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 mr-2" />
+                      Aktualizuj godziny HRappka - cały miesiąc
+                    </>
+                  )}
+                </Button>
+              </div>
+
               {/* Wyszukiwarka i filtry */}
               <div className="space-y-4">
                 <div className="flex gap-4">
@@ -437,6 +749,10 @@ export default function TimeReporting() {
                         onViewReport={() => setLocation(`/employee/${employee.id}/annual-report`)}
                         onAssignmentData={(assignments) => handleAssignmentData(employee.id, assignments)}
                         projects={projects}
+                        onSyncHRappka={handleSyncHRappka}
+                        selectedMonth={selectedMonth}
+                        selectedYear={selectedYear}
+                        isSyncingHRappka={syncingEmployeeId === employee.id && syncHRappkaMutation.isPending}
                       />
                     ))}
                   </div>
