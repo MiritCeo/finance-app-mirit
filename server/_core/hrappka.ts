@@ -179,12 +179,10 @@ export interface HRappkaEmployeeInfo {
   averageHoursPerDay: number; // Średnia godzin dziennie w bieżącym miesiącu
   monthlySummary?: HRappkaMonthlySummary[]; // Podsumowanie godzin per miesiąc
   vacationDaysRemaining?: number; // Pozostałe dni urlopu (jeśli dostępne w API)
-  contractEndDate?: string; // Data zakończenia umowy (YYYY-MM-DD)
-  contractStartDate?: string; // Data rozpoczęcia umowy (YYYY-MM-DD)
-  contractType?: string; // Typ umowy (np. "EMPLOYMENT_CONTRACT")
   yesterdayHoursReported: boolean; // Czy godziny zostały uzupełnione wczoraj
   yesterdayHours?: number; // Ilość godzin wczoraj (jeśli były)
-  lastSettlement?: HRappkaSettlement; // Ostatnie rozliczenie
+  yesterdayHoursAccepted?: number; // Ilość zaakceptowanych godzin wczoraj
+  yesterdayHoursUnaccepted?: number; // Ilość niezaakceptowanych godzin wczoraj
 }
 
 /**
@@ -1042,17 +1040,19 @@ export async function getHRappkaTimeReports(
               }
               
               // Jeśli includeUnaccepted jest false, pomiń wydarzenia które nie są zrealizowane
-              // REALIZED i REALIZED_FROM_REPORT są prawidłowymi stanami
+              // REALIZED, REALIZED_FROM_REPORT i REPORT_REPORTED są prawidłowymi stanami (zgłoszone godziny)
               if (!includeUnaccepted) {
                 if (event.cuce_realization_state && 
                     event.cuce_realization_state !== "REALIZED" && 
-                    event.cuce_realization_state !== "REALIZED_FROM_REPORT") {
+                    event.cuce_realization_state !== "REALIZED_FROM_REPORT" &&
+                    event.cuce_realization_state !== "REPORT_REPORTED") {
                   console.log(`[HRappka] Skipping event with state: ${event.cuce_realization_state}`);
                   return;
                 }
               } else {
                 // Jeśli includeUnaccepted jest true, pomiń tylko usunięte
-                // Wszystkie inne stany (w tym niezaakceptowane) są uwzględniane
+                // Wszystkie inne stany (w tym niezaakceptowane, w tym REPORT_REPORTED) są uwzględniane
+                console.log(`[HRappka] Including event with state: ${event.cuce_realization_state || 'no state'} (includeUnaccepted=true)`);
               }
               
               // Parsuj godziny z cuce_quantity (nowy format) lub cuce_amount (stary format)
@@ -1064,14 +1064,19 @@ export async function getHRappkaTimeReports(
               }
               
               // Określ czy godziny są zaakceptowane
-              // Zaakceptowane to: REALIZED, REALIZED_FROM_REPORT, lub brak stanu (domyślnie zaakceptowane)
+              // Zaakceptowane to: REALIZED, REALIZED_FROM_REPORT
+              // REPORT_REPORTED = zgłoszone, ale nie zaakceptowane
+              // Brak stanu = domyślnie zaakceptowane
               let isAccepted = true;
-              if (includeUnaccepted && event.cuce_realization_state) {
+              if (event.cuce_realization_state) {
+                // Jeśli jest jakiś stan, sprawdź czy jest zaakceptowany
                 isAccepted = event.cuce_realization_state === "REALIZED" || event.cuce_realization_state === "REALIZED_FROM_REPORT";
-                // Loguj niezaakceptowane dla debugowania
-                if (!isAccepted) {
-                  console.log(`[HRappka] Unaccepted event: cuce_id=${event.cuce_id}, date=${event.cuce_date || date}, state=${event.cuce_realization_state}, hours=${hours}`);
-                }
+                // REPORT_REPORTED jest traktowany jako niezaakceptowany (ale jest uwzględniany w raportach)
+                // Loguj wszystkie stany dla debugowania
+                console.log(`[HRappka] Event state: cuce_id=${event.cuce_id}, date=${event.cuce_date || date}, state="${event.cuce_realization_state}", isAccepted=${isAccepted}, hours=${hours}`);
+              } else {
+                // Brak stanu = domyślnie zaakceptowane
+                console.log(`[HRappka] Event without state (default accepted): cuce_id=${event.cuce_id}, date=${event.cuce_date || date}, hours=${hours}`);
               }
               
               reports.push({
@@ -1099,11 +1104,13 @@ export async function getHRappkaTimeReports(
           eventsArray.forEach((event) => {
             if (event.cuce_deleted) return;
             
-            // Jeśli includeUnaccepted jest false, pomiń niezaakceptowane
+            // Jeśli includeUnaccepted jest false, pomiń wydarzenia które nie są zrealizowane
+            // REALIZED, REALIZED_FROM_REPORT i REPORT_REPORTED są prawidłowymi stanami (zgłoszone godziny)
             if (!includeUnaccepted) {
               if (event.cuce_realization_state && 
                   event.cuce_realization_state !== "REALIZED" && 
-                  event.cuce_realization_state !== "REALIZED_FROM_REPORT") return;
+                  event.cuce_realization_state !== "REALIZED_FROM_REPORT" &&
+                  event.cuce_realization_state !== "REPORT_REPORTED") return;
             }
             
             // Parsuj godziny z cuce_quantity (nowy format) lub cuce_amount (stary format)
@@ -1112,14 +1119,19 @@ export async function getHRappkaTimeReports(
             if (hours <= 0) return;
             
             // Określ czy godziny są zaakceptowane
-            // Zaakceptowane to: REALIZED, REALIZED_FROM_REPORT, lub brak stanu (domyślnie zaakceptowane)
+            // Zaakceptowane to: REALIZED, REALIZED_FROM_REPORT
+            // REPORT_REPORTED = zgłoszone, ale nie zaakceptowane
+            // Brak stanu = domyślnie zaakceptowane
             let isAccepted = true;
-            if (includeUnaccepted && event.cuce_realization_state) {
+            if (event.cuce_realization_state) {
+              // Jeśli jest jakiś stan, sprawdź czy jest zaakceptowany
               isAccepted = event.cuce_realization_state === "REALIZED" || event.cuce_realization_state === "REALIZED_FROM_REPORT";
-              // Loguj niezaakceptowane dla debugowania
-              if (!isAccepted) {
-                console.log(`[HRappka] Unaccepted event: cuce_id=${event.cuce_id}, date=${event.cuce_date || date}, state=${event.cuce_realization_state}, hours=${hours}`);
-              }
+              // REPORT_REPORTED jest traktowany jako niezaakceptowany (ale jest uwzględniany w raportach)
+              // Loguj wszystkie stany dla debugowania
+              console.log(`[HRappka] Event state: cuce_id=${event.cuce_id}, date=${event.cuce_date || date}, state="${event.cuce_realization_state}", isAccepted=${isAccepted}, hours=${hours}`);
+            } else {
+              // Brak stanu = domyślnie zaakceptowane
+              console.log(`[HRappka] Event without state (default accepted): cuce_id=${event.cuce_id}, date=${event.cuce_date || date}, hours=${hours}`);
             }
             
             reports.push({
@@ -1333,42 +1345,80 @@ export async function getHRappkaContracts(employeeId: number): Promise<HRappkaCo
  */
 export async function getHRappkaEmployeeInfo(employeeId: number): Promise<HRappkaEmployeeInfo> {
   try {
+    console.log(`[HRappka] ===== getHRappkaEmployeeInfo START for employee ${employeeId} =====`);
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
+    console.log(`[HRappka] Current date info: year=${currentYear}, month=${currentMonth}, date=${now.toISOString()}`);
+    
+    // Oblicz dzisiejszą datę jako string (używane w wielu miejscach)
+    const today = new Date(now);
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     
     // Oblicz daty dla bieżącego miesiąca
+    // UWAGA: Dla bieżącego miesiąca używamy dzisiejszej daty jako końca, nie ostatniego dnia miesiąca
+    // (API może nie zwracać danych dla przyszłych dni)
     const monthStart = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
-    const lastDay = new Date(currentYear, currentMonth, 0).getDate();
-    const monthEnd = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const monthEnd = todayStr; // Użyj dzisiejszej daty zamiast ostatniego dnia miesiąca
+    console.log(`[HRappka] Current month date range: ${monthStart} to ${monthEnd} (today)`);
     
     // Oblicz daty dla bieżącego roku
     const yearStart = `${currentYear}-01-01`;
     const yearEnd = `${currentYear}-12-31`;
     
     // Oblicz daty dla bieżącego tygodnia (poniedziałek - niedziela)
-    const today = new Date(now);
     const dayOfWeek = today.getDay(); // 0 = niedziela, 1 = poniedziałek
     const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Konwersja: niedziela = 6 dni od poniedziałku
     const weekStartDate = new Date(today);
     weekStartDate.setDate(today.getDate() - daysFromMonday);
     const weekStart = `${weekStartDate.getFullYear()}-${String(weekStartDate.getMonth() + 1).padStart(2, '0')}-${String(weekStartDate.getDate()).padStart(2, '0')}`;
-    const weekEnd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const weekEnd = todayStr;
+    
+    console.log(`[HRappka] ===== BEFORE MONTHLY SUMMARY: About to start fetching hours =====`);
+    console.log(`[HRappka] DEBUG: Reached monthly summary section, employeeId=${employeeId}, currentYear=${currentYear}, currentMonth=${currentMonth}`);
+    console.log(`[HRappka] DEBUG: weekStart=${weekStart}, weekEnd=${weekEnd}, todayStr=${todayStr}`);
     
     // Pobierz podsumowanie godzin per miesiąc dla całego roku (użyjemy tego do obliczenia totalHoursThisYear)
     // To zapewni spójność z tabelą miesięczną
     const monthlySummary: HRappkaMonthlySummary[] = [];
     let totalAcceptedHoursThisYear = 0;
     
-    console.log(`[HRappka] Fetching monthly summary for employee ${employeeId} for year ${currentYear}`);
+    console.log(`[HRappka] ===== START: Fetching monthly summary for employee ${employeeId} for year ${currentYear} =====`);
+    console.log(`[HRappka] Current date: ${todayStr}, current month: ${currentMonth}, current year: ${currentYear}`);
+    console.log(`[HRappka] DEBUG: About to start loop for 12 months`);
     for (let month = 1; month <= 12; month++) {
+      console.log(`[HRappka] DEBUG: Loop iteration ${month}/12`);
       const monthStart = `${currentYear}-${String(month).padStart(2, '0')}-01`;
       const lastDay = new Date(currentYear, month, 0).getDate();
-      const monthEnd = `${currentYear}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      
+      // Dla bieżącego miesiąca używamy dzisiejszej daty, dla przeszłych - ostatniego dnia miesiąca
+      let monthEnd: string;
+      if (month === currentMonth) {
+        // Bieżący miesiąc - użyj dzisiejszej daty (API może nie zwracać danych dla przyszłych dat)
+        monthEnd = todayStr;
+        console.log(`[HRappka] Current month (${month}) detected - using today's date as end: ${monthEnd} (last day would be: ${currentYear}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')})`);
+      } else {
+        // Przeszłe miesiące - użyj ostatniego dnia miesiąca
+        monthEnd = `${currentYear}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      }
       
       // Pobierz zaakceptowane godziny
+      console.log(`[HRappka] Fetching month ${month}/${currentYear} reports for employee ${employeeId} (date range: ${monthStart} to ${monthEnd})`);
       const monthAcceptedReports = await getHRappkaTimeReports(employeeId, monthStart, monthEnd, "REAL", false);
       const acceptedHours = monthAcceptedReports.reduce((sum, report) => sum + (report.hours || 0), 0);
+      console.log(`[HRappka] Month ${month}/${currentYear}: Found ${monthAcceptedReports.length} accepted reports, total hours: ${acceptedHours.toFixed(2)}h`);
+      
+      // Dla bieżącego miesiąca, loguj szczegóły pierwszych 5 raportów dla debugowania
+      if (month === currentMonth && monthAcceptedReports.length > 0) {
+        console.log(`[HRappka] Current month sample reports (first 5):`, monthAcceptedReports.slice(0, 5).map(r => ({
+          date: r.date,
+          hours: r.hours,
+          isAccepted: r.isAccepted,
+          description: r.description?.substring(0, 50)
+        })));
+      } else if (month === currentMonth && monthAcceptedReports.length === 0) {
+        console.warn(`[HRappka] WARNING: No reports found for current month (${month}/${currentYear}) with date range ${monthStart} to ${monthEnd}`);
+      }
       totalAcceptedHoursThisYear += acceptedHours;
       
       monthlySummary.push({
@@ -1380,17 +1430,47 @@ export async function getHRappkaEmployeeInfo(employeeId: number): Promise<HRappk
       });
     }
     
+    console.log(`[HRappka] ===== MONTHLY SUMMARY LOOP COMPLETED =====`);
+    console.log(`[HRappka] Monthly summary array length: ${monthlySummary.length}`);
+    console.log(`[HRappka] Monthly summary months: ${monthlySummary.map(m => `${m.month}/${m.year}: ${m.acceptedHours.toFixed(2)}h`).join(', ')}`);
+    
     // Oblicz totalHoursThisYear jako suma zaakceptowanych godzin (zgodnie z tabelą)
     const totalHoursThisYear = totalAcceptedHoursThisYear;
     console.log(`[HRappka] Total hours this year for employee ${employeeId}: ${totalHoursThisYear.toFixed(2)}h`);
     
-    // Pobierz godziny dla bieżącego miesiąca (użyj danych z monthlySummary dla bieżącego miesiąca)
+    // Pobierz godziny dla bieżącego miesiąca - użyj danych z monthlySummary (już pobranych w pętli)
+    // Używamy tych samych dat co w pętli, więc dane powinny być spójne
     const currentMonthSummary = monthlySummary.find(m => m.month === currentMonth);
-    const totalHoursThisMonth = currentMonthSummary?.acceptedHours || 0;
-    console.log(`[HRappka] Total hours this month for employee ${employeeId}: ${totalHoursThisMonth.toFixed(2)}h`);
+    let totalHoursThisMonth = currentMonthSummary?.acceptedHours || 0;
+    console.log(`[HRappka] ===== CURRENT MONTH FROM SUMMARY =====`);
+    console.log(`[HRappka] Looking for month ${currentMonth} in monthlySummary (${monthlySummary.length} months total)`);
+    console.log(`[HRappka] Monthly summary months:`, monthlySummary.map(m => `${m.month}/${m.year}: ${m.acceptedHours.toFixed(2)}h`));
+    console.log(`[HRappka] Current month (${currentMonth}/${currentYear}): ${currentMonthSummary ? `${currentMonthSummary.acceptedHours.toFixed(2)}h from summary` : 'NOT FOUND in summary'}`);
+    
+    // Jeśli nie znaleziono w summary lub ma 0h, spróbuj pobrać bezpośrednio
+    if (!currentMonthSummary || currentMonthSummary.acceptedHours === 0) {
+      console.log(`[HRappka] ===== RETRYING CURRENT MONTH DIRECTLY (summary has 0h or not found) =====`);
+      const currentMonthStart = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
+      const currentMonthEnd = todayStr;
+      console.log(`[HRappka] Direct fetch: employeeId=${employeeId}, startDate=${currentMonthStart}, endDate=${currentMonthEnd}`);
+      const currentMonthReports = await getHRappkaTimeReports(employeeId, currentMonthStart, currentMonthEnd, "REAL", false);
+      const directTotalHours = currentMonthReports.reduce((sum, report) => sum + (report.hours || 0), 0);
+      console.log(`[HRappka] Direct fetch result: ${currentMonthReports.length} reports, ${directTotalHours.toFixed(2)}h total`);
+      if (directTotalHours > 0) {
+        // Zaktualizuj summary i użyj bezpośrednio pobranych danych
+        if (currentMonthSummary) {
+          currentMonthSummary.acceptedHours = directTotalHours;
+          currentMonthSummary.totalHours = directTotalHours;
+        }
+        totalHoursThisMonth = directTotalHours;
+        console.log(`[HRappka] Updated current month hours from ${currentMonthSummary?.acceptedHours || 0} to ${totalHoursThisMonth.toFixed(2)}h`);
+      }
+    }
     
     // Pobierz godziny dla bieżącego tygodnia
-    const weekReports = await getHRappkaTimeReports(employeeId, weekStart, weekEnd, "REAL");
+    console.log(`[HRappka] Fetching week reports for employee ${employeeId} (date range: ${weekStart} to ${weekEnd})`);
+    const weekReports = await getHRappkaTimeReports(employeeId, weekStart, weekEnd, "REAL", false);
+    console.log(`[HRappka] Week reports: Found ${weekReports.length} reports, total hours: ${weekReports.reduce((sum, r) => sum + (r.hours || 0), 0).toFixed(2)}h`);
     const totalHoursThisWeek = weekReports.reduce((sum, report) => sum + (report.hours || 0), 0);
     
     // Oblicz średnią godzin dziennie w bieżącym miesiącu (tylko dni które już minęły)
@@ -1424,139 +1504,18 @@ export async function getHRappkaEmployeeInfo(employeeId: number): Promise<HRappk
       description: r.description?.substring(0, 50)
     })));
     
+    // Sumuj wszystkie godziny (zarówno zaakceptowane jak i niezaakceptowane)
+    // Ważne: niezaakceptowane godziny również liczą się jako uzupełnione!
     const yesterdayHours = yesterdayReports.reduce((sum, report) => sum + (report.hours || 0), 0);
     const yesterdayHoursReported = yesterdayHours > 0;
     
-    console.log(`[HRappka] Yesterday hours summary for employee ${employeeId}: total=${yesterdayHours.toFixed(2)}h, reported=${yesterdayHoursReported}`);
+    // Sprawdź ile godzin jest zaakceptowanych, a ile niezaakceptowanych
+    const acceptedHours = yesterdayReports
+      .filter(r => r.isAccepted)
+      .reduce((sum, report) => sum + (report.hours || 0), 0);
+    const unacceptedHours = yesterdayHours - acceptedHours;
     
-    // Pobierz umowy pracownika
-    const contracts = await getHRappkaContracts(employeeId);
-    
-    // Loguj wszystkie umowy przed filtrowaniem
-    console.log(`[HRappka] All contracts for employee ${employeeId} (${contracts.length} total):`, contracts.map(c => ({
-      id: c.cuc_id,
-      type: c.cuc_type,
-      startDate: c.cuc_start_date,
-      endDate: c.cuc_end_date,
-      state: c.cuc_state,
-      deleted: c.cuc_deleted,
-    })));
-    
-    // Znajdź aktywne umowy (nieusunięte, nie rozliczone, z datą rozpoczęcia)
-    // Używamy zmiennej 'now' zadeklarowanej na początku funkcji
-    const activeContracts = contracts
-      .filter(c => {
-        // Filtruj tylko umowy które nie są rozliczone i nie są usunięte
-        const isNotSettled = !c.cuc_state || c.cuc_state !== "SETTLED";
-        const isNotDeleted = !c.cuc_deleted;
-        const hasStartDate = !!c.cuc_start_date;
-        
-        // Sprawdź czy umowa nie jest zakończona (jeśli ma datę zakończenia, musi być w przyszłości)
-        let isNotEnded = true;
-        if (c.cuc_end_date) {
-          const endDate = new Date(c.cuc_end_date);
-          isNotEnded = endDate >= now;
-        }
-        
-        return isNotSettled && isNotDeleted && hasStartDate && isNotEnded;
-      });
-    
-    console.log(`[HRappka] Filtered ${activeContracts.length} active contracts (not settled, not deleted, not ended)`);
-    
-    // Wybierz aktywną umowę według priorytetu:
-    // 1. Najpierw sprawdź czy jest umowa zlecenie (ORDER_CONTRACT)
-    // 2. Jeśli nie, wybierz umowę o pracę (EMPLOYMENT_CONTRACT)
-    // 3. Jeśli nie ma żadnej z powyższych, wybierz najnowszą (po dacie rozpoczęcia)
-    let activeContract = activeContracts.find(c => 
-      c.cuc_type === "ORDER_CONTRACT" || c.cuc_type === "order_contract" || c.cuc_type === "Zlecenie"
-    );
-    
-    if (!activeContract) {
-      // Jeśli nie ma umowy zlecenie, szukaj umowy o pracę
-      activeContract = activeContracts.find(c => 
-        c.cuc_type === "EMPLOYMENT_CONTRACT" || c.cuc_type === "employment_contract" || c.cuc_type === "Umowa o pracę"
-      );
-    }
-    
-    if (!activeContract && activeContracts.length > 0) {
-      // Jeśli nie ma żadnej z powyższych, wybierz najnowszą (po dacie rozpoczęcia)
-      activeContracts.sort((a, b) => {
-        const dateA = a.cuc_start_date ? new Date(a.cuc_start_date).getTime() : 0;
-        const dateB = b.cuc_start_date ? new Date(b.cuc_start_date).getTime() : 0;
-        return dateB - dateA; // Najnowsza pierwsza
-      });
-      activeContract = activeContracts[0];
-    }
-    
-    if (activeContract) {
-      console.log(`[HRappka] Selected active contract:`, {
-        id: activeContract.cuc_id,
-        type: activeContract.cuc_type,
-        startDate: activeContract.cuc_start_date,
-        endDate: activeContract.cuc_end_date,
-        state: activeContract.cuc_state,
-        selectionReason: activeContract.cuc_type === "ORDER_CONTRACT" || activeContract.cuc_type === "order_contract" || activeContract.cuc_type === "Zlecenie" 
-          ? "ORDER_CONTRACT priority" 
-          : activeContract.cuc_type === "EMPLOYMENT_CONTRACT" || activeContract.cuc_type === "employment_contract" || activeContract.cuc_type === "Umowa o pracę"
-          ? "EMPLOYMENT_CONTRACT priority"
-          : "Latest by start date"
-      });
-    } else {
-      console.log(`[HRappka] No active contract found for employee ${employeeId}. Total contracts: ${contracts.length}, Active after filtering: ${activeContracts.length}`);
-    }
-    
-    const contractEndDate = activeContract?.cuc_end_date || undefined;
-    const contractStartDate = activeContract?.cuc_start_date || undefined;
-    const contractType = activeContract?.cuc_type || undefined;
-    
-    // Pobierz ostatnie rozliczenie (sprawdź poprzedni miesiąc i bieżący miesiąc)
-    let lastSettlement: HRappkaSettlement | undefined = undefined;
-    try {
-      // Najpierw sprawdź poprzedni miesiąc
-      const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
-      const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
-      const prevMonthStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
-      const prevMonthLastDay = new Date(prevYear, prevMonth, 0).getDate();
-      const prevMonthEnd = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevMonthLastDay).padStart(2, '0')}`;
-      
-      let settlements = await getHRappkaSettlements(employeeId, prevMonthStart, prevMonthEnd);
-      console.log(`[HRappka] Found ${settlements.length} settlements for previous month (${prevMonthStart} - ${prevMonthEnd})`);
-      
-      // Jeśli nie ma w poprzednim miesiącu, sprawdź bieżący miesiąc
-      if (settlements.length === 0) {
-        settlements = await getHRappkaSettlements(employeeId, monthStart, monthEnd);
-        console.log(`[HRappka] Found ${settlements.length} settlements for current month (${monthStart} - ${monthEnd})`);
-      }
-      
-      // Jeśli nadal nie ma, sprawdź ostatnie 3 miesiące
-      if (settlements.length === 0) {
-        const threeMonthsAgo = new Date(currentYear, currentMonth - 3, 1);
-        const threeMonthsAgoStart = `${threeMonthsAgo.getFullYear()}-${String(threeMonthsAgo.getMonth() + 1).padStart(2, '0')}-01`;
-        settlements = await getHRappkaSettlements(employeeId, threeMonthsAgoStart, monthEnd);
-        console.log(`[HRappka] Found ${settlements.length} settlements for last 3 months (${threeMonthsAgoStart} - ${monthEnd})`);
-      }
-      
-      if (settlements.length > 0) {
-        // Znajdź najnowsze rozliczenie
-        lastSettlement = settlements.sort((a, b) => {
-          const dateA = new Date(a.settlement_to).getTime();
-          const dateB = new Date(b.settlement_to).getTime();
-          return dateB - dateA;
-        })[0];
-        console.log(`[HRappka] Selected last settlement:`, {
-          id: lastSettlement.settlement_id,
-          from: lastSettlement.settlement_from,
-          to: lastSettlement.settlement_to,
-          netto: lastSettlement.cash_netto_to_pay,
-        });
-      } else {
-        console.log(`[HRappka] No settlements found for employee ${employeeId}`);
-      }
-    } catch (error) {
-      console.warn(`[HRappka] Could not fetch settlements for employee ${employeeId}:`, error);
-      // Nie rzucaj błędu - rozliczenia są opcjonalne
-    }
-    
+    console.log(`[HRappka] Yesterday hours summary for employee ${employeeId}: total=${yesterdayHours.toFixed(2)}h (accepted=${acceptedHours.toFixed(2)}h, unaccepted=${unacceptedHours.toFixed(2)}h), reported=${yesterdayHoursReported}`);
     
     // TODO: Pobierz informacje o urlopach z HRappka API
     // Na razie zwracamy undefined - można to rozszerzyć gdy znajdziemy odpowiedni endpoint
@@ -1569,12 +1528,10 @@ export async function getHRappkaEmployeeInfo(employeeId: number): Promise<HRappk
       averageHoursPerDay,
       monthlySummary,
       vacationDaysRemaining,
-      contractEndDate,
-      contractStartDate,
-      contractType,
       yesterdayHoursReported,
       yesterdayHours: yesterdayHours > 0 ? yesterdayHours : undefined,
-      lastSettlement,
+      yesterdayHoursAccepted: acceptedHours > 0 ? acceptedHours : undefined,
+      yesterdayHoursUnaccepted: unacceptedHours > 0 ? unacceptedHours : undefined,
     };
   } catch (error) {
     console.error(`[HRappka] Error fetching employee info for ${employeeId}:`, error);

@@ -69,6 +69,16 @@ export default function Clients() {
     },
   });
 
+  const deleteMutation = trpc.clients.delete.useMutation({
+    onSuccess: () => {
+      utils.clients.list.invalidate();
+      toast.success("Klient został usunięty");
+    },
+    onError: (error) => {
+      toast.error(`Błąd: ${error.message}`);
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -115,6 +125,12 @@ export default function Clients() {
       phone: "",
       address: "",
     });
+  };
+
+  const handleDelete = (client: any) => {
+    if (confirm(`Czy na pewno chcesz usunąć klienta "${client.name}"?`)) {
+      deleteMutation.mutate({ id: client.id });
+    }
   };
 
   if (isLoading) {
@@ -194,8 +210,19 @@ export default function Clients() {
                           size="sm"
                           onClick={() => openDialog(client)}
                           className="hover:bg-primary/10 transition-all duration-200 hover:scale-110"
+                          title="Edytuj klienta"
                         >
                           <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(client)}
+                          disabled={deleteMutation.isPending}
+                          className="hover:bg-destructive/10 text-destructive hover:text-destructive transition-all duration-200 hover:scale-110"
+                          title="Usuń klienta"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>

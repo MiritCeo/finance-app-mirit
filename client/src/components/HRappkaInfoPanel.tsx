@@ -140,25 +140,56 @@ export function HRappkaInfoPanel() {
       <CardContent className="space-y-4">
         {/* Ostrzeżenie o brakujących godzinach wczoraj */}
         {!info.yesterdayHoursReported && (
-          <Alert variant="destructive" className="border-red-500 bg-red-50 dark:bg-red-950">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertTitle className="text-red-800 dark:text-red-200">Brak godzin za wczoraj!</AlertTitle>
-            <AlertDescription className="text-red-700 dark:text-red-300">
-              Nie uzupełniłeś godzin za dzień <strong>{yesterdayFormatted}</strong>
-              <br />
-              <strong className="text-yellow-700 dark:text-yellow-300">Uzupełnij godziny w systemie HRappka, aby odebrać 15 punktów!</strong>
-            </AlertDescription>
-          </Alert>
+          <div className="relative overflow-hidden rounded-lg border-2 border-orange-400 bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 dark:from-orange-950/50 dark:via-amber-950/50 dark:to-orange-950/50 p-4 shadow-md">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <div className="rounded-full bg-orange-400 p-3 dark:bg-orange-500">
+                  <AlertCircle className="h-6 w-6 text-orange-900 dark:text-orange-950" />
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-semibold text-orange-800 dark:text-orange-200">
+                    Brak godzin za wczoraj
+                  </span>
+                </div>
+                <p className="text-sm text-orange-700 dark:text-orange-300 mb-3">
+                  Nie uzupełniłeś godzin za dzień <strong className="text-orange-900 dark:text-orange-100">{yesterdayFormatted}</strong>
+                </p>
+                <div className="flex items-center gap-2 p-2 rounded-md bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700">
+                  <Trophy className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                  <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                    Uzupełnij godziny w systemie HRappka, aby odebrać <strong className="text-base">15 punktów</strong>!
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Potwierdzenie uzupełnienia godzin wczoraj */}
         {info.yesterdayHoursReported && info.yesterdayHours && (
           <div className="space-y-2">
-            <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertTitle className="text-green-800 dark:text-green-200">Godziny uzupełnione</AlertTitle>
-              <AlertDescription className="text-green-700 dark:text-green-300">
+            <Alert className={info.yesterdayHoursUnaccepted && info.yesterdayHoursUnaccepted > 0 
+              ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-950" 
+              : "border-green-500 bg-green-50 dark:bg-green-950"}>
+              <CheckCircle2 className={info.yesterdayHoursUnaccepted && info.yesterdayHoursUnaccepted > 0 
+                ? "h-4 w-4 text-yellow-600" 
+                : "h-4 w-4 text-green-600"} />
+              <AlertTitle className={info.yesterdayHoursUnaccepted && info.yesterdayHoursUnaccepted > 0 
+                ? "text-yellow-800 dark:text-yellow-200" 
+                : "text-green-800 dark:text-green-200"}>
+                Godziny uzupełnione
+              </AlertTitle>
+              <AlertDescription className={info.yesterdayHoursUnaccepted && info.yesterdayHoursUnaccepted > 0 
+                ? "text-yellow-700 dark:text-yellow-300" 
+                : "text-green-700 dark:text-green-300"}>
                 Wczoraj ({yesterdayFormatted}) zaraportowałeś <strong>{info.yesterdayHours.toFixed(1)}h</strong>
+                {info.yesterdayHoursUnaccepted && info.yesterdayHoursUnaccepted > 0 && (
+                  <span className="block mt-1 text-sm">
+                    ⚠️ <strong>{info.yesterdayHoursUnaccepted.toFixed(1)}h</strong> oczekuje na akceptację
+                  </span>
+                )}
               </AlertDescription>
             </Alert>
             
@@ -271,91 +302,16 @@ export function HRappkaInfoPanel() {
           </div>
         )}
 
-        {/* Ostatnie rozliczenie */}
-        {info.lastSettlement && (
-          <div className="p-4 rounded-lg border bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950">
-            <div className="flex items-center gap-2 mb-3">
-              <DollarSign className="h-5 w-5 text-green-600" />
-              <span className="text-sm font-semibold">Ostatnie rozliczenie</span>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Okres:</span>
-                <span className="font-medium">
-                  {new Date(info.lastSettlement.settlement_from).toLocaleDateString("pl-PL")} - {new Date(info.lastSettlement.settlement_to).toLocaleDateString("pl-PL")}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Do wypłaty:</span>
-                <span className="text-lg font-bold text-green-700 dark:text-green-400">
-                  {parseFloat(info.lastSettlement.cash_netto_to_pay).toLocaleString("pl-PL", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })} PLN
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Brutto: {parseFloat(info.lastSettlement.cash_brutto).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PLN</span>
-                <span>Netto: {parseFloat(info.lastSettlement.cash_netto).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PLN</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Informacje o urlopach i umowie */}
-        {(info.vacationDaysRemaining !== undefined || info.contractEndDate || info.contractStartDate || info.contractType) && (
+        {/* Informacje o urlopach */}
+        {info.vacationDaysRemaining !== undefined && (
           <div className="space-y-3 pt-2 border-t">
-            {info.contractType && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Typ umowy
-                </span>
-                <span className="text-sm font-semibold">
-                  {info.contractType === "EMPLOYMENT_CONTRACT" ? "Umowa o pracę" :
-                   info.contractType === "ORDER_CONTRACT" ? "Umowa zlecenie" :
-                   info.contractType}
-                </span>
-              </div>
-            )}
-
-            {info.contractStartDate && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Data rozpoczęcia umowy
-                </span>
-                <span className="text-sm font-semibold">
-                  {new Date(info.contractStartDate).toLocaleDateString("pl-PL")}
-                </span>
-              </div>
-            )}
-
-            {info.contractEndDate && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Data zakończenia umowy
-                </span>
-                <span className={`text-sm font-semibold ${
-                  new Date(info.contractEndDate) < new Date() ? "text-red-600" :
-                  new Date(info.contractEndDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) ? "text-orange-600" :
-                  ""
-                }`}>
-                  {new Date(info.contractEndDate).toLocaleDateString("pl-PL")}
-                </span>
-              </div>
-            )}
-
-            {info.vacationDaysRemaining !== undefined && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Pozostałe dni urlopu
-                </span>
-                <span className="text-sm font-semibold">{info.vacationDaysRemaining} dni</span>
-              </div>
-            )}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Pozostałe dni urlopu
+              </span>
+              <span className="text-sm font-semibold">{info.vacationDaysRemaining} dni</span>
+            </div>
           </div>
         )}
       </CardContent>

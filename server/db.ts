@@ -296,6 +296,20 @@ export async function updateClient(id: number, client: Partial<InsertClient>) {
   await db.update(clients).set(client).where(eq(clients.id, id));
 }
 
+export async function deleteClient(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Sprawdź czy klient ma powiązane projekty
+  const clientProjects = await db.select().from(projects).where(eq(projects.clientId, id));
+  if (clientProjects.length > 0) {
+    throw new Error(`Nie można usunąć klienta, ponieważ ma ${clientProjects.length} powiązanych projektów. Najpierw usuń lub zmień przypisanie projektów.`);
+  }
+  
+  // Usuń klienta
+  await db.delete(clients).where(eq(clients.id, id));
+}
+
 // ============ PROJECT HELPERS ============
 
 export async function getAllProjects() {
