@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, ArrowLeft, Edit2, Save, X } from "lucide-react";
+import { Loader2, ArrowLeft, Edit2, Save, X, RefreshCw } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -48,6 +48,20 @@ export default function MonthlyEmployeeReports() {
     },
     onError: (error) => {
       toast.error(`Błąd: ${error.message}`);
+    },
+  });
+
+  const propagateAllChangesMutation = trpc.employees.propagateAllMonthlyChanges.useMutation({
+    onSuccess: (result) => {
+      toast.success(result.message || `Zaktualizowano ${result.updatedCount} raportów`);
+      refetch();
+      if (result.errors && result.errors.length > 0) {
+        console.error("Błędy propagacji:", result.errors);
+        toast.warning(`Niektóre raporty nie zostały zaktualizowane. Sprawdź konsolę.`);
+      }
+    },
+    onError: (error) => {
+      toast.error(`Błąd propagacji: ${error.message}`);
     },
   });
 
@@ -186,6 +200,27 @@ export default function MonthlyEmployeeReports() {
             Zapisane raporty wszystkich pracowników z możliwością ręcznej korekty kosztów
           </p>
         </div>
+        <Button
+          onClick={() => {
+            if (confirm("Czy na pewno chcesz zaktualizować wszystkie raporty i propagować zmiany do timeEntries i assignments? Ta operacja może zająć chwilę.")) {
+              propagateAllChangesMutation.mutate({ year, month });
+            }
+          }}
+          disabled={propagateAllChangesMutation.isPending}
+          variant="default"
+        >
+          {propagateAllChangesMutation.isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Aktualizowanie...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Propaguj wszystkie zmiany
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Podsumowanie */}

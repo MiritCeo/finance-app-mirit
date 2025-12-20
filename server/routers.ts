@@ -1140,6 +1140,67 @@ export const appRouter = router({
       }),
 
     /**
+     * Propaguje wszystkie zmiany z raportów miesięcznych do timeEntries i assignments
+     * dla wszystkich pracowników w danym miesiącu
+     */
+    propagateAllMonthlyChanges: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number().min(1).max(12),
+      }))
+      .mutation(async ({ input }) => {
+        const { year, month } = input;
+        
+        // Pobierz wszystkie raporty dla danego miesiąca
+        const reports = await db.getMonthlyReportsByMonthAndYear(year, month);
+        
+        if (reports.length === 0) {
+          return { 
+            success: true, 
+            message: "Brak raportów do propagacji",
+            updatedCount: 0 
+          };
+        }
+        
+        let updatedCount = 0;
+        const errors: string[] = [];
+        
+        // Dla każdego raportu wywołaj propagację zmian
+        for (const report of reports) {
+          try {
+            // Wywołaj updateMonthlyReportFields z propagateChanges=true
+            // Używamy aktualnych wartości z raportu, aby wymusić propagację
+            await db.updateMonthlyReportFields({
+              employeeId: report.employeeId,
+              year: report.year,
+              month: report.month,
+              hoursWorked: report.hoursWorked, // Użyj aktualnych wartości
+              hourlyRateClient: report.hourlyRateClient,
+              actualCost: report.actualCost,
+              propagateChanges: true, // Wymuś propagację
+            });
+            updatedCount++;
+          } catch (error) {
+            const employee = await db.getEmployeeById(report.employeeId);
+            const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : `ID: ${report.employeeId}`;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            errors.push(`${employeeName}: ${errorMessage}`);
+            console.error(`[Propagate] Błąd dla pracownika ${report.employeeId}:`, error);
+          }
+        }
+        
+        return {
+          success: errors.length === 0,
+          message: errors.length === 0
+            ? `Zaktualizowano ${updatedCount} raportów i propagowano zmiany do timeEntries i assignments`
+            : `Zaktualizowano ${updatedCount} z ${reports.length} raportów. Błędy: ${errors.length}`,
+          updatedCount,
+          totalCount: reports.length,
+          errors: errors.length > 0 ? errors : undefined,
+        };
+      }),
+
+    /**
      * Pobiera wszystkie zapisane raporty pracowników dla danego miesiąca i roku
      */
     getMonthlyReports: adminProcedure
