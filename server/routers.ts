@@ -1106,6 +1106,7 @@ export const appRouter = router({
 
     /**
      * Aktualizuje godzin, stawkę i/lub koszt w raporcie miesięcznym
+     * Automatycznie propaguje zmiany do timeEntries i assignments
      */
     updateMonthlyReport: adminProcedure
       .input(z.object({
@@ -1115,9 +1116,10 @@ export const appRouter = router({
         hoursWorked: z.number().optional(), // w godzinach (będzie przekonwertowane na grosze)
         hourlyRateClient: z.number().optional(), // w PLN (będzie przekonwertowane na grosze)
         actualCost: z.number().nullable().optional(), // w PLN (będzie przekonwertowane na grosze)
+        propagateChanges: z.boolean().default(true), // Czy propagować zmiany do timeEntries i assignments
       }))
       .mutation(async ({ input }) => {
-        const { employeeId, year, month, hoursWorked, hourlyRateClient, actualCost } = input;
+        const { employeeId, year, month, hoursWorked, hourlyRateClient, actualCost, propagateChanges } = input;
         
         // Konwertuj wartości na grosze jeśli są podane
         const hoursWorkedInGrosze = hoursWorked !== undefined ? Math.round(hoursWorked * 100) : undefined;
@@ -1131,6 +1133,7 @@ export const appRouter = router({
           hoursWorked: hoursWorkedInGrosze,
           hourlyRateClient: hourlyRateClientInGrosze,
           actualCost: actualCostInGrosze,
+          propagateChanges,
         });
         
         return { success: true };
@@ -2908,6 +2911,93 @@ export const appRouter = router({
         
         // Sortuj po zysku (malejąco)
         return projectStats.sort((a, b) => b.profit - a.profit);
+      }),
+    
+    // Rentowność projektu dla wszystkich 12 miesięcy danego roku
+    getProjectProfitabilityByYear: adminProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        year: z.number().int().positive(),
+      }))
+      .query(async ({ input }) => {
+        const { projectId, year } = input;
+        
+        const project = await db.getProjectById(projectId);
+        if (!project) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Projekt nie został znaleziony",
+          });
+        }
+        
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not available");
+        
+        const { employeeProjectAssignments, timeEntries } = await import("../drizzle/schema");
+        const { sql, eq, and } = await import("drizzle-orm");
+        
+        // Pobierz wszystkie assignments dla tego projektu
+        const assignments = await database
+          .select({
+            id: employeeProjectAssignments.id,
+            employeeId: employeeProjectAssignments.employeeId,
+            hourlyRateClient: employeeProjectAssignments.hourlyRateClient,
+            hourlyRateCost: employeeProjectAssignments.hourlyRateCost,
+          })
+          .from(employeeProjectAssignments)
+          .where(eq(employeeProjectAssignments.projectId, projectId));
+        
+        const monthlyStats = [];
+        
+        // Iteruj przez wszystkie 12 miesięcy
+        for (let month = 1; month <= 12; month++) {
+          let totalRevenue = 0;
+          let totalCost = 0;
+          let totalHours = 0;
+          
+          for (const assignment of assignments) {
+            // Pobierz wpisy godzinowe dla tego assignment w danym miesiącu
+            const entries = await database
+              .select()
+              .from(timeEntries)
+              .where(
+                and(
+                  eq(timeEntries.assignmentId, assignment.id),
+                  sql`YEAR(${timeEntries.workDate}) = ${year}`,
+                  sql`MONTH(${timeEntries.workDate}) = ${month}`
+                )
+              );
+            
+            const hours = entries.reduce((sum, entry) => sum + entry.hoursWorked, 0) / 100;
+            const revenue = Math.round(hours * assignment.hourlyRateClient);
+            const cost = Math.round(hours * assignment.hourlyRateCost);
+            
+            totalRevenue += revenue;
+            totalCost += cost;
+            totalHours += hours;
+          }
+          
+          const profit = totalRevenue - totalCost;
+          const margin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+          
+          monthlyStats.push({
+            month,
+            year,
+            revenue: totalRevenue,
+            cost: totalCost,
+            profit,
+            hours: totalHours,
+            margin: Math.round(margin * 100) / 100,
+          });
+        }
+        
+        return {
+          projectId: project.id,
+          projectName: project.name,
+          clientId: project.clientId,
+          year,
+          monthlyStats,
+        };
       }),
     
     // Trendy zysków/strat (ostatnie N miesięcy)

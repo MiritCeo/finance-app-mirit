@@ -28,6 +28,7 @@ import AdminLogin from "./pages/AdminLogin";
 import HRappkaMapping from "./pages/HRappkaMapping";
 import MonthlyFinancialOverview from "./pages/MonthlyFinancialOverview";
 import MonthlyEmployeeReports from "./pages/MonthlyEmployeeReports";
+import ProjectProfitability from "./pages/ProjectProfitability";
 import DashboardLayout from "./components/DashboardLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -192,6 +193,13 @@ function Router() {
         <ProtectedRoute requiredRole="admin">
           <DashboardLayout>
             <MonthlyEmployeeReports />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/project-profitability"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <ProjectProfitability />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>

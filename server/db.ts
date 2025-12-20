@@ -468,6 +468,15 @@ export async function deleteTimeEntry(id: number) {
   await db.delete(timeEntries).where(eq(timeEntries.id, id));
 }
 
+export async function updateTimeEntry(id: number, data: { hoursWorked?: number }) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  
+  await database.update(timeEntries)
+    .set(data)
+    .where(eq(timeEntries.id, id));
+}
+
 /**
  * Usuwa wszystkie wpisy godzinowe dla danego assignment w danym miesiącu
  */
@@ -750,6 +759,7 @@ export async function updateMonthlyReportFields(data: {
   hoursWorked?: number; // w groszach (setnych godzin)
   hourlyRateClient?: number; // w groszach
   actualCost?: number | null;
+  propagateChanges?: boolean; // Czy propagować zmiany do timeEntries i assignments
 }) {
   const database = await getDb();
   if (!database) throw new Error("Database not available");
@@ -787,6 +797,38 @@ export async function updateMonthlyReportFields(data: {
       updatedAt: new Date(),
     })
     .where(sql`${monthlyEmployeeReports.id} = ${report.id}`);
+  
+  // Propaguj zmiany do timeEntries i assignments jeśli wymagane
+  if (data.propagateChanges !== false) {
+    const timeEntriesList = await getTimeEntriesByEmployeeAndMonth(data.employeeId, data.year, data.month);
+    
+    // Jeśli zmieniono godziny, zaktualizuj proporcjonalnie wszystkie timeEntries
+    if (data.hoursWorked !== undefined && timeEntriesList.length > 0) {
+      const oldTotalHours = report.hoursWorked / 100; // w godzinach
+      const newTotalHours = hoursWorked / 100; // w godzinach
+      
+      if (oldTotalHours > 0 && newTotalHours > 0) {
+        const ratio = newTotalHours / oldTotalHours;
+        
+        // Zaktualizuj każdy wpis proporcjonalnie
+        for (const entry of timeEntriesList) {
+          const newHoursWorked = Math.round(entry.hoursWorked * ratio);
+          await updateTimeEntry(entry.id, { hoursWorked: newHoursWorked });
+        }
+      }
+    }
+    
+    // Jeśli zmieniono stawkę, zaktualizuj wszystkie assignments używane w danym miesiącu
+    if (data.hourlyRateClient !== undefined && timeEntriesList.length > 0) {
+      const uniqueAssignmentIds = new Set(timeEntriesList.map(e => e.assignmentId));
+      
+      for (const assignmentId of uniqueAssignmentIds) {
+        await database.update(employeeProjectAssignments)
+          .set({ hourlyRateClient: hourlyRateClient })
+          .where(eq(employeeProjectAssignments.id, assignmentId));
+      }
+    }
+  }
   
   return report.id;
 }

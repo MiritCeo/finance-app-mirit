@@ -105,9 +105,34 @@ export default function MonthlyFinancialOverview() {
   }, [monthlyData]);
 
   // Funkcja pomocnicza do obliczania zmiany procentowej
+  // Oblicza zmianę zysku operacyjnego między miesiącami
   const calculatePercentageChange = (current: number, previous: number) => {
-    if (previous === 0) return current > 0 ? 100 : (current < 0 ? -100 : 0);
-    return ((current - previous) / previous) * 100;
+    // Jeśli poprzednia wartość to 0, obsłuż specjalny przypadek
+    if (previous === 0) {
+      if (current > 0) return 100; // Z 0 do zysku = 100% poprawy
+      if (current < 0) return -100; // Z 0 do straty = -100% (pogorszenie)
+      return 0; // Z 0 do 0 = brak zmiany
+    }
+    
+    // Standardowa zmiana procentowa: (nowa - stara) / stara * 100
+    // Przykłady:
+    // - previous=1000, current=1500: (1500-1000)/1000*100 = +50% (poprawa)
+    // - previous=1000, current=500: (500-1000)/1000*100 = -50% (pogorszenie)
+    // - previous=-500, current=-300: (-300-(-500))/(-500)*100 = +40% (poprawa - mniejsza strata)
+    // - previous=-500, current=-700: (-700-(-500))/(-500)*100 = -40% (pogorszenie - większa strata)
+    // - previous=-500, current=500: (500-(-500))/(-500)*100 = -200% (przejście ze straty do zysku - pokazujemy jako poprawę przez bezwzględną wartość)
+    
+    const change = ((current - previous) / previous) * 100;
+    
+    // Jeśli przechodzimy ze straty (previous < 0) do zysku (current > 0),
+    // to zawsze jest poprawa - pokaż to jako wartość dodatnią
+    if (previous < 0 && current > 0) {
+      // Przejście ze straty do zysku to zawsze sukces
+      // Używamy bezwzględnej wartości zmiany, aby pokazać poprawę
+      return Math.abs(change);
+    }
+    
+    return change;
   };
 
   // Funkcja pomocnicza do formatowania waluty

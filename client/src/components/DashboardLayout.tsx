@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, CheckSquare, BookOpen, DollarSign, Calendar, Briefcase, UserCircle, Building2, Clock, Receipt, Plus, Zap, Moon, Sun, Sparkles, Info, Menu, X, MapPin, BarChart3 } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, CheckSquare, BookOpen, DollarSign, Calendar, Briefcase, UserCircle, Building2, Clock, Receipt, Plus, Zap, Moon, Sun, Sparkles, Info, Menu, X, MapPin, BarChart3, TrendingUp } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -37,6 +37,7 @@ const adminMenuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/", color: "text-blue-600" },
   { icon: Sparkles, label: "AI Insights", path: "/ai-insights", color: "text-purple-600" },
   { icon: BarChart3, label: "Przegląd finansowy", path: "/monthly-financial-overview", color: "text-teal-600" },
+  { icon: TrendingUp, label: "Rentowność projektów", path: "/project-profitability", color: "text-violet-600" },
   { icon: Sparkles, label: "Grywalizacja", path: "/gamification", color: "text-yellow-500" },
   { icon: MapPin, label: "Obecność w biurze", path: "/office-presence", color: "text-emerald-600" },
   { icon: CheckSquare, label: "Zadania", path: "/tasks", color: "text-purple-600" },
