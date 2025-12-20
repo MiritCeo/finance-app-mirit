@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, TrendingUp, TrendingDown, DollarSign, Users, Receipt, BarChart3 } from "lucide-react";
-import { useLocation } from "wouter";
+import { Loader2, ArrowLeft, TrendingUp, TrendingDown, DollarSign, Users, Receipt, BarChart3, Eye } from "lucide-react";
+import { useLocation, Link, useSearchParams } from "wouter";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
@@ -323,6 +323,7 @@ export default function MonthlyFinancialOverview() {
                         Zmiana vs {compareYear}
                       </TableHead>
                     )}
+                    <TableHead className="text-center w-[100px]">Akcje</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -335,7 +336,7 @@ export default function MonthlyFinancialOverview() {
                       return (
                         <TableRow key={data.month}>
                           <TableCell className="font-medium">{data.monthLabel}</TableCell>
-                          <TableCell colSpan={enableComparison && compareYear ? 7 : 6} className="text-center text-muted-foreground">
+                          <TableCell colSpan={enableComparison && compareYear ? 8 : 7} className="text-center text-muted-foreground">
                             Brak danych
                           </TableCell>
                         </TableRow>
@@ -445,6 +446,14 @@ export default function MonthlyFinancialOverview() {
                             )}
                           </TableCell>
                         )}
+                        <TableCell className="text-center">
+                          <Link href={`/monthly-employee-reports?year=${selectedYear}&month=${data.month}`}>
+                            <Button variant="outline" size="sm">
+                              <Eye className="h-4 w-4 mr-1" />
+                              Szczegóły
+                            </Button>
+                          </Link>
+                        </TableCell>
                       </TableRow>
                     );
                   })}

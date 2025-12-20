@@ -1103,6 +1103,97 @@ export const appRouter = router({
         
         return { success: true };
       }),
+
+    /**
+     * Aktualizuje godzin, stawkę i/lub koszt w raporcie miesięcznym
+     */
+    updateMonthlyReport: adminProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        year: z.number(),
+        month: z.number(),
+        hoursWorked: z.number().optional(), // w godzinach (będzie przekonwertowane na grosze)
+        hourlyRateClient: z.number().optional(), // w PLN (będzie przekonwertowane na grosze)
+        actualCost: z.number().nullable().optional(), // w PLN (będzie przekonwertowane na grosze)
+      }))
+      .mutation(async ({ input }) => {
+        const { employeeId, year, month, hoursWorked, hourlyRateClient, actualCost } = input;
+        
+        // Konwertuj wartości na grosze jeśli są podane
+        const hoursWorkedInGrosze = hoursWorked !== undefined ? Math.round(hoursWorked * 100) : undefined;
+        const hourlyRateClientInGrosze = hourlyRateClient !== undefined ? Math.round(hourlyRateClient * 100) : undefined;
+        const actualCostInGrosze = actualCost !== null && actualCost !== undefined ? Math.round(actualCost * 100) : actualCost;
+        
+        await db.updateMonthlyReportFields({
+          employeeId,
+          year,
+          month,
+          hoursWorked: hoursWorkedInGrosze,
+          hourlyRateClient: hourlyRateClientInGrosze,
+          actualCost: actualCostInGrosze,
+        });
+        
+        return { success: true };
+      }),
+
+    /**
+     * Pobiera wszystkie zapisane raporty pracowników dla danego miesiąca i roku
+     */
+    getMonthlyReports: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number().min(1).max(12),
+      }))
+      .query(async ({ input }) => {
+        const { year, month } = input;
+        
+        // Pobierz wszystkie raporty dla danego miesiąca
+        const reports = await db.getMonthlyReportsByMonthAndYear(year, month);
+        
+        // Pobierz dane pracowników dla każdego raportu
+        const reportsWithEmployees = await Promise.all(
+          reports.map(async (report) => {
+            const employee = await db.getEmployeeById(report.employeeId);
+            if (!employee) {
+              return null;
+            }
+            
+            return {
+              id: report.id,
+              employeeId: report.employeeId,
+              employeeName: `${employee.firstName} ${employee.lastName}`,
+              year: report.year,
+              month: report.month,
+              hoursWorked: report.hoursWorked, // w groszach (setnych godzin)
+              hourlyRateClient: report.hourlyRateClient,
+              revenue: report.revenue,
+              cost: report.cost,
+              actualCost: report.actualCost,
+              profit: report.profit,
+              createdAt: report.createdAt,
+              updatedAt: report.updatedAt,
+            };
+          })
+        );
+        
+        // Filtruj null values i sortuj po nazwisku
+        const validReports = reportsWithEmployees.filter((r): r is NonNullable<typeof r> => r !== null);
+        validReports.sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+        
+        // Oblicz podsumowanie
+        const summary = {
+          totalHours: validReports.reduce((sum, r) => sum + (r.hoursWorked / 100), 0),
+          totalRevenue: validReports.reduce((sum, r) => sum + r.revenue, 0),
+          totalCost: validReports.reduce((sum, r) => sum + (r.actualCost ?? r.cost), 0),
+          totalProfit: validReports.reduce((sum, r) => sum + r.profit, 0),
+          employeeCount: validReports.length,
+        };
+        
+        return {
+          reports: validReports,
+          summary,
+        };
+      }),
       
     // Aktualizacja godzin w raporcie miesięcznym
     updateMonthlyHours: adminProcedure

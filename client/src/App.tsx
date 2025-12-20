@@ -27,6 +27,7 @@ import MyCV from "./pages/MyCV";
 import AdminLogin from "./pages/AdminLogin";
 import HRappkaMapping from "./pages/HRappkaMapping";
 import MonthlyFinancialOverview from "./pages/MonthlyFinancialOverview";
+import MonthlyEmployeeReports from "./pages/MonthlyEmployeeReports";
 import DashboardLayout from "./components/DashboardLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -184,6 +185,13 @@ function Router() {
         <ProtectedRoute requiredRole="admin">
           <DashboardLayout>
             <MonthlyFinancialOverview />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/monthly-employee-reports"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <MonthlyEmployeeReports />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>

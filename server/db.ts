@@ -605,6 +605,19 @@ export async function getMonthlyReport(employeeId: number, year: number, month: 
   return results[0] || null;
 }
 
+export async function getMonthlyReportsByMonthAndYear(year: number, month: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db
+    .select()
+    .from(monthlyEmployeeReports)
+    .where(and(
+      eq(monthlyEmployeeReports.year, year),
+      eq(monthlyEmployeeReports.month, month)
+    ));
+}
+
 // Stara funkcja upsertMonthlyReport została zastąpiona przez nową wersję poniżej
 
 // Get time entries by employee and year
@@ -728,6 +741,54 @@ export async function upsertMonthlyReport(data: {
     });
     return result[0].insertId;
   }
+}
+
+export async function updateMonthlyReportFields(data: {
+  employeeId: number;
+  year: number;
+  month: number;
+  hoursWorked?: number; // w groszach (setnych godzin)
+  hourlyRateClient?: number; // w groszach
+  actualCost?: number | null;
+}) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  
+  const existing = await database.select().from(monthlyEmployeeReports).where(
+    sql`${monthlyEmployeeReports.employeeId} = ${data.employeeId} AND ${monthlyEmployeeReports.year} = ${data.year} AND ${monthlyEmployeeReports.month} = ${data.month}`
+  );
+  
+  if (existing.length === 0) {
+    throw new Error("Raport nie został znaleziony");
+  }
+  
+  const report = existing[0];
+  
+  // Użyj nowych wartości lub zachowaj istniejące
+  const hoursWorked = data.hoursWorked !== undefined ? data.hoursWorked : report.hoursWorked;
+  const hourlyRateClient = data.hourlyRateClient !== undefined ? data.hourlyRateClient : report.hourlyRateClient;
+  const actualCost = data.actualCost !== undefined ? data.actualCost : report.actualCost;
+  
+  // Przelicz przychód na podstawie godzin i stawki
+  const hours = hoursWorked / 100; // Konwersja z groszy na godziny
+  const revenue = Math.round(hours * hourlyRateClient);
+  
+  // Użyj actualCost jeśli istnieje, w przeciwnym razie zapisany cost
+  const cost = actualCost ?? report.cost;
+  const profit = revenue - cost;
+  
+  await database.update(monthlyEmployeeReports)
+    .set({
+      hoursWorked,
+      hourlyRateClient,
+      revenue,
+      actualCost,
+      profit,
+      updatedAt: new Date(),
+    })
+    .where(sql`${monthlyEmployeeReports.id} = ${report.id}`);
+  
+  return report.id;
 }
 
 // Zapisz pełny raport miesięczny z wartościami z momentu zapisu (snapshot)
