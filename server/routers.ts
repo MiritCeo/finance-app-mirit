@@ -1244,31 +1244,35 @@ export const appRouter = router({
               };
             } else {
               // Brak zapisanego raportu - oblicz z aktualnych danych
-              // Pobierz godziny z timeEntries dla tego pracownika w danym miesiącu
-              const timeEntriesList = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
-              
-              // Oblicz łączne godziny
-              const totalHoursWorked = timeEntriesList.reduce((sum, entry) => sum + entry.hoursWorked, 0);
-              const hours = totalHoursWorked / 100; // Konwersja z groszy na godziny
-              
-              // Użyj domyślnej stawki klienta z pracownika lub z assignments
-              let hourlyRateClient = employee.hourlyRateClient || 0;
-              
-              // Jeśli są timeEntries, oblicz średnią ważoną stawki z assignments
-              if (timeEntriesList.length > 0) {
-                const { employeeProjectAssignments } = await import("../drizzle/schema");
-                const database = await db.getDb();
-                if (database) {
+              try {
+                // Pobierz godziny z timeEntries dla tego pracownika w danym miesiącu
+                const timeEntriesList = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
+                
+                // Oblicz łączne godziny
+                const totalHoursWorked = timeEntriesList.reduce((sum, entry) => sum + (entry.hoursWorked || 0), 0);
+                const hours = totalHoursWorked / 100; // Konwersja z groszy na godziny
+                
+                // Użyj domyślnej stawki klienta z pracownika (w groszach)
+                let hourlyRateClient = (employee.hourlyRateClient ?? 0);
+                
+                // Jeśli są timeEntries, oblicz średnią ważoną stawki z assignments
+                if (timeEntriesList.length > 0) {
                   const assignmentsMap = new Map<number, number>();
                   let totalHoursForRate = 0;
                   
                   for (const entry of timeEntriesList) {
-                    const assignment = await db.getAssignmentById(entry.assignmentId);
-                    if (assignment) {
-                      const entryHours = entry.hoursWorked / 100;
-                      const rate = assignment.hourlyRateClient || employee.hourlyRateClient || 0;
-                      assignmentsMap.set(entry.assignmentId, rate);
-                      totalHoursForRate += entryHours;
+                    if (entry.assignmentId) {
+                      try {
+                        const assignment = await db.getAssignmentById(entry.assignmentId);
+                        if (assignment) {
+                          const entryHours = (entry.hoursWorked || 0) / 100;
+                          const rate = assignment.hourlyRateClient ?? employee.hourlyRateClient ?? 0;
+                          assignmentsMap.set(entry.assignmentId, rate);
+                          totalHoursForRate += entryHours;
+                        }
+                      } catch (err) {
+                        console.error(`[getMonthlyReports] Error fetching assignment ${entry.assignmentId}:`, err);
+                      }
                     }
                   }
                   
@@ -1276,38 +1280,57 @@ export const appRouter = router({
                   if (totalHoursForRate > 0) {
                     let weightedSum = 0;
                     for (const entry of timeEntriesList) {
-                      const entryHours = entry.hoursWorked / 100;
-                      const rate = assignmentsMap.get(entry.assignmentId) || employee.hourlyRateClient || 0;
+                      const entryHours = (entry.hoursWorked || 0) / 100;
+                      const rate = assignmentsMap.get(entry.assignmentId) ?? employee.hourlyRateClient ?? 0;
                       weightedSum += entryHours * rate;
                     }
                     hourlyRateClient = Math.round(weightedSum / totalHoursForRate);
                   }
                 }
+                
+                // Oblicz przychód (godziny w godzinach * stawka w groszach = przychód w groszach)
+                const revenue = Math.round(hours * hourlyRateClient);
+                
+                // Koszt pracownika (w groszach)
+                const cost = employee.monthlyCostTotal ?? 0;
+                const profit = revenue - cost;
+                
+                return {
+                  id: 0, // Brak zapisanego raportu
+                  employeeId: employee.id,
+                  employeeName: `${employee.firstName} ${employee.lastName}`,
+                  year,
+                  month,
+                  hoursWorked: totalHoursWorked, // w groszach
+                  hourlyRateClient,
+                  revenue,
+                  cost,
+                  actualCost: null,
+                  profit,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                  hasSavedReport: false,
+                };
+              } catch (error) {
+                console.error(`[getMonthlyReports] Error processing employee ${employee.id}:`, error);
+                // Zwróć pusty raport w przypadku błędu
+                return {
+                  id: 0,
+                  employeeId: employee.id,
+                  employeeName: `${employee.firstName} ${employee.lastName}`,
+                  year,
+                  month,
+                  hoursWorked: 0,
+                  hourlyRateClient: employee.hourlyRateClient ?? 0,
+                  revenue: 0,
+                  cost: employee.monthlyCostTotal ?? 0,
+                  actualCost: null,
+                  profit: -(employee.monthlyCostTotal ?? 0),
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                  hasSavedReport: false,
+                };
               }
-              
-              // Oblicz przychód
-              const revenue = Math.round(hours * hourlyRateClient);
-              
-              // Koszt pracownika
-              const cost = employee.monthlyCostTotal || 0;
-              const profit = revenue - cost;
-              
-              return {
-                id: 0, // Brak zapisanego raportu
-                employeeId: employee.id,
-                employeeName: `${employee.firstName} ${employee.lastName}`,
-                year,
-                month,
-                hoursWorked: totalHoursWorked, // w groszach
-                hourlyRateClient,
-                revenue,
-                cost,
-                actualCost: null,
-                profit,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                hasSavedReport: false,
-              };
             }
           })
         );

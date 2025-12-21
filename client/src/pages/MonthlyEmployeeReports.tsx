@@ -296,7 +296,9 @@ export default function MonthlyEmployeeReports() {
               </TableHeader>
               <TableBody>
                 {data.reports.map((report) => {
-                  const isEditing = editingReport === report.id;
+                  // Użyj unikalnego identyfikatora: employeeId jeśli brak zapisanego raportu (id=0), w przeciwnym razie id
+                  const reportKey = report.id === 0 ? report.employeeId : report.id;
+                  const isEditing = editingReport === reportKey;
                   
                   // Oblicz wartości do wyświetlenia
                   let displayHours = report.hoursWorked / 100;
