@@ -66,7 +66,8 @@ export default function MonthlyEmployeeReports() {
   });
 
   const handleEditReport = (report: any) => {
-    setEditingReport(report.id);
+    // Użyj unikalnego identyfikatora: employeeId jeśli brak zapisanego raportu (id=0), w przeciwnym razie id
+    setEditingReport(report.id === 0 ? report.employeeId : report.id);
     setHoursInput((report.hoursWorked / 100).toFixed(2));
     setRateInput((report.hourlyRateClient / 100).toFixed(2));
     setActualCostInput(report.actualCost !== null ? (report.actualCost / 100).toFixed(2) : "");
@@ -315,7 +316,7 @@ export default function MonthlyEmployeeReports() {
                   const profit = displayRevenue - cost;
 
                   return (
-                    <TableRow key={report.id}>
+                    <TableRow key={reportKey}>
                       <TableCell className="font-medium">
                         {report.employeeName}
                       </TableCell>

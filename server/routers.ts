@@ -1201,7 +1201,8 @@ export const appRouter = router({
       }),
 
     /**
-     * Pobiera wszystkie zapisane raporty pracowników dla danego miesiąca i roku
+     * Pobiera wszystkie raporty pracowników dla danego miesiąca i roku
+     * Zwraca wszystkich aktywnych pracowników, nawet jeśli nie mają zapisanego raportu
      */
     getMonthlyReports: adminProcedure
       .input(z.object({
@@ -1211,50 +1212,120 @@ export const appRouter = router({
       .query(async ({ input }) => {
         const { year, month } = input;
         
-        // Pobierz wszystkie raporty dla danego miesiąca
-        const reports = await db.getMonthlyReportsByMonthAndYear(year, month);
+        // Pobierz wszystkich aktywnych pracowników
+        const allEmployees = await db.getActiveEmployees();
         
-        // Pobierz dane pracowników dla każdego raportu
+        // Pobierz zapisane raporty dla danego miesiąca
+        const savedReports = await db.getMonthlyReportsByMonthAndYear(year, month);
+        const reportsMap = new Map(savedReports.map(r => [r.employeeId, r]));
+        
+        // Dla każdego pracownika utwórz raport (zapisany lub obliczony z aktualnych danych)
         const reportsWithEmployees = await Promise.all(
-          reports.map(async (report) => {
-            const employee = await db.getEmployeeById(report.employeeId);
-            if (!employee) {
-              return null;
-            }
+          allEmployees.map(async (employee) => {
+            const savedReport = reportsMap.get(employee.id);
             
-            return {
-              id: report.id,
-              employeeId: report.employeeId,
-              employeeName: `${employee.firstName} ${employee.lastName}`,
-              year: report.year,
-              month: report.month,
-              hoursWorked: report.hoursWorked, // w groszach (setnych godzin)
-              hourlyRateClient: report.hourlyRateClient,
-              revenue: report.revenue,
-              cost: report.cost,
-              actualCost: report.actualCost,
-              profit: report.profit,
-              createdAt: report.createdAt,
-              updatedAt: report.updatedAt,
-            };
+            if (savedReport) {
+              // Użyj zapisanego raportu
+              return {
+                id: savedReport.id,
+                employeeId: employee.id,
+                employeeName: `${employee.firstName} ${employee.lastName}`,
+                year: savedReport.year,
+                month: savedReport.month,
+                hoursWorked: savedReport.hoursWorked, // w groszach (setnych godzin)
+                hourlyRateClient: savedReport.hourlyRateClient,
+                revenue: savedReport.revenue,
+                cost: savedReport.cost,
+                actualCost: savedReport.actualCost,
+                profit: savedReport.profit,
+                createdAt: savedReport.createdAt,
+                updatedAt: savedReport.updatedAt,
+                hasSavedReport: true,
+              };
+            } else {
+              // Brak zapisanego raportu - oblicz z aktualnych danych
+              // Pobierz godziny z timeEntries dla tego pracownika w danym miesiącu
+              const timeEntriesList = await db.getTimeEntriesByEmployeeAndMonth(employee.id, year, month);
+              
+              // Oblicz łączne godziny
+              const totalHoursWorked = timeEntriesList.reduce((sum, entry) => sum + entry.hoursWorked, 0);
+              const hours = totalHoursWorked / 100; // Konwersja z groszy na godziny
+              
+              // Użyj domyślnej stawki klienta z pracownika lub z assignments
+              let hourlyRateClient = employee.hourlyRateClient || 0;
+              
+              // Jeśli są timeEntries, oblicz średnią ważoną stawki z assignments
+              if (timeEntriesList.length > 0) {
+                const { employeeProjectAssignments } = await import("../drizzle/schema");
+                const database = await db.getDb();
+                if (database) {
+                  const assignmentsMap = new Map<number, number>();
+                  let totalHoursForRate = 0;
+                  
+                  for (const entry of timeEntriesList) {
+                    const assignment = await db.getAssignmentById(entry.assignmentId);
+                    if (assignment) {
+                      const entryHours = entry.hoursWorked / 100;
+                      const rate = assignment.hourlyRateClient || employee.hourlyRateClient || 0;
+                      assignmentsMap.set(entry.assignmentId, rate);
+                      totalHoursForRate += entryHours;
+                    }
+                  }
+                  
+                  // Oblicz średnią ważoną stawki
+                  if (totalHoursForRate > 0) {
+                    let weightedSum = 0;
+                    for (const entry of timeEntriesList) {
+                      const entryHours = entry.hoursWorked / 100;
+                      const rate = assignmentsMap.get(entry.assignmentId) || employee.hourlyRateClient || 0;
+                      weightedSum += entryHours * rate;
+                    }
+                    hourlyRateClient = Math.round(weightedSum / totalHoursForRate);
+                  }
+                }
+              }
+              
+              // Oblicz przychód
+              const revenue = Math.round(hours * hourlyRateClient);
+              
+              // Koszt pracownika
+              const cost = employee.monthlyCostTotal || 0;
+              const profit = revenue - cost;
+              
+              return {
+                id: 0, // Brak zapisanego raportu
+                employeeId: employee.id,
+                employeeName: `${employee.firstName} ${employee.lastName}`,
+                year,
+                month,
+                hoursWorked: totalHoursWorked, // w groszach
+                hourlyRateClient,
+                revenue,
+                cost,
+                actualCost: null,
+                profit,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                hasSavedReport: false,
+              };
+            }
           })
         );
         
-        // Filtruj null values i sortuj po nazwisku
-        const validReports = reportsWithEmployees.filter((r): r is NonNullable<typeof r> => r !== null);
-        validReports.sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+        // Sortuj po nazwisku
+        reportsWithEmployees.sort((a, b) => a.employeeName.localeCompare(b.employeeName));
         
         // Oblicz podsumowanie
         const summary = {
-          totalHours: validReports.reduce((sum, r) => sum + (r.hoursWorked / 100), 0),
-          totalRevenue: validReports.reduce((sum, r) => sum + r.revenue, 0),
-          totalCost: validReports.reduce((sum, r) => sum + (r.actualCost ?? r.cost), 0),
-          totalProfit: validReports.reduce((sum, r) => sum + r.profit, 0),
-          employeeCount: validReports.length,
+          totalHours: reportsWithEmployees.reduce((sum, r) => sum + (r.hoursWorked / 100), 0),
+          totalRevenue: reportsWithEmployees.reduce((sum, r) => sum + r.revenue, 0),
+          totalCost: reportsWithEmployees.reduce((sum, r) => sum + (r.actualCost ?? r.cost), 0),
+          totalProfit: reportsWithEmployees.reduce((sum, r) => sum + r.profit, 0),
+          employeeCount: reportsWithEmployees.length,
         };
         
         return {
-          reports: validReports,
+          reports: reportsWithEmployees,
           summary,
         };
       }),

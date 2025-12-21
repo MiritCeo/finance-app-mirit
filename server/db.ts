@@ -768,35 +768,74 @@ export async function updateMonthlyReportFields(data: {
     sql`${monthlyEmployeeReports.employeeId} = ${data.employeeId} AND ${monthlyEmployeeReports.year} = ${data.year} AND ${monthlyEmployeeReports.month} = ${data.month}`
   );
   
-  if (existing.length === 0) {
-    throw new Error("Raport nie został znaleziony");
+  // Pobierz dane pracownika do obliczenia kosztu domyślnego
+  const employee = await getEmployeeById(data.employeeId);
+  if (!employee) {
+    throw new Error("Pracownik nie został znaleziony");
   }
   
-  const report = existing[0];
+  let reportId: number;
+  let oldHoursWorked = 0;
+  let oldHourlyRateClient = 0;
   
-  // Użyj nowych wartości lub zachowaj istniejące
-  const hoursWorked = data.hoursWorked !== undefined ? data.hoursWorked : report.hoursWorked;
-  const hourlyRateClient = data.hourlyRateClient !== undefined ? data.hourlyRateClient : report.hourlyRateClient;
-  const actualCost = data.actualCost !== undefined ? data.actualCost : report.actualCost;
-  
-  // Przelicz przychód na podstawie godzin i stawki
-  const hours = hoursWorked / 100; // Konwersja z groszy na godziny
-  const revenue = Math.round(hours * hourlyRateClient);
-  
-  // Użyj actualCost jeśli istnieje, w przeciwnym razie zapisany cost
-  const cost = actualCost ?? report.cost;
-  const profit = revenue - cost;
-  
-  await database.update(monthlyEmployeeReports)
-    .set({
+  if (existing.length > 0) {
+    // Aktualizuj istniejący raport
+    const report = existing[0];
+    oldHoursWorked = report.hoursWorked;
+    oldHourlyRateClient = report.hourlyRateClient;
+    
+    // Użyj nowych wartości lub zachowaj istniejące
+    const hoursWorked = data.hoursWorked !== undefined ? data.hoursWorked : report.hoursWorked;
+    const hourlyRateClient = data.hourlyRateClient !== undefined ? data.hourlyRateClient : report.hourlyRateClient;
+    const actualCost = data.actualCost !== undefined ? data.actualCost : report.actualCost;
+    
+    // Przelicz przychód na podstawie godzin i stawki
+    const hours = hoursWorked / 100; // Konwersja z groszy na godziny
+    const revenue = Math.round(hours * hourlyRateClient);
+    
+    // Użyj actualCost jeśli istnieje, w przeciwnym razie zapisany cost
+    const cost = actualCost ?? report.cost;
+    const profit = revenue - cost;
+    
+    await database.update(monthlyEmployeeReports)
+      .set({
+        hoursWorked,
+        hourlyRateClient,
+        revenue,
+        actualCost,
+        profit,
+        updatedAt: new Date(),
+      })
+      .where(sql`${monthlyEmployeeReports.id} = ${report.id}`);
+    
+    reportId = report.id;
+  } else {
+    // Utwórz nowy raport - wymagane są wszystkie wartości
+    if (data.hoursWorked === undefined || data.hourlyRateClient === undefined) {
+      throw new Error("Aby utworzyć nowy raport, musisz podać godziny i stawkę");
+    }
+    
+    const hoursWorked = data.hoursWorked;
+    const hourlyRateClient = data.hourlyRateClient;
+    const hours = hoursWorked / 100;
+    const revenue = Math.round(hours * hourlyRateClient);
+    const cost = data.actualCost ?? employee.monthlyCostTotal ?? 0;
+    const profit = revenue - cost;
+    
+    const result = await database.insert(monthlyEmployeeReports).values({
+      employeeId: data.employeeId,
+      year: data.year,
+      month: data.month,
       hoursWorked,
       hourlyRateClient,
       revenue,
-      actualCost,
+      cost,
+      actualCost: data.actualCost,
       profit,
-      updatedAt: new Date(),
-    })
-    .where(sql`${monthlyEmployeeReports.id} = ${report.id}`);
+    });
+    
+    reportId = Number(result[0].insertId);
+  }
   
   // Propaguj zmiany do timeEntries i assignments jeśli wymagane
   if (data.propagateChanges !== false) {
@@ -804,16 +843,26 @@ export async function updateMonthlyReportFields(data: {
     
     // Jeśli zmieniono godziny, zaktualizuj proporcjonalnie wszystkie timeEntries
     if (data.hoursWorked !== undefined && timeEntriesList.length > 0) {
-      const oldTotalHours = report.hoursWorked / 100; // w godzinach
-      const newTotalHours = hoursWorked / 100; // w godzinach
+      const newTotalHours = data.hoursWorked / 100; // w godzinach
       
-      if (oldTotalHours > 0 && newTotalHours > 0) {
+      // Jeśli istnieje stary raport, użyj jego godzin do obliczenia proporcji
+      if (existing.length > 0 && oldHoursWorked > 0 && newTotalHours > 0) {
+        const oldTotalHours = oldHoursWorked / 100;
         const ratio = newTotalHours / oldTotalHours;
         
         // Zaktualizuj każdy wpis proporcjonalnie
         for (const entry of timeEntriesList) {
           const newHoursWorked = Math.round(entry.hoursWorked * ratio);
           await updateTimeEntry(entry.id, { hoursWorked: newHoursWorked });
+        }
+      } else if (existing.length === 0 && newTotalHours > 0) {
+        // Nowy raport - rozłóż godziny równomiernie na wszystkie wpisy
+        const entryCount = timeEntriesList.length;
+        if (entryCount > 0) {
+          const hoursPerEntry = Math.round(data.hoursWorked / entryCount);
+          for (const entry of timeEntriesList) {
+            await updateTimeEntry(entry.id, { hoursWorked: hoursPerEntry });
+          }
         }
       }
     }
@@ -824,13 +873,13 @@ export async function updateMonthlyReportFields(data: {
       
       for (const assignmentId of uniqueAssignmentIds) {
         await database.update(employeeProjectAssignments)
-          .set({ hourlyRateClient: hourlyRateClient })
+          .set({ hourlyRateClient: data.hourlyRateClient })
           .where(eq(employeeProjectAssignments.id, assignmentId));
       }
     }
   }
   
-  return report.id;
+  return reportId;
 }
 
 // Zapisz pełny raport miesięczny z wartościami z momentu zapisu (snapshot)
