@@ -1016,18 +1016,19 @@ export const appRouter = router({
           let revenue: number;
           let defaultCost: number;
           
-          if (savedReport && savedReport.hoursWorked > 0) {
+          if (savedReport) {
             // Użyj zapisanych wartości z momentu zapisu raportu (snapshot)
+            // Używamy zapisanego raportu niezależnie od liczby godzin - jeśli raport istnieje, jest to prawda źródłowa
             hoursWorked = savedReport.hoursWorked / 100; // Konwersja z groszy na godziny
-            hourlyRateClient = savedReport.hourlyRateClient; // Zapisana stawka
-            revenue = savedReport.revenue; // Zapisany przychód
+            hourlyRateClient = savedReport.hourlyRateClient; // Zapisana stawka w groszach
+            revenue = savedReport.revenue; // Zapisany przychód w groszach
             defaultCost = savedReport.cost; // Zapisany koszt domyślny - NIE ZMIENIA SIĘ po edycji pracownika
           } else {
             // Brak zapisanego raportu - użyj aktualnych danych
             hoursWorked = (monthlyHours[month] || 0) / 100; // Konwersja z groszy na godziny (13100 -> 131h)
-            hourlyRateClient = employee.hourlyRateClient; // Aktualna stawka w groszach
+            hourlyRateClient = employee.hourlyRateClient ?? 0; // Aktualna stawka w groszach
             revenue = Math.round(hoursWorked * hourlyRateClient); // godziny × stawka w groszach
-            defaultCost = employee.monthlyCostTotal; // Aktualny koszt domyślny z bazy (w groszach)
+            defaultCost = employee.monthlyCostTotal ?? 0; // Aktualny koszt domyślny z bazy (w groszach)
           }
           
           // Pobierz actualCost z zapisanego raportu (jeśli istnieje)
@@ -1037,13 +1038,14 @@ export const appRouter = router({
           // defaultCost jest zawsze zapisaną wartością z momentu zapisu raportu (jeśli raport istnieje)
           const cost = actualCost ?? defaultCost;
           
-          // Jeśli mamy zapisany raport, użyj zapisanego profit, w przeciwnym razie oblicz
+          // Jeśli mamy zapisany raport i nie zmieniono actualCost, użyj zapisanego profit
+          // W przeciwnym razie przelicz profit (może być zmieniony przez actualCost)
           let profit: number;
-          if (savedReport && savedReport.hoursWorked > 0 && actualCost === null) {
-            // Użyj zapisanego profit jeśli nie ma actualCost
+          if (savedReport && actualCost === null) {
+            // Użyj zapisanego profit jeśli nie ma actualCost (zapisany profit jest poprawny)
             profit = savedReport.profit;
           } else {
-            // Przelicz profit (może być zmieniony przez actualCost)
+            // Przelicz profit (może być zmieniony przez actualCost lub to nowy raport)
             profit = revenue - cost;
           }
           
