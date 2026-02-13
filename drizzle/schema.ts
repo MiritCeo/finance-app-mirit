@@ -43,6 +43,8 @@ export const employees = mysqlTable("employees", {
   isActive: boolean("isActive").default(true).notNull(),
   notes: text("notes"),
   hrappkaId: int("hrappkaId"), // ID pracownika w systemie HRappka (dla synchronizacji danych)
+  projectHunterRateMin: int("projectHunterRateMin").default(null), // Minimalna stawka godzinowa dla Łowcy Projektów w groszach
+  projectHunterRateMax: int("projectHunterRateMax").default(null), // Maksymalna stawka godzinowa dla Łowcy Projektów w groszach
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -641,3 +643,32 @@ export const hrappkaEmployeeInfoCache = mysqlTable("hrappkaEmployeeInfoCache", {
 
 export type HRappkaEmployeeInfoCache = typeof hrappkaEmployeeInfoCache.$inferSelect;
 export type InsertHRappkaEmployeeInfoCache = typeof hrappkaEmployeeInfoCache.$inferInsert;
+
+/**
+ * Project Hunter Assignments - łączy Łowców Projektów z pracownikami, którzy są widoczni dla danego ŁP
+ */
+export const projectHunterAssignments = mysqlTable("projectHunterAssignments", {
+  id: int("id").autoincrement().primaryKey(),
+  projectHunterId: int("projectHunterId").notNull(), // ID użytkownika z rolą project_hunter
+  employeeId: int("employeeId").notNull(), // ID pracownika
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ProjectHunterAssignment = typeof projectHunterAssignments.$inferSelect;
+export type InsertProjectHunterAssignment = typeof projectHunterAssignments.$inferInsert;
+
+/**
+ * Project Hunter Passwords - przechowuje hasła dla Łowców Projektów (logowanie bez OAuth)
+ */
+export const projectHunterPasswords = mysqlTable("projectHunterPasswords", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(), // ID użytkownika z tabeli users
+  passwordHash: varchar("passwordHash", { length: 255 }).notNull(), // Bcrypt hash
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ProjectHunterPassword = typeof projectHunterPasswords.$inferSelect;
+export type InsertProjectHunterPassword = typeof projectHunterPasswords.$inferInsert;

@@ -39,6 +39,13 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Local documents
+Mirit-kalkulacje.xlsx
+
+# Local guides (not for repo)
+PROJECT_HUNTER_ADMIN_GUIDE.md
+PROJECT_HUNTER_SETUP.md
+
 # Runtime data
 pids
 *.pid

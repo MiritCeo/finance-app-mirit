@@ -29,6 +29,9 @@ import HRappkaMapping from "./pages/HRappkaMapping";
 import MonthlyFinancialOverview from "./pages/MonthlyFinancialOverview";
 import MonthlyEmployeeReports from "./pages/MonthlyEmployeeReports";
 import ProjectProfitability from "./pages/ProjectProfitability";
+import ProjectHunterDashboard from "./pages/ProjectHunterDashboard";
+import ProjectHunterManagement from "./pages/ProjectHunterManagement";
+import ProjectHunterLogin from "./pages/ProjectHunterLogin";
 import DashboardLayout from "./components/DashboardLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -37,6 +40,7 @@ function Router() {
     <Switch>
       <Route path={"/admin-login"} component={AdminLogin} />
       <Route path={"/employee-login"} component={EmployeeLogin} />
+      <Route path={"/project-hunter-login"} component={ProjectHunterLogin} />
       <Route path={"/my-cv"} component={MyCV} />
       <Route path={"/"}>
         <ProtectedRoute>
@@ -200,6 +204,20 @@ function Router() {
         <ProtectedRoute requiredRole="admin">
           <DashboardLayout>
             <ProjectProfitability />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/project-hunter-management"}>
+        <ProtectedRoute requiredRole="admin">
+          <DashboardLayout>
+            <ProjectHunterManagement />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/project-hunter-dashboard"}>
+        <ProtectedRoute requiredRole="project_hunter">
+          <DashboardLayout>
+            <ProjectHunterDashboard />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>

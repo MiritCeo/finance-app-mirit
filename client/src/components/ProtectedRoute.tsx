@@ -5,8 +5,8 @@ import { Loader2 } from "lucide-react";
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
-  requiredRole?: "admin" | "employee" | "user";
-  allowedRoles?: ("admin" | "employee" | "user")[];
+  requiredRole?: "admin" | "employee" | "user" | "project_hunter";
+  allowedRoles?: ("admin" | "employee" | "user" | "project_hunter")[];
   redirectTo?: string;
 };
 
@@ -34,6 +34,8 @@ export default function ProtectedRoute({
       // Przekieruj w zależności od roli
       if (userRole === "employee") {
         setLocation("/my-cv");
+      } else if (userRole === "project_hunter") {
+        setLocation("/project-hunter-dashboard");
       } else {
         setLocation(redirectTo || "/");
       }
@@ -44,6 +46,8 @@ export default function ProtectedRoute({
       // Przekieruj w zależności od roli
       if (userRole === "employee") {
         setLocation("/my-cv");
+      } else if (userRole === "project_hunter") {
+        setLocation("/project-hunter-dashboard");
       } else {
         setLocation(redirectTo || "/");
       }

@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, CheckSquare, BookOpen, DollarSign, Calendar, Briefcase, UserCircle, Building2, Clock, Receipt, Plus, Zap, Moon, Sun, Sparkles, Info, Menu, X, MapPin, BarChart3, TrendingUp } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, CheckSquare, BookOpen, DollarSign, Calendar, Briefcase, UserCircle, Building2, Clock, Receipt, Plus, Zap, Moon, Sun, Sparkles, Info, Menu, X, MapPin, BarChart3, TrendingUp, Search, Settings2 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -47,6 +47,7 @@ const adminMenuItems = [
   { icon: Building2, label: "Klienci", path: "/clients", color: "text-cyan-600" },
   { icon: Clock, label: "Raportowanie godzin", path: "/time-reporting", color: "text-pink-600" },
   { icon: Receipt, label: "Koszty stałe", path: "/fixed-costs", color: "text-red-600" },
+  { icon: Settings2, label: "Łowcy Projektów", path: "/project-hunter-management", color: "text-amber-600" },
 ];
 
 const employeeMenuItems = [
@@ -57,6 +58,10 @@ const employeeMenuItems = [
   { icon: UserCircle, label: "Moje CV", path: "/my-cv", color: "text-blue-600" },
   { icon: BookOpen, label: "Baza Wiedzy", path: "/knowledge", color: "text-indigo-600" },
   { icon: Info, label: "Zasady grywalizacji", path: "/gamification-info", color: "text-slate-600" },
+];
+
+const projectHunterMenuItems = [
+  { icon: Search, label: "Dostępni Pracownicy", path: "/project-hunter-dashboard", color: "text-amber-600" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -161,7 +166,10 @@ function DashboardLayoutContent({
     }
   }, [user]);
   
-  const menuItems = user?.role === 'employee' ? employeeMenuItems : adminMenuItems;
+  const menuItems = 
+    user?.role === 'employee' ? employeeMenuItems :
+    user?.role === 'project_hunter' ? projectHunterMenuItems :
+    adminMenuItems;
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 
@@ -228,10 +236,14 @@ function DashboardLayoutContent({
                     {user?.role && (
                       <span className={`text-xs font-semibold block truncate ${
                         user.role === "admin" ? "text-blue-600 dark:text-blue-400" : 
-                        user.role === "employee" ? "text-green-600 dark:text-green-400" : 
+                        user.role === "employee" ? "text-green-600 dark:text-green-400" :
+                        user.role === "project_hunter" ? "text-amber-600 dark:text-amber-400" :
                         "text-muted-foreground dark:text-muted-foreground"
                       }`}>
-                        {user.role === "admin" ? "Administrator" : user.role === "employee" ? "Pracownik" : "Użytkownik"}
+                        {user.role === "admin" ? "Administrator" : 
+                         user.role === "employee" ? "Pracownik" : 
+                         user.role === "project_hunter" ? "Łowca Projektów" : 
+                         "Użytkownik"}
                       </span>
                     )}
                   </div>
@@ -289,6 +301,8 @@ function DashboardLayoutContent({
                           <span className="text-blue-600 dark:text-blue-400">Administrator</span>
                         ) : user.role === "employee" ? (
                           <span className="text-green-600 dark:text-green-400">Pracownik</span>
+                        ) : user.role === "project_hunter" ? (
+                          <span className="text-amber-600 dark:text-amber-400">Łowca Projektów</span>
                         ) : (
                           <span className="text-muted-foreground dark:text-muted-foreground">Użytkownik</span>
                         )}

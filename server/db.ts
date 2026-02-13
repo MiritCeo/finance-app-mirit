@@ -37,6 +37,8 @@ import {
   vacationPlans, InsertVacationPlan, VacationPlan,
   knowledgeBasePoints, InsertKnowledgeBasePoint, KnowledgeBasePoint,
   hrappkaEmployeeInfoCache, InsertHRappkaEmployeeInfoCache, HRappkaEmployeeInfoCache,
+  projectHunterAssignments, InsertProjectHunterAssignment, ProjectHunterAssignment,
+  projectHunterPasswords, InsertProjectHunterPassword, ProjectHunterPassword,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -154,6 +156,34 @@ export async function getUserById(id: number) {
 
   const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUsersByRole(role: string): Promise<User[]> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get users by role: database not available");
+    return [];
+  }
+
+  return await db.select().from(users).where(eq(users.role, role));
+}
+
+export async function getUserByEmail(email: string): Promise<User | undefined> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user by email: database not available");
+    return undefined;
+  }
+
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function deleteUser(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(users).where(eq(users.id, userId));
 }
 
 // ============ EMPLOYEE HELPERS ============
@@ -3227,4 +3257,233 @@ export async function awardHRappkaDailyHoursPoints(
     console.error(`[Gamification] Failed to award HRappka daily hours points for employee ${employeeId}:`, error);
     return false;
   }
+}
+
+// ============ PROJECT HUNTER HELPERS ============
+
+/**
+ * Pobiera wszystkie przypisania pracowników do Łowcy Projektów
+ */
+export async function getProjectHunterAssignments(projectHunterId: number): Promise<ProjectHunterAssignment[]> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  return await database
+    .select()
+    .from(projectHunterAssignments)
+    .where(
+      and(
+        eq(projectHunterAssignments.projectHunterId, projectHunterId),
+        eq(projectHunterAssignments.isActive, true)
+      )
+    );
+}
+
+/**
+ * Pobiera pracowników widocznych dla Łowcy Projektów z pełnymi danymi
+ */
+export async function getEmployeesForProjectHunter(projectHunterId: number) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const assignments = await database
+    .select({
+      assignment: projectHunterAssignments,
+      employee: employees,
+    })
+    .from(projectHunterAssignments)
+    .innerJoin(employees, eq(projectHunterAssignments.employeeId, employees.id))
+    .where(
+      and(
+        eq(projectHunterAssignments.projectHunterId, projectHunterId),
+        eq(projectHunterAssignments.isActive, true),
+        eq(employees.isActive, true)
+      )
+    );
+
+  return assignments;
+}
+
+/**
+ * Dodaje przypisanie pracownika do Łowcy Projektów
+ */
+export async function assignEmployeeToProjectHunter(
+  projectHunterId: number,
+  employeeId: number
+): Promise<number> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  // Sprawdź czy przypisanie już istnieje
+  const existing = await database
+    .select()
+    .from(projectHunterAssignments)
+    .where(
+      and(
+        eq(projectHunterAssignments.projectHunterId, projectHunterId),
+        eq(projectHunterAssignments.employeeId, employeeId)
+      )
+    )
+    .limit(1);
+
+  if (existing.length > 0) {
+    // Jeśli istnieje ale jest nieaktywne, reaktywuj
+    if (!existing[0].isActive) {
+      await database
+        .update(projectHunterAssignments)
+        .set({
+          isActive: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(projectHunterAssignments.id, existing[0].id));
+    }
+    return existing[0].id;
+  }
+
+  // Utwórz nowe przypisanie
+  const result = await database.insert(projectHunterAssignments).values({
+    projectHunterId,
+    employeeId,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as InsertProjectHunterAssignment);
+
+  return Number(result[0].insertId);
+}
+
+/**
+ * Usuwa przypisanie pracownika do Łowcy Projektów (soft delete)
+ */
+export async function removeEmployeeFromProjectHunter(
+  projectHunterId: number,
+  employeeId: number
+): Promise<void> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  await database
+    .update(projectHunterAssignments)
+    .set({
+      isActive: false,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(projectHunterAssignments.projectHunterId, projectHunterId),
+        eq(projectHunterAssignments.employeeId, employeeId)
+      )
+    );
+}
+
+/**
+ * Pobiera wszystkie przypisania dla danego pracownika (admin view)
+ */
+export async function getProjectHuntersForEmployee(employeeId: number) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const assignments = await database
+    .select({
+      assignment: projectHunterAssignments,
+      projectHunter: users,
+    })
+    .from(projectHunterAssignments)
+    .innerJoin(users, eq(projectHunterAssignments.projectHunterId, users.id))
+    .where(
+      and(
+        eq(projectHunterAssignments.employeeId, employeeId),
+        eq(projectHunterAssignments.isActive, true)
+      )
+    );
+
+  return assignments;
+}
+
+/**
+ * Zapisuje/aktualizuje hasło dla Łowcy Projektów
+ */
+export async function setProjectHunterPassword(userId: number, passwordHash: string): Promise<void> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  // Sprawdź czy hasło już istnieje
+  const existing = await database
+    .select()
+    .from(projectHunterPasswords)
+    .where(eq(projectHunterPasswords.userId, userId))
+    .limit(1);
+
+  if (existing.length > 0) {
+    // Aktualizuj
+    await database
+      .update(projectHunterPasswords)
+      .set({
+        passwordHash,
+        updatedAt: new Date(),
+      })
+      .where(eq(projectHunterPasswords.userId, userId));
+  } else {
+    // Utwórz
+    await database.insert(projectHunterPasswords).values({
+      userId,
+      passwordHash,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as InsertProjectHunterPassword);
+  }
+}
+
+/**
+ * Pobiera hasło Łowcy Projektów
+ */
+export async function getProjectHunterPassword(userId: number): Promise<ProjectHunterPassword | null> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  const result = await database
+    .select()
+    .from(projectHunterPasswords)
+    .where(eq(projectHunterPasswords.userId, userId))
+    .limit(1);
+
+  return result[0] || null;
+}
+
+/**
+ * Usuwa hasło Łowcy Projektów
+ */
+export async function deleteProjectHunterPassword(userId: number): Promise<void> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  await database
+    .delete(projectHunterPasswords)
+    .where(eq(projectHunterPasswords.userId, userId));
+}
+
+/**
+ * Weryfikuje hasło Łowcy Projektów przy logowaniu
+ */
+export async function verifyProjectHunterPassword(email: string, password: string): Promise<User | null> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  // Znajdź użytkownika po emailu
+  const user = await getUserByEmail(email);
+  if (!user || user.role !== 'project_hunter') {
+    return null;
+  }
+
+  // Pobierz hash hasła
+  const passwordData = await getProjectHunterPassword(user.id);
+  if (!passwordData) {
+    return null;
+  }
+
+  // Zweryfikuj hasło
+  const bcrypt = await import("bcrypt");
+  const isValid = await bcrypt.default.compare(password, passwordData.passwordHash);
+
+  return isValid ? user : null;
 }

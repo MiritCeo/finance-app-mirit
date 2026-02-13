@@ -74,3 +74,24 @@ export const employeeProcedure = t.procedure.use(
     });
   }),
 );
+
+export const projectHunterProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+
+    if (!ctx.user) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+    }
+
+    if (ctx.user.role !== 'project_hunter' && ctx.user.role !== 'admin') {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Dostęp tylko dla Łowców Projektów" });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        user: ctx.user,
+      },
+    });
+  }),
+);

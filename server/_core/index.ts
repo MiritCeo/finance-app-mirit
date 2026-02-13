@@ -8,6 +8,8 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { sql } from "drizzle-orm";
 import { sdk } from "./sdk";
+import { COOKIE_NAME } from "@shared/const";
+import { ENV } from "./env";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -84,6 +86,81 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  
+  // Project Hunter login endpoint (bez OAuth)
+  app.post("/api/project-hunter/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Email i hasło są wymagane",
+        });
+      }
+
+      const { verifyProjectHunterPassword } = await import("../db");
+      const user = await verifyProjectHunterPassword(email, password);
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "Nieprawidłowy email lub hasło",
+        });
+      }
+
+      console.log("[Project Hunter Login] User authenticated:", {
+        id: user.id,
+        openId: user.openId,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      });
+
+      // Utwórz sesję dla Łowcy Projektów używając SDK (tak samo jak OAuth)
+      // Upewnij się, że name nie jest null/undefined
+      const userName = user.name || user.email || "Project Hunter";
+      // Dla Łowców Projektów używamy "local" jako appId jeśli nie ma konfiguracji OAuth
+      const appId = ENV.appId || "local-project-hunter-app";
+      
+      console.log("[Project Hunter Login] Creating session with appId:", appId);
+      
+      const sessionToken = await sdk.signSession({
+        openId: user.openId,
+        appId: appId,
+        name: userName,
+      }, {
+        expiresInMs: 7 * 24 * 60 * 60 * 1000, // 7 dni
+      });
+
+      console.log("[Project Hunter Login] Session token created for openId:", user.openId);
+
+      // Ustaw cookie sesji
+      const { getSessionCookieOptions } = await import("./cookies");
+      const cookieOptions = getSessionCookieOptions(req);
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dni
+      });
+
+      return res.json({
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        },
+      });
+    } catch (error: any) {
+      console.error("[Project Hunter Login] Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Wystąpił błąd podczas logowania",
+      });
+    }
+  });
+  
   // tRPC API - przed Vite middleware
   app.use(
     "/api/trpc",

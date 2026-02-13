@@ -1,7 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, adminProcedure, employeeProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, employeeProcedure, projectHunterProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
@@ -5395,6 +5395,267 @@ Odpowiadaj na pytania w sposób zwięzły, profesjonalny i pomocny. Jeśli pytan
             message: `Nie udało się pobrać raportów godzinowych: ${errorMessage}`,
           });
         }
+      }),
+  }),
+
+  // ============ PROJECT HUNTER ============
+  projectHunter: router({
+    /**
+     * Pobiera listę pracowników przypisanych do Łowcy Projektów
+     */
+    getAssignedEmployees: projectHunterProcedure.query(async ({ ctx }) => {
+      const projectHunterId = ctx.user.id;
+      const assignments = await db.getEmployeesForProjectHunter(projectHunterId);
+      
+      // Pobierz CV i historię CV dla każdego pracownika
+      const employeesWithDetails = await Promise.all(
+        assignments.map(async ({ assignment, employee }) => {
+          const cvDetails = await db.getEmployeeCVWithDetails(employee.id);
+          const cvHistory = await db.getCVHistory(employee.id);
+          
+          return {
+            id: employee.id,
+            firstName: employee.firstName,
+            // Nie pokazujemy nazwiska dla Łowcy Projektów
+            position: employee.position,
+            projectHunterRateMin: employee.projectHunterRateMin,
+            projectHunterRateMax: employee.projectHunterRateMax,
+            cv: cvDetails,
+            cvHistory: cvHistory.map(cv => ({
+              id: cv.id,
+              generatedAt: cv.generatedAt,
+              language: cv.language,
+            })),
+          };
+        })
+      );
+      
+      return employeesWithDetails;
+    }),
+
+    /**
+     * Pobiera szczegóły CV pracownika (HTML)
+     */
+    getCVHistory: projectHunterProcedure
+      .input(z.object({ cvHistoryId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const projectHunterId = ctx.user.id;
+        const cvHistory = await db.getCVHistoryById(input.cvHistoryId);
+        
+        if (!cvHistory) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "CV nie zostało znalezione",
+          });
+        }
+        
+        // Sprawdź czy Łowca Projektów ma dostęp do tego pracownika
+        const assignments = await db.getProjectHunterAssignments(projectHunterId);
+        const hasAccess = assignments.some(
+          (a) => a.employeeId === cvHistory.employeeId && a.isActive
+        );
+        
+        if (!hasAccess) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Brak dostępu do tego CV",
+          });
+        }
+        
+        return cvHistory;
+      }),
+  }),
+
+  // ============ PROJECT HUNTER ADMIN ============
+  projectHunterAdmin: router({
+    /**
+     * Pobiera listę wszystkich użytkowników z rolą project_hunter
+     */
+    listProjectHunters: adminProcedure.query(async () => {
+      return await db.getUsersByRole("project_hunter");
+    }),
+
+    /**
+     * Tworzy nowego Łowcę Projektów z hasłem (bez OAuth)
+     */
+    createProjectHunter: adminProcedure
+      .input(
+        z.object({
+          email: z.string().email(),
+          name: z.string().min(1),
+          password: z.string().min(8, "Hasło musi mieć minimum 8 znaków"),
+        })
+      )
+      .mutation(async ({ input }) => {
+        // Sprawdź czy użytkownik już istnieje
+        const existingUser = await db.getUserByEmail(input.email);
+        if (existingUser) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Użytkownik z tym emailem już istnieje",
+          });
+        }
+
+        // Hashuj hasło
+        const bcrypt = await import("bcrypt");
+        const passwordHash = await bcrypt.default.hash(input.password, 10);
+
+        // Utwórz użytkownika z unikalnym openId (email jako identifier)
+        const openId = `project_hunter_${input.email}`;
+        
+        await db.upsertUser({
+          openId,
+          email: input.email,
+          name: input.name,
+          role: "project_hunter",
+        });
+
+        // Pobierz utworzonego użytkownika
+        const user = await db.getUserByEmail(input.email);
+        if (!user) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Nie udało się utworzyć użytkownika",
+          });
+        }
+
+        // Zapisz hash hasła w custom tabeli (używamy employeeId jako storage)
+        await db.setProjectHunterPassword(user.id, passwordHash);
+
+        return { 
+          success: true, 
+          userId: user.id,
+          email: input.email,
+          password: input.password, // Zwracamy hasło tylko raz, do wysłania mailem
+        };
+      }),
+
+    /**
+     * Zmienia hasło Łowcy Projektów
+     */
+    resetProjectHunterPassword: adminProcedure
+      .input(
+        z.object({
+          projectHunterId: z.number(),
+          newPassword: z.string().min(8, "Hasło musi mieć minimum 8 znaków"),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const bcrypt = await import("bcrypt");
+        const passwordHash = await bcrypt.default.hash(input.newPassword, 10);
+        
+        await db.setProjectHunterPassword(input.projectHunterId, passwordHash);
+        
+        return { success: true, newPassword: input.newPassword };
+      }),
+
+    /**
+     * Usuwa konto Łowcy Projektów
+     */
+    deleteProjectHunter: adminProcedure
+      .input(z.object({ projectHunterId: z.number() }))
+      .mutation(async ({ input }) => {
+        // Usuń wszystkie przypisania
+        const assignments = await db.getProjectHunterAssignments(input.projectHunterId);
+        for (const assignment of assignments) {
+          await db.removeEmployeeFromProjectHunter(input.projectHunterId, assignment.employeeId);
+        }
+
+        // Usuń hasło
+        await db.deleteProjectHunterPassword(input.projectHunterId);
+
+        // Usuń użytkownika
+        await db.deleteUser(input.projectHunterId);
+
+        return { success: true };
+      }),
+
+    /**
+     * Pobiera przypisania pracowników dla danego Łowcy Projektów
+     */
+    getAssignments: adminProcedure
+      .input(z.object({ projectHunterId: z.number() }))
+      .query(async ({ input }) => {
+        const assignments = await db.getEmployeesForProjectHunter(input.projectHunterId);
+        return assignments.map(({ assignment, employee }) => ({
+          assignmentId: assignment.id,
+          employeeId: employee.id,
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          position: employee.position,
+          projectHunterRateMin: employee.projectHunterRateMin,
+          projectHunterRateMax: employee.projectHunterRateMax,
+        }));
+      }),
+
+    /**
+     * Przypisuje pracownika do Łowcy Projektów
+     */
+    assignEmployee: adminProcedure
+      .input(
+        z.object({
+          projectHunterId: z.number(),
+          employeeId: z.number(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const id = await db.assignEmployeeToProjectHunter(
+          input.projectHunterId,
+          input.employeeId
+        );
+        return { success: true, id };
+      }),
+
+    /**
+     * Usuwa przypisanie pracownika od Łowcy Projektów
+     */
+    removeAssignment: adminProcedure
+      .input(
+        z.object({
+          projectHunterId: z.number(),
+          employeeId: z.number(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        await db.removeEmployeeFromProjectHunter(
+          input.projectHunterId,
+          input.employeeId
+        );
+        return { success: true };
+      }),
+
+    /**
+     * Pobiera wszystkich Łowców Projektów przypisanych do pracownika
+     */
+    getProjectHuntersForEmployee: adminProcedure
+      .input(z.object({ employeeId: z.number() }))
+      .query(async ({ input }) => {
+        const assignments = await db.getProjectHuntersForEmployee(input.employeeId);
+        return assignments.map(({ assignment, projectHunter }) => ({
+          assignmentId: assignment.id,
+          projectHunterId: projectHunter.id,
+          projectHunterName: projectHunter.name,
+          projectHunterEmail: projectHunter.email,
+        }));
+      }),
+
+    /**
+     * Aktualizuje stawki dla Łowcy Projektów dla pracownika
+     */
+    updateEmployeeRates: adminProcedure
+      .input(
+        z.object({
+          employeeId: z.number(),
+          projectHunterRateMin: z.number().nullable().optional(),
+          projectHunterRateMax: z.number().nullable().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        await db.updateEmployee(input.employeeId, {
+          projectHunterRateMin: input.projectHunterRateMin ?? null,
+          projectHunterRateMax: input.projectHunterRateMax ?? null,
+        });
+        return { success: true };
       }),
   }),
 });
