@@ -13,6 +13,9 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*.example
+*.example
+*.local.*
 
 # IDE and editor files
 .vscode/
@@ -20,6 +23,7 @@ build/
 *.swp
 *.swo
 *~
+*.code-workspace
 
 # OS generated files
 .DS_Store
@@ -38,6 +42,19 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+
+# Local documents
+Mirit-kalkulacje.xlsx
+
+# Markdown docs (not tracked)
+*.md
+
+# One-off scripts/tests (local)
+test_*.mjs
+check-*.sh
+check-*.mjs
+CHECK_*.sh
+fix-*.mjs
 
 # Local documents
 Mirit-kalkulacje.xlsx
