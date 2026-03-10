@@ -185,6 +185,7 @@ export default function TasksPage() {
           </DialogContent>
         </Dialog>
       </div>
+      </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TaskStatus | "all")}>
         <TabsList className="grid w-full grid-cols-5">

@@ -288,6 +288,7 @@ export default function Projects() {
           </DialogContent>
         </Dialog>
       </div>
+      </div>
 
       <Card>
         <CardHeader>

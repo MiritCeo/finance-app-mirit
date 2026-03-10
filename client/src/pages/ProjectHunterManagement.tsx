@@ -369,6 +369,7 @@ export default function ProjectHunterManagement() {
           </DialogContent>
         </Dialog>
       </div>
+      </div>
 
       {!projectHunters || projectHunters.length === 0 ? (
         <Card>
