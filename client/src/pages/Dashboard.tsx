@@ -94,7 +94,7 @@ export default function Dashboard() {
     const id = window.setTimeout(() => setLoadDashboardData(true), 150);
     return () => window.clearTimeout(id);
   }, [isAdmin]);
-  const { data: myProfile } = trpc.employees.myProfile.useQuery(undefined, {
+  const { data: myProfile, isLoading: myProfileLoading } = trpc.employees.myProfile.useQuery(undefined, {
     enabled: isEmployee,
   });
   const { data: myHoursStatus, refetch: refetchMyHoursStatus } = trpc.timeEntries.myMonthlyHoursStatus.useQuery(undefined, {
@@ -351,7 +351,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {myProfile?.employmentType === "b2b" && (
+        {isEmployee && (
           <Card>
             <CardHeader>
               <CardTitle>Godziny miesięczne (B2B)</CardTitle>
@@ -360,7 +360,16 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {myHoursStatus?.isLastDay ? (
+              {myProfileLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Ładowanie danych profilu...
+                </div>
+              ) : myProfile?.employmentType !== "b2b" ? (
+                <p className="text-sm text-muted-foreground">
+                  Funkcja dostępna tylko dla umowy B2B.
+                </p>
+              ) : myHoursStatus?.isLastDay ? (
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="monthly-hours">Liczba godzin</Label>
@@ -401,8 +410,11 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Panel informacji z HRappka */}
-        <HRappkaInfoPanel />
+        {/* Panel informacji z HRappka (ukryty tylko dla B2B) */}
+        {!isEmployee && <HRappkaInfoPanel />}
+        {isEmployee && !myProfileLoading && myProfile?.employmentType !== "b2b" && (
+          <HRappkaInfoPanel />
+        )}
 
       </div>
     );
