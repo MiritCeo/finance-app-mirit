@@ -2195,6 +2195,26 @@ export const appRouter = router({
         };
       }),
 
+    myMonthlyHoursHistory: employeeProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user.employeeId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Brak przypisanego pracownika." });
+        }
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const reports = await db.getMonthlyReportsByEmployeeAndYear(ctx.user.employeeId, year);
+
+        return reports
+          .map(report => ({
+            year: report.year,
+            month: report.month,
+            hours: report.hoursWorked / 100,
+            updatedAt: report.updatedAt,
+          }))
+          .sort((a, b) => b.month - a.month);
+      }),
+
     submitMyMonthlyHours: employeeProcedure
       .input(z.object({
         hours: z.number().min(0).max(400),

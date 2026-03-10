@@ -97,6 +97,11 @@ export default function Dashboard() {
   const { data: myHoursStatus, refetch: refetchMyHoursStatus } = trpc.timeEntries.myMonthlyHoursStatus.useQuery(undefined, {
     enabled: isEmployee,
   });
+  const { data: myHoursHistory } = trpc.timeEntries.myMonthlyHoursHistory.useQuery(undefined, {
+    enabled: isEmployee,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
   const { data: myProfile, isLoading: myProfileLoading } = trpc.employees.myProfile.useQuery(undefined, {
     enabled: isEmployee,
   });
@@ -367,7 +372,7 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle>Godziny miesięczne (B2B)</CardTitle>
               <CardDescription>
-                Uzupełnij godziny pracy w dowolnym dniu miesiąca.
+                Uzupełnij godziny pracy za bieżący miesiąc.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -382,6 +387,14 @@ export default function Dashboard() {
                 </p>
               ) : (
                 <>
+                  <p className="text-sm text-muted-foreground">
+                    Raportujesz godziny za{" "}
+                    <span className="font-medium text-foreground">
+                      {getMonthName(myHoursStatus?.month ?? new Date().getMonth() + 1)}{" "}
+                      {myHoursStatus?.year ?? new Date().getFullYear()}
+                    </span>
+                    .
+                  </p>
                   <div className="space-y-2">
                     <Label htmlFor="monthly-hours">Liczba godzin</Label>
                     <Input
@@ -416,6 +429,32 @@ export default function Dashboard() {
                       Jeśli widzisz ten formularz bez typu umowy, poproś administratora o
                       uzupełnienie profilu.
                     </p>
+                  )}
+                  {isB2BEmployee && (
+                    <div className="pt-2 space-y-2">
+                      <p className="text-sm font-medium">Twoje raporty z bieżącego roku</p>
+                      {myHoursHistory && myHoursHistory.length > 0 ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {myHoursHistory
+                            .filter(report => report.month !== (myHoursStatus?.month ?? new Date().getMonth() + 1))
+                            .map(report => (
+                              <div
+                                key={`${report.year}-${report.month}`}
+                                className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
+                              >
+                                <span className="text-muted-foreground">
+                                  {getMonthName(report.month)} {report.year}
+                                </span>
+                                <span className="font-semibold">{report.hours}h</span>
+                              </div>
+                            ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Brak raportów w bieżącym roku.
+                        </p>
+                      )}
+                    </div>
                   )}
                 </>
               )}
