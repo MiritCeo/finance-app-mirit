@@ -1,8 +1,8 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, DollarSign, Users, TrendingUp, TrendingDown, Calendar, ArrowUp, ArrowDown, Minus, Plus, Trophy, Briefcase, Award, Medal, TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon, Zap, Clock, Building2, Calculator, Receipt, Moon, Sun, Filter, Target, Activity, Sparkles, UserCircle, BookOpen } from "lucide-react";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Loader2, DollarSign, Users, TrendingUp, TrendingDown, Calendar, ArrowUp, ArrowDown, Minus, Plus, Trophy, Briefcase, Award, Medal, TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon, Zap, Clock, Building2, Calculator, Receipt, Moon, Sun, Filter, Target, Activity, Sparkles, UserCircle, BookOpen, Info } from "lucide-react";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
 import { Link } from "wouter";
@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { HRappkaInfoPanel } from "@/components/HRappkaInfoPanel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
 function UrgentTasksList({ enabled }: { enabled: boolean }) {
@@ -377,7 +378,24 @@ export default function Dashboard() {
         {canShowB2BHoursCard && (
           <Card>
             <CardHeader>
-              <CardTitle>Godziny miesięczne (B2B)</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                Godziny miesięczne (B2B)
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Zasady punktów i edycji godzin"
+                    >
+                      <Info className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Punkty przyznajemy za terminowe uzupełnienie godzin w ostatnim dniu miesiąca.
+                    Zapis z tego dnia jest ostateczny i blokuje dalszą edycję.
+                  </TooltipContent>
+                </Tooltip>
+              </CardTitle>
               <CardDescription>
                 Uzupełnij godziny pracy za bieżący miesiąc i zadbaj o terminowe rozliczenie.
               </CardDescription>
@@ -1270,7 +1288,7 @@ export default function Dashboard() {
                   tick={{ fontSize: 12 }}
                   tickFormatter={(value) => `${(value / 100).toFixed(0)} zł`}
                 />
-                <Tooltip 
+                <RechartsTooltip 
                   formatter={(value: number, name: string) => [
                     formatCurrency(value),
                     name === "revenue" ? "Przychód" : name === "totalCosts" ? "Koszty całkowite" : "Zysk operacyjny"
@@ -1334,7 +1352,7 @@ export default function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `${(value / 100).toFixed(0)} zł`} />
-                <Tooltip 
+                <RechartsTooltip 
                   formatter={(value: number, name: string) => [
                     formatCurrency(value),
                     name === "obecny" ? `${getMonthName(currentMonth)} ${currentYear}` : `${getMonthName(prevMonth.month)} ${prevMonth.year}`
