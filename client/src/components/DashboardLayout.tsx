@@ -1,5 +1,4 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useTheme } from "@/contexts/ThemeContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -156,7 +155,6 @@ function DashboardLayoutContent({
   const { data: myProfile } = trpc.employees.myProfile.useQuery(undefined, {
     enabled: user?.role === "employee",
   });
-  const { theme, toggleTheme } = useTheme();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -317,24 +315,6 @@ function DashboardLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                {toggleTheme && (
-                  <DropdownMenuItem
-                    onClick={toggleTheme}
-                    className="cursor-pointer"
-                  >
-                    {theme === "dark" ? (
-                      <>
-                        <Sun className="mr-2 h-4 w-4" />
-                        <span>Jasny motyw</span>
-                      </>
-                    ) : (
-                      <>
-                        <Moon className="mr-2 h-4 w-4" />
-                        <span>Ciemny motyw</span>
-                      </>
-                    )}
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuItem
                   onClick={() => {
                     const name = user?.name || user?.email || "-";
