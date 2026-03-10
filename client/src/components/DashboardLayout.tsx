@@ -81,9 +81,10 @@ export default function DashboardLayout({
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
-  const { data: myProfile } = trpc.employees.myProfile.useQuery(undefined, {
+  const myProfileQuery = trpc.employees.myProfile.useQuery(undefined, {
     enabled: user?.role === "employee",
   });
+  const myProfile = myProfileQuery.data;
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
