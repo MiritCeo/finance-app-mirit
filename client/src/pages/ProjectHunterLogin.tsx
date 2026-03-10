@@ -58,9 +58,9 @@ export default function ProjectHunterLogin() {
           <div className="mx-auto h-16 w-16 rounded-2xl bg-white shadow-md ring-1 ring-black/5 flex items-center justify-center">
             <img src={logo} alt="Lacheck" className="h-12 w-12 object-contain" />
           </div>
-          <CardTitle className="text-3xl font-bold">System Mirit Softwarehouse - Lacheck</CardTitle>
+          <CardTitle className="text-3xl font-bold">Mirit Softwarehouse - Lacheck</CardTitle>
           <CardDescription className="text-base">
-            System wewnętrzny organizacji
+            Wewnętrzny system zarządzania
           </CardDescription>
         </CardHeader>
         <CardContent>

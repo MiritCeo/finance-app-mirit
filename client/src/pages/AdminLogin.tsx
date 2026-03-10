@@ -55,10 +55,10 @@ export default function AdminLogin() {
             <img src={logo} alt="Lacheck" className="h-12 w-12 object-contain" />
           </div>
           <CardTitle className="text-2xl font-bold text-center">
-            System Mirit Softwarehouse - Lacheck
+            Mirit Softwarehouse - Lacheck
           </CardTitle>
           <CardDescription className="text-center">
-            System wewnętrzny organizacji
+            Wewnętrzny system zarządzania
           </CardDescription>
         </CardHeader>
         <CardContent>

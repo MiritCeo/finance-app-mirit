@@ -67,7 +67,7 @@ export default function EmployeeProfitSimulator() {
         Wróć do dashboardu
       </Button>
       
-      <div>
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
         <h1 className="text-3xl font-bold">Symulator zysku z pracownika</h1>
         <p className="text-muted-foreground">
           Narzędzie do negocjacji wynagrodzeń - zobacz ile zostanie zysku dla firmy

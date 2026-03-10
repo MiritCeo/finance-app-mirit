@@ -15,6 +15,17 @@ import {
 export default function GamificationGuide() {
   return (
     <div className="container mx-auto max-w-4xl space-y-6">
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center gap-3">
+          <Sparkles className="w-6 h-6 text-primary" />
+          <div>
+            <h1 className="text-3xl font-bold">Zasady grywalizacji</h1>
+            <p className="text-muted-foreground">
+              Najważniejsze informacje o punktach, poziomach i nagrodach
+            </p>
+          </div>
+        </div>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

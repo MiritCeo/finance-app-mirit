@@ -284,6 +284,12 @@ export default function OfficePresence() {
 
   return (
     <div className="container mx-auto max-w-6xl space-y-6">
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">Obecność w biurze</h1>
+        <p className="text-muted-foreground">
+          Zbieraj punkty za obecność w biurze i zarządzaj lokalizacjami (dla admina).
+        </p>
+      </div>
       {/* Employee View: Office Presence Tracking */}
       {!isAdmin && (
         <>
