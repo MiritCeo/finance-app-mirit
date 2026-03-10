@@ -237,17 +237,6 @@ function DashboardLayoutContent({
                       <span className="font-bold text-lg tracking-tight truncate text-foreground dark:text-foreground">
                         Lacheck
                       </span>
-                      {user?.role && (
-                        <span className="text-xs font-semibold text-muted-foreground">
-                          {user.role === "employee"
-                            ? (myProfile?.position?.trim() || "Zespół Mirit")
-                            : user.role === "admin"
-                              ? "Administrator"
-                              : user.role === "project_hunter"
-                                ? "Łowca Projektów"
-                                : "Użytkownik"}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
