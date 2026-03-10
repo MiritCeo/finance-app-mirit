@@ -19,7 +19,7 @@ export default function GamificationGuide() {
         <div className="flex items-center gap-3">
           <Sparkles className="w-6 h-6 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold">Zasady grywalizacji</h1>
+            <h1 className="text-3xl font-bold">Zasady Mirit Points</h1>
             <p className="text-muted-foreground">
               Najważniejsze informacje o punktach, poziomach i nagrodach
             </p>
@@ -30,7 +30,7 @@ export default function GamificationGuide() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-primary" />
-            Zasady grywalizacji w Mirit
+            Zasady Mirit Points
           </CardTitle>
           <CardDescription>
             Krótkie wyjaśnienie po co jest system punktów, jak działa i za co możesz zdobywać
@@ -39,11 +39,15 @@ export default function GamificationGuide() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm leading-relaxed">
           <p>
-            System grywalizacji ma pomóc nam w trzech obszarach:{" "}
+            System Mirit Points ma pomóc nam w trzech obszarach:{" "}
             <span className="font-semibold">
               lepsza współpraca, stabilność finansowa firmy i większe poczucie wpływu
             </span>{" "}
             każdego pracownika.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Koncept Mirit Points jest w fazie przemyśleń – opisane zasady to luźne założenia i mogą
+            ulec zmianie.
           </p>
           <p>
             Punkty nigdy nie służą do karania ani do porównywania ludzi publicznie.{" "}
@@ -73,8 +77,8 @@ export default function GamificationGuide() {
             </p>
             <p>
               Progi poziomów są proste: mniej więcej co{" "}
-              <span className="font-semibold">1000 punktów</span> awansujesz na kolejny poziom. Na
-              karcie grywalizacji zobaczysz ile brakuje Ci do następnego poziomu.
+              <span className="font-semibold">1000 punktów</span> awansujesz na kolejny poziom. W
+              panelu Mirit Points zobaczysz ile brakuje Ci do następnego poziomu.
             </p>
           </div>
           <div className="space-y-2">
@@ -173,7 +177,7 @@ export default function GamificationGuide() {
         <CardContent className="space-y-3 text-sm">
           <ul className="list-disc list-inside space-y-1">
             <li>
-              W części grywalizacji możesz <span className="font-semibold">zaplanować urlop</span>{" "}
+            W części Mirit Points możesz <span className="font-semibold">zaplanować urlop</span>{" "}
               i od razu zobaczyć, ile punktów taki plan Ci przyniesie.
             </li>
             <li>
@@ -279,7 +283,7 @@ export default function GamificationGuide() {
             <li>„Innovation Master” – wyróżnione innowacyjne rozwiązania.</li>
           </ul>
           <p className="text-xs text-muted-foreground">
-            Gdy odznaki będą aktywne, pojawią się w Twoim profilu grywalizacji. Będą one widoczne
+            Gdy odznaki będą aktywne, pojawią się w Twoim profilu Mirit Points. Będą one widoczne
             tylko wewnętrznie – nie planujemy publicznych rankingów, które mogłyby wprowadzać
             niepotrzebną rywalizację.
           </p>

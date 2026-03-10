@@ -113,7 +113,7 @@ export default function Gamification() {
         <div className="flex items-center gap-3">
           <Sparkles className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold">Grywalizacja</h1>
+            <h1 className="text-3xl font-bold">Mirit Points</h1>
             <p className="text-muted-foreground">
               Punkty, poziomy i nagrody za aktywność w systemie
             </p>
@@ -124,9 +124,9 @@ export default function Gamification() {
       {summaryError && (
         <Card>
           <CardHeader>
-            <CardTitle>Błąd grywalizacji</CardTitle>
+            <CardTitle>Błąd Mirit Points</CardTitle>
             <CardDescription>
-              Nie udało się załadować danych grywalizacji: {summaryError.message}
+              Nie udało się załadować danych Mirit Points: {summaryError.message}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -137,7 +137,7 @@ export default function Gamification() {
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
-              <CardTitle>Grywalizacja</CardTitle>
+              <CardTitle>Mirit Points</CardTitle>
             </div>
             <CardDescription>
               Podsumowanie punktów, poziomu oraz punktów zdobytych za obecność w biurze.

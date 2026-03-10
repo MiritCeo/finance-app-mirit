@@ -298,7 +298,7 @@ export default function OfficePresence() {
               <CardHeader className="space-y-1">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-primary" />
-                  <CardTitle className="text-base">Twoje punkty grywalizacji</CardTitle>
+                  <CardTitle className="text-base">Twoje punkty Mirit Points</CardTitle>
                 </div>
                 <CardDescription>
                   Podsumowanie poziomu i punktów, w tym zdobytych za obecność w biurze.

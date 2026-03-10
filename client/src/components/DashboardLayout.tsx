@@ -39,7 +39,7 @@ const adminMenuItems = [
   { icon: Sparkles, label: "AI Insights", path: "/ai-insights", color: "text-purple-600" },
   { icon: BarChart3, label: "Przegląd finansowy", path: "/monthly-financial-overview", color: "text-teal-600" },
   { icon: TrendingUp, label: "Rentowność projektów", path: "/project-profitability", color: "text-violet-600" },
-  { icon: Sparkles, label: "Grywalizacja", path: "/gamification", color: "text-yellow-500" },
+  { icon: Sparkles, label: "Mirit Points", path: "/gamification", color: "text-yellow-500" },
   { icon: MapPin, label: "Obecność w biurze", path: "/office-presence", color: "text-emerald-600" },
   { icon: CheckSquare, label: "Zadania", path: "/tasks", color: "text-purple-600" },
   { icon: BookOpen, label: "Baza Wiedzy", path: "/knowledge", color: "text-indigo-600" },
@@ -53,12 +53,12 @@ const adminMenuItems = [
 
 const employeeMenuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/", color: "text-blue-600" },
-  { icon: Sparkles, label: "Moje punkty", path: "/gamification", color: "text-yellow-500" },
+  { icon: Sparkles, label: "Mirit Points", path: "/gamification", color: "text-yellow-500" },
   { icon: Calendar, label: "Planowanie urlopów", path: "/vacation-planning", color: "text-sky-600" },
   { icon: MapPin, label: "Obecność w biurze", path: "/office-presence", color: "text-emerald-600" },
   { icon: UserCircle, label: "Moje CV", path: "/my-cv", color: "text-blue-600" },
   { icon: BookOpen, label: "Baza Wiedzy", path: "/knowledge", color: "text-indigo-600" },
-  { icon: Info, label: "Zasady grywalizacji", path: "/gamification-info", color: "text-slate-600" },
+  { icon: Info, label: "Zasady Mirit Points", path: "/gamification-info", color: "text-slate-600" },
 ];
 
 const projectHunterMenuItems = [
@@ -235,11 +235,11 @@ function DashboardLayoutContent({
                       Mirit Lacheck
                     </span>
                     {user?.role && (
-                      <span className={`text-xs font-semibold block truncate ${
-                        user.role === "admin" ? "text-blue-600 dark:text-blue-400" : 
-                        user.role === "employee" ? "text-green-600 dark:text-green-400" :
-                        user.role === "project_hunter" ? "text-amber-600 dark:text-amber-400" :
-                        "text-muted-foreground dark:text-muted-foreground"
+                      <span className={`text-xs font-semibold inline-flex px-2 py-0.5 rounded-full bg-white text-slate-900 ${
+                        user.role === "admin" ? "border border-blue-200" : 
+                        user.role === "employee" ? "border border-green-200" :
+                        user.role === "project_hunter" ? "border border-amber-200" :
+                        "border border-slate-200"
                       }`}>
                         {user.role === "admin" ? "Administrator" : 
                          user.role === "employee" ? "Pracownik" : 
