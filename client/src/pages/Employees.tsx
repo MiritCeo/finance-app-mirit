@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
@@ -50,7 +51,7 @@ export default function Employees() {
   // Filtry i wyszukiwanie
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEmploymentType, setFilterEmploymentType] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [statusTab, setStatusTab] = useState<"active" | "inactive">("active");
   const [sortBy, setSortBy] = useState<string>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [selectedEmployeeForAI, setSelectedEmployeeForAI] = useState<number | null>(null);
@@ -534,7 +535,7 @@ export default function Employees() {
         employmentType: employee.employmentType,
         searchTerm,
         filterEmploymentType,
-        filterStatus
+        statusTab
       });
     }
     // Wyszukiwanie
@@ -548,9 +549,9 @@ export default function Employees() {
     const matchesEmploymentType = filterEmploymentType === "all" || employee.employmentType === filterEmploymentType;
     
     // Filtr statusu
-    const matchesStatus = filterStatus === "all" || 
-      (filterStatus === "active" && employee.isActive === true) ||
-      (filterStatus === "inactive" && employee.isActive === false);
+    const matchesStatus =
+      (statusTab === "active" && employee.isActive === true) ||
+      (statusTab === "inactive" && employee.isActive === false);
     
     return matchesSearch && matchesEmploymentType && matchesStatus;
   }).sort((a, b) => {
@@ -1132,16 +1133,16 @@ export default function Employees() {
                 <SelectItem value="zlecenie_studenckie">Zlecenie studenckie</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-full sm:w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Wszystkie</SelectItem>
-                <SelectItem value="active">Aktywni</SelectItem>
-                <SelectItem value="inactive">Nieaktywni</SelectItem>
-              </SelectContent>
-            </Select>
+            <Tabs value={statusTab} onValueChange={(value) => setStatusTab(value as "active" | "inactive")}>
+              <TabsList className="h-9">
+                <TabsTrigger value="active">
+                  Aktywni ({employees?.filter(e => e.isActive).length || 0})
+                </TabsTrigger>
+                <TabsTrigger value="inactive">
+                  Nieaktywni ({employees?.filter(e => !e.isActive).length || 0})
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
             <Select value={`${sortBy}-${sortOrder}`} onValueChange={(v) => {
               const [by, order] = v.split("-");
               setSortBy(by);
@@ -1558,6 +1559,16 @@ export default function Employees() {
                           >
                             <Sparkles className="mr-2 h-4 w-4 text-purple-600" />
                             Analiza AI
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => {
+                              updateMutation.mutate({ id: employee.id, isActive: !employee.isActive });
+                            }}
+                            className={`cursor-pointer ${employee.isActive ? "text-amber-700 focus:text-amber-700 focus:bg-amber-50" : "text-green-700 focus:text-green-700 focus:bg-green-50"}`}
+                          >
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            {employee.isActive ? "Dezaktywuj pracownika" : "Aktywuj pracownika"}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem

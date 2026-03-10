@@ -10,8 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Circle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HRappkaInfoPanel } from "@/components/HRappkaInfoPanel";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 function UrgentTasksList() {
   const { data: urgentTasks, isLoading } = trpc.tasks.getUrgent.useQuery({ limit: 10 });
@@ -78,6 +81,28 @@ export default function Dashboard() {
   const isEmployee = !authLoading && user && user.role === "employee";
   // Warunek: zapytania dashboardowe tylko dla administratorów
   const isAdmin = Boolean(!authLoading && user && user.role === "admin");
+  const { data: myProfile } = trpc.employees.myProfile.useQuery(undefined, {
+    enabled: isEmployee,
+  });
+  const { data: myHoursStatus, refetch: refetchMyHoursStatus } = trpc.timeEntries.myMonthlyHoursStatus.useQuery(undefined, {
+    enabled: isEmployee,
+  });
+  const submitMyMonthlyHours = trpc.timeEntries.submitMyMonthlyHours.useMutation({
+    onSuccess: () => {
+      toast.success("Godziny zapisane.");
+      refetchMyHoursStatus();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Nie udało się zapisać godzin.");
+    },
+  });
+  const [monthlyHoursInput, setMonthlyHoursInput] = useState("");
+
+  useEffect(() => {
+    if (myHoursStatus) {
+      setMonthlyHoursInput(myHoursStatus.hours ? String(myHoursStatus.hours) : "");
+    }
+  }, [myHoursStatus]);
   // Pobierz bieżący miesiąc i rok
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -230,12 +255,12 @@ export default function Dashboard() {
 
     return (
       <div className="container mx-auto max-w-7xl space-y-6">
-        <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold">Dashboard</h1>
-                <Badge variant="secondary" className="bg-primary text-white">
+                <h1 className="text-3xl font-bold">Panel pracownika</h1>
+                <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20">
                   Pracownik
                 </Badge>
               </div>
@@ -249,13 +274,13 @@ export default function Dashboard() {
 
         {gamificationSummary && (
           <div className="grid gap-4 md:grid-cols-3">
-            <Card>
+            <Card className="border border-border/60">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Sparkles className="h-4 w-4 text-primary" />
-                  Mój poziom i punkty
+                  Mirit Points
                 </CardTitle>
-                <CardDescription>Podstawowe podsumowanie grywalizacji.</CardDescription>
+                <CardDescription>Twój poziom i suma punktów.</CardDescription>
               </CardHeader>
               <CardContent className="flex items-center justify-between">
                 <div>
@@ -275,7 +300,7 @@ export default function Dashboard() {
 
         {/* Menu szybkiego startu dla pracowników */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = "/my-cv"}>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border border-border/60" onClick={() => window.location.href = "/my-cv"}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <UserCircle className="h-5 w-5 text-blue-600" />
@@ -292,7 +317,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = "/knowledge"}>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border border-border/60" onClick={() => window.location.href = "/knowledge"}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5 text-indigo-600" />
@@ -310,20 +335,59 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        {myProfile?.employmentType === "b2b" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Godziny miesięczne (B2B)</CardTitle>
+              <CardDescription>
+                Uzupełnij godziny pracy w ostatnim dniu miesiąca.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {myHoursStatus?.isLastDay ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="monthly-hours">Liczba godzin</Label>
+                    <Input
+                      id="monthly-hours"
+                      type="number"
+                      min="0"
+                      max="400"
+                      step="0.5"
+                      value={monthlyHoursInput}
+                      onChange={(e) => setMonthlyHoursInput(e.target.value)}
+                      placeholder="np. 160"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => submitMyMonthlyHours.mutate({ hours: parseFloat(monthlyHoursInput || "0") })}
+                    disabled={submitMyMonthlyHours.isPending}
+                  >
+                    {submitMyMonthlyHours.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Zapisywanie...
+                      </>
+                    ) : (
+                      "Zapisz godziny"
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Dane zapisują się w raporcie miesięcznym do dalszych wyliczeń.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Funkcja dostępna tylko w ostatnim dniu miesiąca.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Panel informacji z HRappka */}
         <HRappkaInfoPanel />
 
-        {/* Informacja o dostępności */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Witaj w systemie Mirit Software house sp. z o.o.</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              Jako pracownik masz dostęp do zarządzania swoim CV oraz przeglądania bazy wiedzy firmy.
-            </p>
-          </CardContent>
-        </Card>
       </div>
     );
   }

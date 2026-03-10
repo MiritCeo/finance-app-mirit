@@ -61,6 +61,17 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return await db.getEmployeeById(input.id);
       }),
+
+    myProfile: employeeProcedure.query(async ({ ctx }) => {
+      if (!ctx.user.employeeId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Brak przypisanego pracownika." });
+      }
+      const employee = await db.getEmployeeById(ctx.user.employeeId);
+      if (!employee) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Pracownik nie znaleziony." });
+      }
+      return employee;
+    }),
     
     create: adminProcedure
       .input(z.object({
@@ -2154,6 +2165,77 @@ export const appRouter = router({
           });
         }
         
+        return { success: true };
+      }),
+
+    myMonthlyHoursStatus: employeeProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.user.employeeId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Brak przypisanego pracownika." });
+        }
+
+        const employee = await db.getEmployeeById(ctx.user.employeeId);
+        if (!employee) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Pracownik nie znaleziony." });
+        }
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        const lastDay = new Date(year, month, 0).getDate();
+        const isLastDay = now.getDate() === lastDay;
+
+        const report = await db.getMonthlyReport(ctx.user.employeeId, year, month);
+        const hours = report ? report.hoursWorked / 100 : 0;
+
+        return {
+          year,
+          month,
+          isLastDay,
+          employmentType: employee.employmentType,
+          hours,
+        };
+      }),
+
+    submitMyMonthlyHours: employeeProcedure
+      .input(z.object({
+        hours: z.number().min(0).max(400),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user.employeeId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Brak przypisanego pracownika." });
+        }
+
+        const employee = await db.getEmployeeById(ctx.user.employeeId);
+        if (!employee) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Pracownik nie znaleziony." });
+        }
+
+        if (employee.employmentType !== "b2b") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Funkcja dostępna tylko dla B2B." });
+        }
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        const lastDay = new Date(year, month, 0).getDate();
+        if (now.getDate() !== lastDay) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Godziny można uzupełnić tylko w ostatnim dniu miesiąca." });
+        }
+
+        const assignments = await db.getAssignmentsByEmployee(ctx.user.employeeId);
+        const activeAssignment = assignments.find(a => a.isActive && a.hourlyRateClient && a.hourlyRateClient > 0);
+        const hourlyRateClient = employee.hourlyRateClient || activeAssignment?.hourlyRateClient || 0;
+
+        await db.updateMonthlyReportFields({
+          employeeId: ctx.user.employeeId,
+          year,
+          month,
+          hoursWorked: Math.round(input.hours * 100),
+          hourlyRateClient,
+          propagateChanges: false,
+        });
+
         return { success: true };
       }),
     
