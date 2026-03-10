@@ -94,15 +94,15 @@ export default function Dashboard() {
     const id = window.setTimeout(() => setLoadDashboardData(true), 150);
     return () => window.clearTimeout(id);
   }, [isAdmin]);
+  const { data: myHoursStatus, refetch: refetchMyHoursStatus } = trpc.timeEntries.myMonthlyHoursStatus.useQuery(undefined, {
+    enabled: isEmployee,
+  });
   const { data: myProfile, isLoading: myProfileLoading } = trpc.employees.myProfile.useQuery(undefined, {
     enabled: isEmployee,
   });
   const isB2BEmployee = Boolean(
     myProfile?.employmentType === "b2b" || myHoursStatus?.employmentType === "b2b"
   );
-  const { data: myHoursStatus, refetch: refetchMyHoursStatus } = trpc.timeEntries.myMonthlyHoursStatus.useQuery(undefined, {
-    enabled: isEmployee,
-  });
   const submitMyMonthlyHours = trpc.timeEntries.submitMyMonthlyHours.useMutation({
     onSuccess: () => {
       toast.success("Godziny zapisane.");
