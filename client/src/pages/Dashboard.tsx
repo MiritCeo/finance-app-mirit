@@ -379,7 +379,7 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle>Godziny miesięczne (B2B)</CardTitle>
               <CardDescription>
-                Uzupełnij godziny pracy za bieżący miesiąc.
+                Uzupełnij godziny pracy za bieżący miesiąc i zadbaj o terminowe rozliczenie.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -401,6 +401,10 @@ export default function Dashboard() {
                       {myHoursStatus?.year ?? new Date().getFullYear()}
                     </span>
                     .
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Za terminowe uzupełnienie godzin w ostatnim dniu miesiąca otrzymujesz Mirit Points.
+                    Zapis z ostatniego dnia jest ostateczny i blokuje dalszą edycję.
                   </p>
                   <div className="space-y-2">
                     <Label htmlFor="monthly-hours">Liczba godzin</Label>
