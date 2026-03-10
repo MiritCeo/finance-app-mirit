@@ -100,9 +100,11 @@ export default function Dashboard() {
   const { data: myProfile, isLoading: myProfileLoading } = trpc.employees.myProfile.useQuery(undefined, {
     enabled: isEmployee,
   });
-  const isB2BEmployee = Boolean(
-    myProfile?.employmentType === "b2b" || myHoursStatus?.employmentType === "b2b"
-  );
+  const normalizeEmploymentType = (value?: string | null) =>
+    value?.trim().toLowerCase();
+  const isB2BEmployee =
+    normalizeEmploymentType(myProfile?.employmentType) === "b2b" ||
+    normalizeEmploymentType(myHoursStatus?.employmentType) === "b2b";
   const submitMyMonthlyHours = trpc.timeEntries.submitMyMonthlyHours.useMutation({
     onSuccess: () => {
       toast.success("Godziny zapisane.");
