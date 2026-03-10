@@ -97,6 +97,7 @@ export default function Dashboard() {
   const { data: myProfile, isLoading: myProfileLoading } = trpc.employees.myProfile.useQuery(undefined, {
     enabled: isEmployee,
   });
+  const isB2BEmployee = Boolean(myProfile?.employmentType === "b2b");
   const { data: myHoursStatus, refetch: refetchMyHoursStatus } = trpc.timeEntries.myMonthlyHoursStatus.useQuery(undefined, {
     enabled: isEmployee,
   });
@@ -351,7 +352,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {isEmployee && (
+        {(isEmployee && (myProfileLoading || isB2BEmployee)) && (
           <Card>
             <CardHeader>
               <CardTitle>Godziny miesięczne (B2B)</CardTitle>
@@ -365,10 +366,6 @@ export default function Dashboard() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Ładowanie danych profilu...
                 </div>
-              ) : myProfile?.employmentType !== "b2b" ? (
-                <p className="text-sm text-muted-foreground">
-                  Funkcja dostępna tylko dla umowy B2B.
-                </p>
               ) : myHoursStatus?.isLastDay ? (
                 <>
                   <div className="space-y-2">
@@ -410,11 +407,8 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Panel informacji z HRappka (ukryty tylko dla B2B) */}
-        {!isEmployee && <HRappkaInfoPanel />}
-        {isEmployee && !myProfileLoading && myProfile?.employmentType !== "b2b" && (
-          <HRappkaInfoPanel />
-        )}
+        {/* Panel informacji z HRappka (ukryty dla pracownika B2B) */}
+        {(!isEmployee || (!myProfileLoading && !isB2BEmployee)) && <HRappkaInfoPanel />}
 
       </div>
     );
