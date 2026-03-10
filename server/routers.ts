@@ -129,6 +129,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
+        const updateData = { ...data } as any;
         
         // Jeśli podano hasło, zahashuj je przed zapisaniem
         if (data.passwordHash && data.passwordHash.length > 0) {
@@ -139,7 +140,13 @@ export const appRouter = router({
           data.passwordHash = null;
         }
         
-        await db.updateEmployee(id, data);
+        if (updateData.isActive === false) {
+          updateData.deactivatedAt = new Date();
+        } else if (updateData.isActive === true) {
+          updateData.deactivatedAt = null;
+        }
+
+        await db.updateEmployee(id, updateData);
         return { success: true };
       }),
     
@@ -2373,8 +2380,8 @@ export const appRouter = router({
         
         const { monthlyEmployeeReports } = await import("../drizzle/schema");
         const allReports = await database.select().from(monthlyEmployeeReports);
-        const activeEmployees = await db.getActiveEmployees();
-        const activeEmployeeIds = new Set(activeEmployees.map(emp => emp.id));
+        const allEmployees = await db.getAllEmployees();
+        const employeesById = new Map(allEmployees.map(emp => [emp.id, emp]));
         
         // Grupuj po miesiącu i roku
         const reportMap = new Map<string, {
@@ -2388,8 +2395,18 @@ export const appRouter = router({
         }>();
         
         for (const report of allReports) {
-          if (!activeEmployeeIds.has(report.employeeId)) {
+          const employee = employeesById.get(report.employeeId);
+          if (!employee) {
             continue;
+          }
+
+          if (employee.isActive === false && employee.deactivatedAt) {
+            const reportPeriod = report.year * 12 + report.month;
+            const deactivatedAt = new Date(employee.deactivatedAt);
+            const deactivatedPeriod = deactivatedAt.getFullYear() * 12 + (deactivatedAt.getMonth() + 1);
+            if (reportPeriod > deactivatedPeriod) {
+              continue;
+            }
           }
           const key = `${report.year}-${report.month}`;
           

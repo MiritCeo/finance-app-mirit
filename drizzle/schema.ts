@@ -41,6 +41,7 @@ export const employees = mysqlTable("employees", {
   vacationDaysPerYear: int("vacationDaysPerYear").default(21).notNull(), // Płatne urlopy (21 dni dla wszystkich)
   vacationDaysUsed: int("vacationDaysUsed").default(0).notNull(), // Wykorzystane dni urlopu w bieżącym roku
   isActive: boolean("isActive").default(true).notNull(),
+  deactivatedAt: timestamp("deactivatedAt"),
   notes: text("notes"),
   hrappkaId: int("hrappkaId"), // ID pracownika w systemie HRappka (dla synchronizacji danych)
   projectHunterRateMin: int("projectHunterRateMin").default(null), // Minimalna stawka godzinowa dla Łowcy Projektów w groszach

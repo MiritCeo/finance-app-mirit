@@ -19,6 +19,10 @@ const REQUIRED_COLUMNS = [
     sql: "ALTER TABLE `employees` ADD COLUMN `isActive` TINYINT(1) NOT NULL DEFAULT 1 AFTER `vacationDaysUsed`",
   },
   {
+    name: "deactivatedAt",
+    sql: "ALTER TABLE `employees` ADD COLUMN `deactivatedAt` timestamp NULL AFTER `isActive`",
+  },
+  {
     name: "hrappkaId",
     sql: "ALTER TABLE `employees` ADD COLUMN `hrappkaId` int NULL AFTER `notes`",
   },
