@@ -259,14 +259,17 @@ export default function Dashboard() {
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold">Panel pracownika</h1>
-                <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20">
-                  Pracownik
-                </Badge>
+                <h1 className="text-3xl font-bold">
+                  Witaj, {user.name || user.email}!
+                </h1>
+                {myProfile?.position && (
+                  <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20">
+                    {myProfile.position}
+                  </Badge>
+                )}
               </div>
-              <p className="text-muted-foreground flex items-center gap-2">
-                <span>👋</span>
-                <span>Witaj, <span className="font-semibold text-foreground">{user.name || user.email}</span>!</span>
+              <p className="text-muted-foreground">
+                Miło Cię widzieć w systemie Mirit Lacheck.
               </p>
             </div>
           </div>

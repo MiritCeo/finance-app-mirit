@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Edit, Heart, Pin, Tag, Eye, Calendar, User, Briefcase } from "lucide-react";
+import { Loader2, ArrowLeft, Edit, Heart, Pin, Tag, Eye, Calendar, User, Briefcase, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
 
@@ -271,6 +271,15 @@ function CommentsSection({ articleId }: { articleId: number }) {
       toast.success("Komentarz dodany");
     },
   });
+  const deleteComment = trpc.knowledgeBase.deleteComment.useMutation({
+    onSuccess: () => {
+      utils.knowledgeBase.getComments.invalidate({ articleId });
+      toast.success("Komentarz usunięty");
+    },
+    onError: (error) => {
+      toast.error(error.message || "Nie udało się usunąć komentarza");
+    },
+  });
 
   const handleSubmitComment = () => {
     if (!newComment.trim() || !user?.id) return;
@@ -335,13 +344,30 @@ function CommentsSection({ articleId }: { articleId: number }) {
                     </span>
                   </div>
                   <p className="text-sm mb-2">{comment.content}</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
-                  >
-                    Odpowiedz
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
+                    >
+                      Odpowiedz
+                    </Button>
+                    {comment.userId === user?.id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={() => {
+                          if (confirm("Usunąć ten komentarz?")) {
+                            deleteComment.mutate({ id: comment.id });
+                          }
+                        }}
+                      >
+                        <Trash2 className="mr-1 h-3 w-3" />
+                        Usuń
+                      </Button>
+                    )}
+                  </div>
                   
                   {/* Formularz odpowiedzi */}
                   {replyingTo === comment.id && (
@@ -384,6 +410,23 @@ function CommentsSection({ articleId }: { articleId: number }) {
                                 </span>
                               </div>
                               <p className="text-sm">{reply.content}</p>
+                              {reply.userId === user?.id && (
+                                <div className="mt-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-destructive"
+                                    onClick={() => {
+                                      if (confirm("Usunąć tę odpowiedź?")) {
+                                        deleteComment.mutate({ id: reply.id });
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="mr-1 h-3 w-3" />
+                                    Usuń
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>

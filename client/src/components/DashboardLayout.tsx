@@ -32,6 +32,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
+import { trpc } from "@/lib/trpc";
 import logo from "@/assets/logolacheck.png";
 
 const adminMenuItems = [
@@ -80,6 +81,9 @@ export default function DashboardLayout({
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
+  const { data: myProfile } = trpc.employees.myProfile.useQuery(undefined, {
+    enabled: user?.role === "employee",
+  });
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -119,7 +123,7 @@ export default function DashboardLayout({
               size="lg"
               className="w-full"
             >
-              Zaloguj jako pracownik
+              Zaloguj do systemu
             </Button>
           </div>
         </div>
@@ -231,22 +235,27 @@ function DashboardLayoutContent({
                     <img src={logo} alt="Lacheck" className="h-7 w-7 object-contain" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className="font-bold text-lg tracking-tight truncate text-foreground dark:text-foreground block">
-                      Mirit Lacheck
-                    </span>
-                    {user?.role && (
-                    <span className={`text-xs font-semibold inline-flex px-2 py-0.5 rounded-full bg-white text-slate-900 shadow-sm ${
-                        user.role === "admin" ? "border border-blue-200" : 
-                        user.role === "employee" ? "border border-green-200" :
-                        user.role === "project_hunter" ? "border border-amber-200" :
-                        "border border-slate-200"
-                      }`}>
-                        {user.role === "admin" ? "Administrator" : 
-                         user.role === "employee" ? "Pracownik" : 
-                         user.role === "project_hunter" ? "Łowca Projektów" : 
-                         "Użytkownik"}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-bold text-lg tracking-tight truncate text-foreground dark:text-foreground">
+                        Mirit Lacheck
                       </span>
-                    )}
+                      {user?.role && (
+                        <span className={`text-xs font-semibold inline-flex items-center h-5 px-2 rounded-full bg-white text-slate-900 shadow-sm ${
+                          user.role === "admin" ? "border border-blue-200" : 
+                          user.role === "employee" ? "border border-green-200" :
+                          user.role === "project_hunter" ? "border border-amber-200" :
+                          "border border-slate-200"
+                        }`}>
+                          {user.role === "employee"
+                            ? (myProfile?.position?.trim() || "Zespół Mirit")
+                            : user.role === "admin"
+                              ? "Administrator"
+                              : user.role === "project_hunter"
+                                ? "Łowca Projektów"
+                                : "Użytkownik"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -301,7 +310,7 @@ function DashboardLayoutContent({
                         {user.role === "admin" ? (
                           <span className="text-blue-600 dark:text-blue-400">Administrator</span>
                         ) : user.role === "employee" ? (
-                          <span className="text-green-600 dark:text-green-400">Pracownik</span>
+                          <span className="text-primary">{myProfile?.position?.trim() || "Zespół Mirit"}</span>
                         ) : user.role === "project_hunter" ? (
                           <span className="text-amber-600 dark:text-amber-400">Łowca Projektów</span>
                         ) : (
@@ -333,9 +342,17 @@ function DashboardLayoutContent({
                 )}
                 <DropdownMenuItem
                   onClick={() => {
-                    // Pokaż informacje o użytkowniku
-                    const roleText = user?.role === "admin" ? "Administrator" : user?.role === "employee" ? "Pracownik" : "Użytkownik";
-                    const userInfo = `Zalogowany jako: ${user?.name || "-"}\nRola: ${roleText}\nEmail: ${user?.email || "-"}`;
+                    const name = user?.name || user?.email || "-";
+                    const position = myProfile?.position?.trim();
+                    const roleText = user?.role === "admin"
+                      ? "Administrator"
+                      : user?.role === "project_hunter"
+                        ? "Łowca Projektów"
+                        : "Użytkownik";
+                    const details = user?.role === "employee" && position
+                      ? `Stanowisko: ${position}`
+                      : `Rola: ${roleText}`;
+                    const userInfo = `Zalogowany jako: ${name}\n${details}\nEmail: ${user?.email || "-"}`;
                     alert(userInfo);
                   }}
                   className="cursor-pointer"
@@ -396,15 +413,11 @@ function DashboardLayoutContent({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {user?.role && (
+            {user && (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted border">
                 <span className="text-xs text-muted-foreground">Zalogowany jako:</span>
-                <span className={`text-xs font-semibold ${
-                  user.role === "admin" ? "text-blue-600 dark:text-blue-400" : 
-                  user.role === "employee" ? "text-green-600 dark:text-green-400" : 
-                  "text-muted-foreground"
-                }`}>
-                  {user.role === "admin" ? "Administrator" : user.role === "employee" ? "Pracownik" : "Użytkownik"}
+                <span className="text-xs font-semibold text-foreground">
+                  {user?.name || user?.email || "-"}
                 </span>
               </div>
             )}

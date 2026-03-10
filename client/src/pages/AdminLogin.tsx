@@ -112,7 +112,7 @@ export default function AdminLogin() {
               onClick={() => setLocation("/employee-login")}
               className="text-sm"
             >
-              Zaloguj się jako pracownik
+              Zaloguj do systemu
             </Button>
           </div>
         </CardContent>

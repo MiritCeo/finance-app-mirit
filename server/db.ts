@@ -2156,14 +2156,30 @@ export async function updateKnowledgeBaseComment(id: number, content: string) {
     .where(eq(knowledgeBaseComments.id, id));
 }
 
+export async function getKnowledgeBaseCommentById(id: number) {
+  const database = await getDb();
+  if (!database) return null;
+  
+  const result = await database
+    .select()
+    .from(knowledgeBaseComments)
+    .where(eq(knowledgeBaseComments.id, id))
+    .limit(1);
+  
+  return result[0] || null;
+}
+
 export async function deleteKnowledgeBaseComment(id: number) {
   const database = await getDb();
   if (!database) return;
   
-  // Usuń również wszystkie odpowiedzi (CASCADE)
+  // Usuń również wszystkie odpowiedzi
   await database
     .delete(knowledgeBaseComments)
-    .where(eq(knowledgeBaseComments.id, id));
+    .where(or(
+      eq(knowledgeBaseComments.id, id),
+      eq(knowledgeBaseComments.parentId, id)
+    ));
 }
 
 // ============ KNOWLEDGE BASE LINKS ============

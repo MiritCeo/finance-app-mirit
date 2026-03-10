@@ -3594,7 +3594,15 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
         if (!ctx.user?.id) throw new TRPCError({ code: "UNAUTHORIZED" });
-        // TODO: Sprawdź czy użytkownik jest autorem komentarza lub adminem
+        const comment = await db.getKnowledgeBaseCommentById(input.id);
+        if (!comment) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Komentarz nie istnieje." });
+        }
+
+        if (ctx.user.role !== "admin" && comment.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Nie masz uprawnień do usunięcia tego komentarza." });
+        }
+
         await db.deleteKnowledgeBaseComment(input.id);
         return { success: true };
       }),
@@ -3750,6 +3758,9 @@ export const appRouter = router({
         language: z.enum(["pl", "en"]).default("pl"), // Język CV: pl = polski, en = angielski
       }))
       .mutation(async ({ input, ctx }) => {
+        if (ctx.user?.role === "employee") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Generowanie CV jest dostępne tylko dla administratora." });
+        }
         // Jeśli użytkownik jest pracownikiem, może generować tylko swoje CV
         let employeeId = input.employeeId;
         if (ctx.user?.role === 'employee' && ctx.user.employeeId) {

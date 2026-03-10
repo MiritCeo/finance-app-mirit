@@ -21,8 +21,6 @@ export default function MyCV() {
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
-  const [isLanguageDialogOpen, setIsLanguageDialogOpen] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<"pl" | "en">("pl");
 
   const { data: cvData, isLoading, refetch } = trpc.employeeCV.get.useQuery(
     {},
@@ -243,40 +241,11 @@ export default function MyCV() {
     });
   };
 
-  const [isGenerating, setIsGenerating] = useState(false);
-  const utils = trpc.useUtils();
   const { data: cvHistory } = trpc.employeeCV.getHistory.useQuery(
     {},
     { enabled: !!user && !!employeeId && !!cvData }
   );
 
-  const generateHTMLMutation = trpc.employeeCV.generateHTML.useMutation({
-    onSuccess: (data) => {
-      setIsGenerating(false);
-      toast.success("CV wygenerowane pomyślnie! Otwieranie w nowej zakładce...");
-      window.open(`/cv/${data.historyId}`, '_blank');
-      setTimeout(() => {
-        utils.employeeCV.getHistory.invalidate({});
-      }, 1000);
-    },
-    onError: (error) => {
-      console.error('[MyCV] Generate HTML error:', error);
-      toast.error(`Błąd podczas generowania CV: ${error.message || 'Nie udało się wygenerować CV'}`);
-      setIsGenerating(false);
-    },
-  });
-
-  const handleGenerateNewVersion = () => {
-    setIsLanguageDialogOpen(true);
-  };
-
-  const handleConfirmGenerate = () => {
-    setIsLanguageDialogOpen(false);
-    setIsGenerating(true);
-    generateHTMLMutation.mutate({
-      language: selectedLanguage
-    });
-  };
 
   const handleLogout = async () => {
     await logout();
@@ -288,7 +257,7 @@ export default function MyCV() {
       <div className="container mx-auto max-w-7xl py-8">
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground mb-4">Brak dostępu. Zaloguj się jako pracownik.</p>
+            <p className="text-muted-foreground mb-4">Brak dostępu. Zaloguj się do systemu.</p>
             <Button onClick={() => setLocation("/employee-login")}>
               Przejdź do logowania
             </Button>
@@ -330,23 +299,6 @@ export default function MyCV() {
             <Button onClick={handleOpenEdit} variant="outline">
               <Edit className="w-4 h-4 mr-2" />
               Edytuj CV
-            </Button>
-            <Button
-              onClick={handleGenerateNewVersion}
-              variant="default"
-              disabled={isGenerating || !cvData}
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generowanie...
-                </>
-              ) : (
-                <>
-                  <FileCheck className="w-4 h-4 mr-2" />
-                  Wygeneruj CV HTML
-                </>
-              )}
             </Button>
             <Button onClick={handleLogout} variant="outline">
               <LogOut className="w-4 h-4 mr-2" />
@@ -477,7 +429,7 @@ export default function MyCV() {
               <CardHeader>
                 <CardTitle>Historia wygenerowanych CV</CardTitle>
                 <CardDescription>
-                  Ostatnie {cvHistory.length} wygenerowanych wersji CV (maksymalnie 5)
+                  Wersje CV wygenerowane przez administratora (maksymalnie 5)
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -949,56 +901,6 @@ export default function MyCV() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog wyboru języka */}
-      <Dialog open={isLanguageDialogOpen} onOpenChange={setIsLanguageDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Wybierz język CV</DialogTitle>
-            <DialogDescription>
-              Wybierz język, w którym ma zostać wygenerowane CV.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Język CV</label>
-              <Select value={selectedLanguage} onValueChange={(value: "pl" | "en") => setSelectedLanguage(value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Wybierz język" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pl">
-                    <div className="flex items-center gap-2">
-                      <span>🇵🇱</span>
-                      <span>Polski</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="en">
-                    <div className="flex items-center gap-2">
-                      <span>🇬🇧</span>
-                      <span>English</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsLanguageDialogOpen(false)}>
-              Anuluj
-            </Button>
-            <Button type="button" onClick={handleConfirmGenerate} disabled={isGenerating}>
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generowanie...
-                </>
-              ) : (
-                "Wygeneruj CV"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
