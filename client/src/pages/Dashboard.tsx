@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, DollarSign, Users, TrendingUp, TrendingDown, Calendar, ArrowUp, ArrowDown, Minus, Plus, Trophy, Briefcase, Award, Medal, TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon, Zap, Clock, Building2, Calculator, Receipt, Moon, Sun, Filter, Target, Activity, Sparkles, UserCircle, BookOpen, Info } from "lucide-react";
+import { Loader2, DollarSign, Users, TrendingUp, TrendingDown, Calendar, ArrowUp, ArrowDown, Minus, Plus, Trophy, Briefcase, Award, Medal, TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon, Zap, Clock, Building2, Calculator, Receipt, Moon, Sun, Filter, Target, Activity, Sparkles, UserCircle, BookOpen } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
@@ -14,7 +14,6 @@ import { useEffect, useState } from "react";
 import { HRappkaInfoPanel } from "@/components/HRappkaInfoPanel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
 function UrgentTasksList({ enabled }: { enabled: boolean }) {
@@ -378,24 +377,7 @@ export default function Dashboard() {
         {canShowB2BHoursCard && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                Godziny miesięczne (B2B)
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-                      aria-label="Zasady punktów i edycji godzin"
-                    >
-                      <Info className="h-4 w-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Punkty przyznajemy za terminowe uzupełnienie godzin w ostatnim dniu miesiąca.
-                    Zapis z tego dnia jest ostateczny i blokuje dalszą edycję.
-                  </TooltipContent>
-                </Tooltip>
-              </CardTitle>
+              <CardTitle>Godziny miesięczne (B2B)</CardTitle>
               <CardDescription>
                 Uzupełnij godziny pracy za bieżący miesiąc i zadbaj o terminowe rozliczenie.
               </CardDescription>
@@ -420,10 +402,10 @@ export default function Dashboard() {
                     </span>
                     .
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground">
                     Za terminowe uzupełnienie godzin w ostatnim dniu miesiąca otrzymujesz Mirit Points.
-                    Zapis z ostatniego dnia jest ostateczny i blokuje dalszą edycję.
-                  </p>
+                    Zapis z tego dnia jest ostateczny i blokuje dalszą edycję.
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="monthly-hours">Liczba godzin</Label>
                     <Input
