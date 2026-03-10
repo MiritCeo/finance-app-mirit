@@ -244,7 +244,7 @@ export default function TimeReporting() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
 
-  const { data: employees, isLoading: employeesLoading } = trpc.employees.list.useQuery(undefined, { enabled: !!user });
+  const { data: employees, isLoading: employeesLoading } = trpc.employees.active.useQuery(undefined, { enabled: !!user });
   const { data: monthlyReports, isLoading: reportsLoading } = trpc.timeEntries.monthlyReports.useQuery(
     undefined,
     { enabled: !!user }

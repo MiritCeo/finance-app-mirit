@@ -2077,6 +2077,10 @@ export const appRouter = router({
             console.warn('[saveMonthlyHours] Employee not found:', entry.employeeId);
             continue;
           }
+          if (employee.isActive === false) {
+            console.warn('[saveMonthlyHours] Skipping inactive employee:', entry.employeeId);
+            continue;
+          }
           
           // Sprawdź czy assignment istnieje
           const assignment = await db.getAssignmentById(entry.assignmentId);
@@ -2369,6 +2373,8 @@ export const appRouter = router({
         
         const { monthlyEmployeeReports } = await import("../drizzle/schema");
         const allReports = await database.select().from(monthlyEmployeeReports);
+        const activeEmployees = await db.getActiveEmployees();
+        const activeEmployeeIds = new Set(activeEmployees.map(emp => emp.id));
         
         // Grupuj po miesiącu i roku
         const reportMap = new Map<string, {
@@ -2382,6 +2388,9 @@ export const appRouter = router({
         }>();
         
         for (const report of allReports) {
+          if (!activeEmployeeIds.has(report.employeeId)) {
+            continue;
+          }
           const key = `${report.year}-${report.month}`;
           
           if (!reportMap.has(key)) {
