@@ -47,6 +47,12 @@ export default function Employees() {
   const [assigningEmployee, setAssigningEmployee] = useState<any>(null);
   const [managingEmployee, setManagingEmployee] = useState<any>(null);
   const [editingAssignment, setEditingAssignment] = useState<any>(null);
+  const [isDeactivateDialogOpen, setIsDeactivateDialogOpen] = useState(false);
+  const [deactivationEmployee, setDeactivationEmployee] = useState<any>(null);
+  const [deactivationDate, setDeactivationDate] = useState<string>(() => {
+    const now = new Date();
+    return now.toISOString().slice(0, 10);
+  });
   
   // Filtry i wyszukiwanie
   const [searchTerm, setSearchTerm] = useState("");
@@ -129,6 +135,12 @@ export default function Employees() {
   
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const openDeactivateDialog = (employee: any) => {
+    const today = new Date().toISOString().slice(0, 10);
+    setDeactivationEmployee(employee);
+    setDeactivationDate(today);
+    setIsDeactivateDialogOpen(true);
+  };
   
   const handleExport = async () => {
     try {
@@ -706,6 +718,47 @@ export default function Employees() {
 
   return (
     <div className="container mx-auto max-w-[98vw] xl:max-w-[95vw] space-y-6 px-2 sm:px-4">
+      <Dialog open={isDeactivateDialogOpen} onOpenChange={setIsDeactivateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Dezaktywuj pracownika</DialogTitle>
+            <DialogDescription>
+              Wybierz datę, od której pracownik ma być traktowany jako nieaktywny w raportach.
+              Raporty sprzed tej daty pozostaną bez zmian.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="deactivation-date">Data dezaktywacji</Label>
+            <Input
+              id="deactivation-date"
+              type="date"
+              value={deactivationDate}
+              onChange={(e) => setDeactivationDate(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeactivateDialogOpen(false)}
+            >
+              Anuluj
+            </Button>
+            <Button
+              onClick={() => {
+                if (!deactivationEmployee) return;
+                updateMutation.mutate({
+                  id: deactivationEmployee.id,
+                  isActive: false,
+                  deactivatedAt: deactivationDate,
+                });
+                setIsDeactivateDialogOpen(false);
+              }}
+            >
+              Dezaktywuj
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Button onClick={() => setLocation("/")} variant="outline" className="mb-4">
         <ArrowLeft className="mr-2 h-4 w-4" />
         Powrót do dashboardu
@@ -1563,7 +1616,11 @@ export default function Employees() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => {
-                              updateMutation.mutate({ id: employee.id, isActive: !employee.isActive });
+                              if (employee.isActive) {
+                                openDeactivateDialog(employee);
+                              } else {
+                                updateMutation.mutate({ id: employee.id, isActive: true });
+                              }
                             }}
                             className={`cursor-pointer ${employee.isActive ? "text-amber-700 focus:text-amber-700 focus:bg-amber-50" : "text-green-700 focus:text-green-700 focus:bg-green-50"}`}
                           >

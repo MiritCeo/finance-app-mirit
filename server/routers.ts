@@ -125,6 +125,7 @@ export const appRouter = router({
         vacationCostAnnual: z.number().optional(),
         vacationDaysPerYear: z.number().optional(),
         isActive: z.boolean().optional(),
+        deactivatedAt: z.string().optional(),
         notes: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
@@ -141,7 +142,9 @@ export const appRouter = router({
         }
         
         if (updateData.isActive === false) {
-          updateData.deactivatedAt = new Date();
+          updateData.deactivatedAt = updateData.deactivatedAt
+            ? new Date(`${updateData.deactivatedAt}T00:00:00`)
+            : new Date();
         } else if (updateData.isActive === true) {
           updateData.deactivatedAt = null;
         }
