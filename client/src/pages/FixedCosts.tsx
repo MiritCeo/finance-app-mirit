@@ -156,7 +156,7 @@ export default function FixedCosts() {
         Wróć do dashboardu
       </Button>
       
-      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm border-l-4 border-l-primary/40 page-hero">
         <h1 className="text-3xl font-bold">Koszty stałe</h1>
         <p className="text-muted-foreground">
           Zarządzaj kosztami stałymi firmy (wynajem, oprogramowanie, księgowość, itp.)

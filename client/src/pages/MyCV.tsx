@@ -318,40 +318,40 @@ export default function MyCV() {
         <ArrowLeft className="w-4 h-4 mr-2" />
         Powrót do Dashboard
       </Button>
-      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
+      <div className="rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm border-l-4 border-l-primary/40 page-hero">
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div className="space-y-1">
             <h1 className="text-3xl font-bold">Moje CV</h1>
             <p className="text-muted-foreground">
               Aktualizuj swoje CV aby było zawsze aktualne
             </p>
           </div>
           <div className="flex gap-2">
-          <Button onClick={handleOpenEdit} variant="outline">
-            <Edit className="w-4 h-4 mr-2" />
-            Edytuj CV
-          </Button>
-          <Button
-            onClick={handleGenerateNewVersion}
-            variant="default"
-            disabled={isGenerating || !cvData}
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Generowanie...
-              </>
-            ) : (
-              <>
-                <FileCheck className="w-4 h-4 mr-2" />
-                Wygeneruj CV HTML
-              </>
-            )}
-          </Button>
-          <Button onClick={handleLogout} variant="outline">
-            <LogOut className="w-4 h-4 mr-2" />
-            Wyloguj
-          </Button>
+            <Button onClick={handleOpenEdit} variant="outline">
+              <Edit className="w-4 h-4 mr-2" />
+              Edytuj CV
+            </Button>
+            <Button
+              onClick={handleGenerateNewVersion}
+              variant="default"
+              disabled={isGenerating || !cvData}
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generowanie...
+                </>
+              ) : (
+                <>
+                  <FileCheck className="w-4 h-4 mr-2" />
+                  Wygeneruj CV HTML
+                </>
+              )}
+            </Button>
+            <Button onClick={handleLogout} variant="outline">
+              <LogOut className="w-4 h-4 mr-2" />
+              Wyloguj
+            </Button>
           </div>
         </div>
       </div>

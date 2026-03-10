@@ -44,7 +44,7 @@ export default function ProjectProfitability() {
 
   return (
     <div className="container mx-auto max-w-7xl space-y-6">
-      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm border-l-4 border-l-primary/40 page-hero">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-3">

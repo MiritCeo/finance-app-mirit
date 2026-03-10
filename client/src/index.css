@@ -133,6 +133,39 @@
   }
 }
 
+.page-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.page-hero > h1,
+.page-hero > p {
+  grid-column: 1 / -1;
+}
+
+.page-hero > .page-hero-text {
+  grid-column: 1 / 2;
+}
+
+.page-hero > .page-hero-actions {
+  grid-column: 2 / 3;
+  grid-row: 1;
+  justify-self: end;
+}
+
+@media (max-width: 767px) {
+  .page-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .page-hero > .page-hero-actions {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
 @layer components {
   /**
    * Custom container utility that centers content and adds responsive padding.

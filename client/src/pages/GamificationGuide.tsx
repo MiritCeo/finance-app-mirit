@@ -15,14 +15,16 @@ import {
 export default function GamificationGuide() {
   return (
     <div className="container mx-auto max-w-4xl space-y-6">
-      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
-        <div className="flex items-center gap-3">
-          <Sparkles className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold">Zasady Mirit Points</h1>
-            <p className="text-muted-foreground">
-              Najważniejsze informacje o punktach, poziomach i nagrodach
-            </p>
+      <div className="rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm border-l-4 border-l-primary/40 page-hero">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-6 h-6 text-primary" />
+            <div className="space-y-1">
+              <h1 className="text-3xl font-bold">Zasady Mirit Points</h1>
+              <p className="text-muted-foreground">
+                Najważniejsze informacje o punktach, poziomach i nagrodach
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -103,32 +105,28 @@ export default function GamificationGuide() {
             Punkty za obecność w biurze
           </CardTitle>
           <CardDescription>
-            System oparty na geolokalizacji i czasie spędzonym w biurze – bez kar.
+            Pomysł nagradzania obecności w biurze — bez kar i bez presji.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <ul className="list-disc list-inside space-y-1">
             <li>
-              W zakładce <span className="font-semibold">„Obecność w biurze”</span> rozpoczynasz i
-              kończysz <span className="font-semibold">sesję biurową</span>.
+              Jeśli uruchomimy ten pomysł, obecność będzie potwierdzana krótką sesją w zakładce{" "}
+              <span className="font-semibold">„Obecność w biurze”</span>.
             </li>
             <li>
-              System sprawdza, czy jesteś w zdefiniowanym obszarze biura (na podstawie GPS) oraz
-              ile czasu minęło między startem a zakończeniem.
+              Rozważamy weryfikację obecności na podstawie lokalizacji i czasu spędzonego w biurze.
             </li>
             <li>
-              Jeśli sesja spełni minimalny czas (np.{" "}
-              <span className="font-semibold">4h w biurze w ciągu dnia</span>), dostajesz{" "}
-              <span className="font-semibold">punkty za dzień</span>.
+              Punkty byłyby przyznawane po spełnieniu minimalnego czasu (np.{" "}
+              <span className="font-semibold">4h w biurze w ciągu dnia</span>).
             </li>
             <li>
-              Za serię kolejnych dni spełniających warunki możesz otrzymać{" "}
-              <span className="font-semibold">dodatkowe punkty za „streak”</span>.
+              Dodatkowo rozważamy bonus za regularność (serię dni spełniających warunki).
             </li>
           </ul>
           <p className="text-xs text-muted-foreground">
-            Dokładne wartości (ile punktów za dzień i za serię) są konfigurowane przez
-            administratora firmy i mogą się zmieniać, ale zawsze działają na zasadzie:{" "}
+            Dokładne wartości i progi to jeszcze otwarta decyzja firmy — kluczowa zasada to{" "}
             <span className="font-semibold">tylko nagrody, żadnych kar</span>.
           </p>
         </CardContent>
@@ -141,14 +139,13 @@ export default function GamificationGuide() {
             Punkty za godziny pracy
           </CardTitle>
           <CardDescription>
-            Automatyczne punkty miesięczne na podstawie raportowanych godzin – zgodnie z V3.
+            Pomysł na punkty miesięczne w oparciu o raportowane godziny.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p>
-            Raz na jakiś czas (np. po zakończeniu miesiąca) administrator może{" "}
-            <span className="font-semibold">przeliczyć punkty za godziny</span> na podstawie
-            raportów miesięcznych.
+            Rozważamy, aby po zakończeniu miesiąca naliczać punkty na podstawie raportowanych
+            godzin.
           </p>
           <ul className="list-disc list-inside space-y-1">
             <li>1 punkt za każdą zaraportowaną godzinę do 160h miesięcznie,</li>
@@ -157,9 +154,8 @@ export default function GamificationGuide() {
             <li>200h+: +1.5 pkt za każdą godzinę powyżej 200h.</li>
           </ul>
           <p className="text-xs text-muted-foreground">
-            Punkty są naliczane na podstawie oficjalnych danych z systemu (time tracking /
-            raporty), nie subiektywnych ocen. Nie trzeba nic klikać ręcznie – system zaciąga dane
-            z raportów.
+            To propozycja firmy — jeśli ją wdrożymy, punkty będą wynikały z danych raportowych, bez
+            ręcznego „odhaczania”.
           </p>
         </CardContent>
       </Card>
@@ -171,17 +167,16 @@ export default function GamificationGuide() {
             Planowanie urlopów – bez kar, tylko nagrody
           </CardTitle>
           <CardDescription>
-            System, który nagradza planowanie z wyprzedzeniem i unikanie „dziur” w obsadzie.
+            Pomysł nagradzania planowania z wyprzedzeniem i unikania „dziur” w obsadzie.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <ul className="list-disc list-inside space-y-1">
             <li>
-            W części Mirit Points możesz <span className="font-semibold">zaplanować urlop</span>{" "}
-              i od razu zobaczyć, ile punktów taki plan Ci przyniesie.
+              Jeśli ten pomysł uruchomimy, planowanie urlopu pokaże orientacyjną liczbę punktów.
             </li>
             <li>
-              System nagradza:
+              Chcemy nagradzać:
               <ul className="list-disc list-inside ml-5 space-y-1">
                 <li>
                   planowanie z wyprzedzeniem (3+ mies., 2 mies., 1 mies. – im wcześniej, tym więcej
@@ -193,9 +188,8 @@ export default function GamificationGuide() {
             </li>
           </ul>
           <p className="text-xs text-muted-foreground">
-            <span className="font-semibold">Nie ma żadnych kar</span> za urlopy – jeśli termin
-            będzie mniej korzystny dla firmy, po prostu nie dostaniesz dodatkowych punktów.
-            Najgorszy scenariusz to „0 punktów”, nigdy minus.
+            <span className="font-semibold">Nie planujemy żadnych kar</span> — mniej korzystny termin
+            oznacza po prostu mniej lub zero punktów, nigdy minus.
           </p>
         </CardContent>
       </Card>
@@ -207,18 +201,17 @@ export default function GamificationGuide() {
             Punkty za wiedzę (baza wiedzy)
           </CardTitle>
           <CardDescription>
-            Nagradzamy dzielenie się wiedzą wewnątrz firmy – artykuły w bazie wiedzy.
+            Pomysł nagradzania dzielenia się wiedzą wewnątrz firmy.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <ul className="list-disc list-inside space-y-1">
             <li>
-              Jeśli dodasz artykuł do <span className="font-semibold">bazy wiedzy</span> jako
-              pracownik, system może przyznać Ci punkty za wkład.
+              Planujemy premiować tworzenie artykułów w <span className="font-semibold">bazie wiedzy</span>.
             </li>
             <li>
-              W przyszłości będzie można dodawać dodatkowe punkty za popularność artykułu (liczba
-              odczytów, komentarze, oznaczenie jako „innowacja” przez admina).
+              Rozważamy dodatkowe punkty za realny wpływ artykułu (np. przydatność lub uznanie przez
+              zespół).
             </li>
           </ul>
           <p className="text-xs text-muted-foreground">
@@ -235,28 +228,26 @@ export default function GamificationGuide() {
             Questy i cele zespołowe
           </CardTitle>
           <CardDescription>
-            Wspólne wyzwania godzinowe i zadaniowe – indywidualne, zespołowe i firmowe.
+            Pomysł na wspólne wyzwania godzinowe i zadaniowe — indywidualne, zespołowe i firmowe.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <ul className="list-disc list-inside space-y-1">
             <li>
-              <span className="font-semibold">Questy</span> – to mniejsze wyzwania (np. indywidualne
-              lub zespołowe), z jasno określonym celem (liczba godzin, liczba artykułów, itp.) i
+              <span className="font-semibold">Questy</span> – mniejsze wyzwania z jasnym celem i
               nagrodą punktową.
             </li>
             <li>
-              <span className="font-semibold">Cele zespołowe</span> – większe cele oparte na
-              godzinach (np. zespół/cała firma ma zrealizować X godzin w miesiącu lub kwartale).
+              <span className="font-semibold">Cele zespołowe</span> – większe cele, które wzmacniają
+              współpracę całego zespołu.
             </li>
             <li>
-              Po osiągnięciu celu punkty mogą być dzielone równo lub proporcjonalnie do wkładu –{" "}
-              bez ujawniania szczegółowych danych finansowych innych osób.
+              Model podziału punktów ustalimy tak, by był fair i bez porównywania prywatnych danych.
             </li>
           </ul>
           <p className="text-xs text-muted-foreground">
-            Dokładne questy i cele będą ogłaszane przez właścicieli / liderów – ta część systemu
-            jest elastyczna i możemy ją dopasowywać do aktualnych potrzeb firmy.
+            Konkretne questy i cele będą wynikiem decyzji firmy — ta część ma być elastyczna i
+            dopasowana do aktualnych potrzeb.
           </p>
         </CardContent>
       </Card>
@@ -265,7 +256,7 @@ export default function GamificationGuide() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="w-4 h-4 text-yellow-500" />
-            Odznaki (badges) – w przygotowaniu
+            Odznaki (badges) – pomysł na przyszłość
           </CardTitle>
           <CardDescription>
             Odznaki są dodatkowymi wyróżnieniami za długoterminową konsekwencję i wkład.
@@ -273,8 +264,7 @@ export default function GamificationGuide() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p>
-            Techniczna podstawa pod odznaki jest już w systemie. W kolejnych etapach możemy
-            włączyć np.:
+            Rozważamy wprowadzenie odznak jako dodatkowego wyróżnienia. Potencjalne przykłady:
           </p>
           <ul className="list-disc list-inside space-y-1">
             <li>„Consistent” – kilka miesięcy z rzędu z pełną liczbą godzin,</li>
@@ -283,9 +273,8 @@ export default function GamificationGuide() {
             <li>„Innovation Master” – wyróżnione innowacyjne rozwiązania.</li>
           </ul>
           <p className="text-xs text-muted-foreground">
-            Gdy odznaki będą aktywne, pojawią się w Twoim profilu Mirit Points. Będą one widoczne
-            tylko wewnętrznie – nie planujemy publicznych rankingów, które mogłyby wprowadzać
-            niepotrzebną rywalizację.
+            Jeśli zdecydujemy się je wdrożyć, odznaki będą widoczne tylko wewnątrz firmy — bez
+            publicznych rankingów i zbędnej rywalizacji.
           </p>
         </CardContent>
       </Card>

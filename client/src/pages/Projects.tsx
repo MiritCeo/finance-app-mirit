@@ -195,7 +195,7 @@ export default function Projects() {
         <ArrowLeft className="mr-2 h-4 w-4" />
         Powrót do dashboardu
       </Button>
-      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm border-l-4 border-l-primary/40 page-hero">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="space-y-1">
             <h1 className="text-3xl font-bold flex items-center gap-2">

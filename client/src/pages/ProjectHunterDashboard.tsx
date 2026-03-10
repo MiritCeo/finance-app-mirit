@@ -25,7 +25,7 @@ export default function ProjectHunterDashboard() {
   if (!employees || employees.length === 0) {
     return (
       <div className="p-8 max-w-7xl mx-auto space-y-6">
-        <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm border-l-4 border-l-primary/40 page-hero">
           <div className="space-y-1">
             <h1 className="text-3xl font-bold">Panel Łowcy Projektów</h1>
             <p className="text-muted-foreground">
@@ -57,7 +57,7 @@ export default function ProjectHunterDashboard() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm mb-6">
+      <div className="rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm border-l-4 border-l-primary/40 page-hero mb-6">
         <h1 className="text-3xl font-bold mb-2">Panel Łowcy Projektów</h1>
         <p className="text-muted-foreground">
           Lista pracowników dostępnych do projektów bodyleasingowych

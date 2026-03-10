@@ -109,14 +109,16 @@ export default function Gamification() {
 
   return (
     <div className="container mx-auto max-w-6xl space-y-6">
-      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
-        <div className="flex items-center gap-3">
-          <Sparkles className="h-8 w-8 text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold">Mirit Points</h1>
-            <p className="text-muted-foreground">
-              Punkty, poziomy i nagrody za aktywność w systemie
-            </p>
+      <div className="rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm border-l-4 border-l-primary/40 page-hero">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-8 w-8 text-primary" />
+            <div className="space-y-1">
+              <h1 className="text-3xl font-bold">Mirit Points</h1>
+              <p className="text-muted-foreground">
+                Punkty, poziomy i nagrody za aktywność w systemie
+              </p>
+            </div>
           </div>
         </div>
       </div>

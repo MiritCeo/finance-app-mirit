@@ -220,10 +220,10 @@ function DashboardLayoutContent({
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
-          className="border-r-0"
+          className="border-r border-border/60 bg-card/80 backdrop-blur"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center border-b bg-gradient-to-r from-primary/10 to-primary/20 dark:from-primary/20 dark:to-primary/30 dark:border-sidebar-border">
+          <SidebarHeader className="h-16 justify-center border-b bg-card/80 dark:bg-sidebar">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -235,7 +235,7 @@ function DashboardLayoutContent({
                       Mirit Lacheck
                     </span>
                     {user?.role && (
-                      <span className={`text-xs font-semibold inline-flex px-2 py-0.5 rounded-full bg-white text-slate-900 ${
+                    <span className={`text-xs font-semibold inline-flex px-2 py-0.5 rounded-full bg-white text-slate-900 shadow-sm ${
                         user.role === "admin" ? "border border-blue-200" : 
                         user.role === "employee" ? "border border-green-200" :
                         user.role === "project_hunter" ? "border border-amber-200" :
@@ -257,8 +257,8 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0">
-            <SidebarMenu className="px-2 py-1">
+          <SidebarContent className="gap-2 p-2">
+            <SidebarMenu className="space-y-1">
               {menuItems.map(item => {
                 const isActive = location === item.path;
                 return (
@@ -267,7 +267,7 @@ function DashboardLayoutContent({
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal text-sidebar-foreground dark:text-sidebar-foreground`}
+                      className={`h-10 rounded-lg px-3 text-sm font-medium transition-colors text-sidebar-foreground dark:text-sidebar-foreground ${isActive ? "bg-primary/10 text-primary" : "hover:bg-accent/50"}`}
                     >
                       <item.icon
                         className={`h-4 w-4 ${isActive ? "text-primary" : "text-sidebar-foreground dark:text-sidebar-foreground"}`}
@@ -283,7 +283,7 @@ function DashboardLayoutContent({
           <SidebarFooter className="p-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <button className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/80 px-2 py-2 hover:bg-accent/40 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <Avatar className="h-9 w-9 border shrink-0">
                     <AvatarFallback className="text-xs font-medium">
                       {user?.name?.charAt(0).toUpperCase()}

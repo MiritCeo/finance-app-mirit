@@ -171,7 +171,7 @@ export default function KnowledgeBaseEditPage() {
         <ArrowLeft className="w-4 h-4 mr-2" />
         Powrót do bazy wiedzy
       </Button>
-      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm mb-6">
+      <div className="rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm border-l-4 border-l-primary/40 page-hero mb-6">
         <h1 className="text-3xl font-bold">
           {isEdit ? "Edytuj artykuł" : (isAdmin ? "Nowy artykuł" : "Nowa notatka")}
         </h1>
