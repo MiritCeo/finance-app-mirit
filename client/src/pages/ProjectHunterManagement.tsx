@@ -191,20 +191,21 @@ export default function ProjectHunterManagement() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Zarządzanie Łowcami Projektów</h1>
-          <p className="text-muted-foreground">
-            Przypisuj pracowników do Łowców Projektów
-          </p>
-        </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setCreatedCredentials(null)}>
-              <UserPlus className="w-4 h-4 mr-2" />
-              Dodaj Łowcę Projektów
-            </Button>
-          </DialogTrigger>
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm mb-6">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Zarządzanie Łowcami Projektów</h1>
+            <p className="text-muted-foreground">
+              Przypisuj pracowników do Łowców Projektów
+            </p>
+          </div>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => setCreatedCredentials(null)} className="shadow-lg hover:shadow-xl transition">
+                <UserPlus className="w-4 h-4 mr-2" />
+                Dodaj Łowcę Projektów
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>

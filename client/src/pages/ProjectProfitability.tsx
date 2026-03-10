@@ -44,15 +44,17 @@ export default function ProjectProfitability() {
 
   return (
     <div className="container mx-auto max-w-7xl space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <TrendingUp className="h-8 w-8 text-violet-600" />
-            <h1 className="text-3xl font-bold">Rentowność projektów</h1>
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <TrendingUp className="h-8 w-8 text-primary" />
+              <h1 className="text-3xl font-bold">Rentowność projektów</h1>
+            </div>
+            <p className="text-muted-foreground">
+              Analiza rentowności projektów w ujęciu miesięcznym
+            </p>
           </div>
-          <p className="text-muted-foreground">
-            Analiza rentowności projektów w ujęciu miesięcznym
-          </p>
         </div>
       </div>
 

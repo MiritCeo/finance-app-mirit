@@ -176,9 +176,9 @@ export default function MonthlyEmployeeReports() {
             <CardTitle>Raporty pracowników - {MONTH_NAMES[month - 1]} {year}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">
+            <div className="text-center py-8 text-muted-foreground rounded-2xl border border-dashed bg-muted/30">
               Brak zapisanych raportów dla tego miesiąca.
-            </p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -192,36 +192,39 @@ export default function MonthlyEmployeeReports() {
         Powrót do przeglądu finansowego
       </Button>
 
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold">
-            Raporty pracowników - {MONTH_NAMES[month - 1]} {year}
-          </h1>
-          <p className="text-muted-foreground">
-            Zapisane raporty wszystkich pracowników z możliwością ręcznej korekty kosztów
-          </p>
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold">
+              Raporty pracowników - {MONTH_NAMES[month - 1]} {year}
+            </h1>
+            <p className="text-muted-foreground">
+              Zapisane raporty wszystkich pracowników z możliwością ręcznej korekty kosztów
+            </p>
+          </div>
+          <Button
+            onClick={() => {
+              if (confirm("Czy na pewno chcesz zaktualizować wszystkie raporty i propagować zmiany do timeEntries i assignments? Ta operacja może zająć chwilę.")) {
+                propagateAllChangesMutation.mutate({ year, month });
+              }
+            }}
+            disabled={propagateAllChangesMutation.isPending}
+            variant="default"
+            className="shadow-lg hover:shadow-xl transition"
+          >
+            {propagateAllChangesMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Aktualizowanie...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Propaguj wszystkie zmiany
+              </>
+            )}
+          </Button>
         </div>
-        <Button
-          onClick={() => {
-            if (confirm("Czy na pewno chcesz zaktualizować wszystkie raporty i propagować zmiany do timeEntries i assignments? Ta operacja może zająć chwilę.")) {
-              propagateAllChangesMutation.mutate({ year, month });
-            }
-          }}
-          disabled={propagateAllChangesMutation.isPending}
-          variant="default"
-        >
-          {propagateAllChangesMutation.isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Aktualizowanie...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Propaguj wszystkie zmiany
-            </>
-          )}
-        </Button>
       </div>
 
       {/* Podsumowanie */}

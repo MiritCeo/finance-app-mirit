@@ -159,15 +159,17 @@ export default function KnowledgeBasePage() {
         Powrót do dashboardu
       </Button>
       
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">📚 Baza Wiedzy</h1>
-          <p className="text-muted-foreground">Ważne informacje i procedury firmowe</p>
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">📚 Baza Wiedzy</h1>
+            <p className="text-muted-foreground">Ważne informacje i procedury firmowe</p>
+          </div>
+          <Button onClick={() => setLocation("/knowledge/new")} className="shadow-lg hover:shadow-xl transition">
+            <Plus className="w-4 h-4 mr-2" />
+            {isAdmin ? "Dodaj informację" : "Dodaj notatkę"}
+          </Button>
         </div>
-        <Button onClick={() => setLocation("/knowledge/new")}>
-          <Plus className="w-4 h-4 mr-2" />
-          {isAdmin ? "Dodaj informację" : "Dodaj notatkę"}
-        </Button>
       </div>
 
       {/* Filtry i wyszukiwarka */}

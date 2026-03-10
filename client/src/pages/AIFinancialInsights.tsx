@@ -64,18 +64,19 @@ export default function AIFinancialInsights() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Sparkles className="h-8 w-8 text-purple-600" />
-            AI Insights Finansowe
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Inteligentna analiza finansów firmy z wykorzystaniem AI
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-4">
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Sparkles className="h-8 w-8 text-primary" />
+              AI Insights Finansowe
+            </h1>
+            <p className="text-muted-foreground mt-2">
+              Inteligentna analiza finansów firmy z wykorzystaniem AI
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-4">
           <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
             <SelectTrigger className="w-32">
               <SelectValue />
@@ -128,6 +129,7 @@ export default function AIFinancialInsights() {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
       </div>
 

@@ -85,9 +85,9 @@ export default function HRappkaMapping() {
   return (
     <div className="container mx-auto max-w-7xl space-y-6 py-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="space-y-1">
             <Button
               variant="ghost"
               size="sm"
@@ -98,15 +98,14 @@ export default function HRappkaMapping() {
               Powrót
             </Button>
             <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Link2 className="h-6 w-6" />
+              <Link2 className="h-6 w-6 text-primary" />
               Mapowanie pracowników z HRappka
             </h1>
+            <p className="text-muted-foreground">
+              Przypisz pracowników z naszej aplikacji do pracowników w systemie HRappka w celu synchronizacji danych.
+            </p>
           </div>
-          <p className="text-muted-foreground">
-            Przypisz pracowników z naszej aplikacji do pracowników w systemie HRappka w celu synchronizacji danych.
-          </p>
-        </div>
-        <div className="flex gap-2">
+          <div className="flex gap-2">
           <Button
             onClick={() => setShowDebug(!showDebug)}
             variant="outline"
@@ -125,6 +124,7 @@ export default function HRappkaMapping() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Odśwież
           </Button>
+          </div>
         </div>
       </div>
 

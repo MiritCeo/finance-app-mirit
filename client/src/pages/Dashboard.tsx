@@ -230,18 +230,20 @@ export default function Dashboard() {
 
     return (
       <div className="container mx-auto max-w-7xl space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold">Dashboard</h1>
-              <Badge variant="secondary" className="bg-green-600 text-white">
-                Pracownik
-              </Badge>
+        <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold">Dashboard</h1>
+                <Badge variant="secondary" className="bg-primary text-white">
+                  Pracownik
+                </Badge>
+              </div>
+              <p className="text-muted-foreground flex items-center gap-2">
+                <span>👋</span>
+                <span>Witaj, <span className="font-semibold text-foreground">{user.name || user.email}</span>!</span>
+              </p>
             </div>
-            <p className="text-muted-foreground flex items-center gap-2">
-              <span>👋</span>
-              <span>Witaj, <span className="font-semibold text-foreground">{user.name || user.email}</span>!</span>
-            </p>
           </div>
         </div>
 
@@ -327,67 +329,69 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="container mx-auto max-w-7xl space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="space-y-1">
+      <div className="container mx-auto max-w-7xl space-y-6">
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold">Dashboard</h1>
+              {user?.role && (
+                <Badge 
+                  variant={user.role === "admin" ? "default" : user.role === "employee" ? "secondary" : "outline"}
+                  className={user.role === "admin" ? "bg-primary text-white" : user.role === "employee" ? "bg-primary/90 text-white" : ""}
+                >
+                  {user.role === "admin" ? "Administrator" : user.role === "employee" ? "Pracownik" : "Użytkownik"}
+                </Badge>
+              )}
+            </div>
+            <p className="text-muted-foreground flex items-center gap-2">
+              <span>👋</span>
+              <span>Witaj, <span className="font-semibold text-foreground">{user.name || user.email}</span>!</span>
+            </p>
+          </div>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            {user?.role && (
-              <Badge 
-                variant={user.role === "admin" ? "default" : user.role === "employee" ? "secondary" : "outline"}
-                className={user.role === "admin" ? "bg-blue-600 text-white" : user.role === "employee" ? "bg-green-600 text-white" : ""}
+            {/* Filtry miesiąca/roku */}
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map(year => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map(month => (
+                    <SelectItem key={month.value} value={month.value.toString()}>{month.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Przełącznik dark mode */}
+            {toggleTheme && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                className="h-9 w-9"
+                title={theme === "dark" ? "Przełącz na jasny motyw" : "Przełącz na ciemny motyw"}
               >
-                {user.role === "admin" ? "Administrator" : user.role === "employee" ? "Pracownik" : "Użytkownik"}
-              </Badge>
+                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </Button>
             )}
           </div>
-          <p className="text-muted-foreground flex items-center gap-2">
-            <span>👋</span>
-            <span>Witaj, <span className="font-semibold text-foreground">{user.name || user.email}</span>!</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Filtry miesiąca/roku */}
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
-              <SelectTrigger className="w-[120px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map(year => (
-                  <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {months.map(month => (
-                  <SelectItem key={month.value} value={month.value.toString()}>{month.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {/* Przełącznik dark mode */}
-          {toggleTheme && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="h-9 w-9"
-              title={theme === "dark" ? "Przełącz na jasny motyw" : "Przełącz na ciemny motyw"}
-            >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
-          )}
         </div>
       </div>
 
       {/* Menu szybkiego startu */}
-      <div className="border rounded-lg bg-card p-4">
+      <div className="rounded-2xl border border-border/60 bg-card/80 p-4 shadow-sm">
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-sm font-medium text-muted-foreground flex items-center gap-2 whitespace-nowrap">
             <Zap className="h-4 w-4 text-primary" />

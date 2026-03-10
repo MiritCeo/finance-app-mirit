@@ -163,15 +163,15 @@ export default function KnowledgeBaseEditPage() {
 
   return (
     <div className="container mx-auto py-6 max-w-5xl">
-      <div className="mb-6">
-        <Button
-          variant="ghost"
-          onClick={() => setLocation("/knowledge")}
-          className="mb-4"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Powrót do bazy wiedzy
-        </Button>
+      <Button
+        variant="ghost"
+        onClick={() => setLocation("/knowledge")}
+        className="mb-4"
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Powrót do bazy wiedzy
+      </Button>
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm mb-6">
         <h1 className="text-3xl font-bold">
           {isEdit ? "Edytuj artykuł" : (isAdmin ? "Nowy artykuł" : "Nowa notatka")}
         </h1>

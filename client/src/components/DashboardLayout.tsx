@@ -32,6 +32,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
+import logo from "@/assets/logolacheck.png";
 
 const adminMenuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/", color: "text-blue-600" },
@@ -222,16 +223,16 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center border-b bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20 dark:border-sidebar-border">
+          <SidebarHeader className="h-16 justify-center border-b bg-gradient-to-r from-primary/10 to-primary/20 dark:from-primary/20 dark:to-primary/30 dark:border-sidebar-border">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
-                    <LayoutDashboard className="h-4 w-4 text-white" />
+                  <div className="h-9 w-9 rounded-xl bg-white/90 ring-1 ring-black/5 flex items-center justify-center">
+                    <img src={logo} alt="Lacheck" className="h-7 w-7 object-contain" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <span className="font-bold text-lg tracking-tight truncate text-foreground dark:text-foreground block">
-                      Mirit Intranet
+                      Mirit Lacheck
                     </span>
                     {user?.role && (
                       <span className={`text-xs font-semibold block truncate ${
@@ -249,8 +250,8 @@ function DashboardLayoutContent({
                   </div>
                 </div>
               ) : (
-                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
-                  <LayoutDashboard className="h-4 w-4 text-white" />
+                <div className="h-9 w-9 rounded-xl bg-white/90 ring-1 ring-black/5 flex items-center justify-center">
+                  <img src={logo} alt="Lacheck" className="h-6 w-6 object-contain" />
                 </div>
               )}
             </div>
@@ -269,7 +270,7 @@ function DashboardLayoutContent({
                       className={`h-10 transition-all font-normal text-sidebar-foreground dark:text-sidebar-foreground`}
                     >
                       <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary dark:text-primary" : "text-sidebar-foreground dark:text-sidebar-foreground"}`}
+                        className={`h-4 w-4 ${isActive ? "text-primary" : "text-sidebar-foreground dark:text-sidebar-foreground"}`}
                       />
                       <span className="text-sidebar-foreground dark:text-sidebar-foreground">{item.label}</span>
                     </SidebarMenuButton>

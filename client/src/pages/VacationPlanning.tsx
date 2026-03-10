@@ -103,6 +103,13 @@ export default function VacationPlanning() {
 
   return (
     <div className="container mx-auto max-w-4xl space-y-6">
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">Planowanie urlopów</h1>
+        <p className="text-muted-foreground">
+          Zobacz ile punktów otrzymasz za sposób zaplanowania urlopu. System nagradza
+          wyprzedzenie, rozłożenie urlopu i unikanie konfliktów – bez kar.
+        </p>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Planowanie urlopów (punkty bez kar)</CardTitle>

@@ -24,13 +24,20 @@ export default function ProjectHunterDashboard() {
 
   if (!employees || employees.length === 0) {
     return (
-      <div className="p-8">
-        <h1 className="text-3xl font-bold mb-6">Panel Łowcy Projektów</h1>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">
-              Brak przypisanych pracowników. Skontaktuj się z administratorem.
+      <div className="p-8 max-w-7xl mx-auto space-y-6">
+        <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold">Panel Łowcy Projektów</h1>
+            <p className="text-muted-foreground">
+              Lista pracowników dostępnych do projektów bodyleasingowych
             </p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center text-muted-foreground rounded-2xl border border-dashed bg-muted/30 py-8">
+              Brak przypisanych pracowników. Skontaktuj się z administratorem.
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -50,7 +57,7 @@ export default function ProjectHunterDashboard() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      <div className="mb-6">
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm mb-6">
         <h1 className="text-3xl font-bold mb-2">Panel Łowcy Projektów</h1>
         <p className="text-muted-foreground">
           Lista pracowników dostępnych do projektów bodyleasingowych

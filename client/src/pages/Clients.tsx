@@ -149,18 +149,20 @@ export default function Clients() {
         <ArrowLeft className="mr-2 h-4 w-4" />
         Powrót do dashboardu
       </Button>
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Building2 className="h-6 w-6" />
-            Klienci
-          </h1>
-          <p className="text-muted-foreground">Zarządzaj bazą klientów firmy</p>
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Building2 className="h-6 w-6 text-primary" />
+              Klienci
+            </h1>
+            <p className="text-muted-foreground">Zarządzaj bazą klientów firmy</p>
+          </div>
+          <Button onClick={() => openDialog()} size="lg" className="shadow-lg hover:shadow-xl transition">
+            <Plus className="mr-2 h-4 w-4" />
+            Dodaj klienta
+          </Button>
         </div>
-        <Button onClick={() => openDialog()} size="lg" className="shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
-          <Plus className="mr-2 h-4 w-4" />
-          Dodaj klienta
-        </Button>
       </div>
 
       <Card>
@@ -172,8 +174,8 @@ export default function Clients() {
         </CardHeader>
         <CardContent>
           {!clients || clients.length === 0 ? (
-            <div className="text-center py-12">
-              <Building2 className="mx-auto h-12 w-12 text-muted-foreground/50" />
+            <div className="text-center py-12 rounded-2xl border border-dashed bg-muted/30">
+              <Building2 className="mx-auto h-12 w-12 text-muted-foreground/60" />
               <h3 className="mt-4 text-lg font-semibold">Brak klientów</h3>
               <p className="text-muted-foreground mt-2">
                 Dodaj pierwszego klienta, aby móc tworzyć projekty i raporty

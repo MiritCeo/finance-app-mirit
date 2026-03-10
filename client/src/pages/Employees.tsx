@@ -710,6 +710,36 @@ export default function Employees() {
         Powrót do dashboardu
       </Button>
 
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Users className="h-6 w-6 text-primary" />
+              Pracownicy
+            </h1>
+            <p className="text-muted-foreground">
+              Zarządzaj zespołem, kosztami i przypisaniami projektów.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => {
+                resetForm();
+                setIsDialogOpen(true);
+              }}
+              className="shadow-lg hover:shadow-xl transition"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Dodaj pracownika
+            </Button>
+            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Import
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {/* Karty podsumowań */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-l-4 border-l-green-500">
@@ -1136,7 +1166,7 @@ export default function Employees() {
           </div>
           
           {filteredAndSortedEmployees && filteredAndSortedEmployees.length === 0 && employees && employees.length > 0 && (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 text-muted-foreground rounded-2xl border border-dashed bg-muted/30">
               Brak pracowników spełniających kryteria wyszukiwania
               <p className="text-sm mt-2">
                 (Znaleziono {employees.length} pracowników, ale filtry je ukrywają)
@@ -1144,8 +1174,19 @@ export default function Employees() {
             </div>
           )}
           {filteredAndSortedEmployees && filteredAndSortedEmployees.length === 0 && (!employees || employees.length === 0) && (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 text-muted-foreground rounded-2xl border border-dashed bg-muted/30">
               Brak pracowników. Dodaj pierwszego pracownika.
+              <div className="mt-4">
+                <Button
+                  onClick={() => {
+                    resetForm();
+                    setIsDialogOpen(true);
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Dodaj pracownika
+                </Button>
+              </div>
             </div>
           )}
           

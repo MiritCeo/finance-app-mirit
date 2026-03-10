@@ -118,12 +118,12 @@ export default function EmployeeAnnualReport() {
 
   return (
     <div className="container mx-auto py-8">
-      <div className="mb-6">
-        <Button onClick={() => setLocation("/employees")} variant="outline" className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Powrót do listy pracowników
-        </Button>
-        
+      <Button onClick={() => setLocation("/employees")} variant="outline" className="mb-4">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Powrót do listy pracowników
+      </Button>
+      
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm mb-6">
         <h1 className="text-3xl font-bold mb-2">
           Raport roczny: {employee.firstName} {employee.lastName}
         </h1>

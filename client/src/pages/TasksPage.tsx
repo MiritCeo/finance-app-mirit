@@ -115,18 +115,19 @@ export default function TasksPage() {
         <ArrowLeft className="mr-2 h-4 w-4" />
         Powrót do dashboardu
       </Button>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Zadania</h1>
-          <p className="text-muted-foreground">Zarządzaj zadaniami i projektami</p>
-        </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Nowe zadanie
-            </Button>
-          </DialogTrigger>
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Zadania</h1>
+            <p className="text-muted-foreground">Zarządzaj zadaniami i projektami</p>
+          </div>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="shadow-lg hover:shadow-xl transition">
+                <Plus className="w-4 h-4 mr-2" />
+                Nowe zadanie
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Utwórz nowe zadanie</DialogTitle>

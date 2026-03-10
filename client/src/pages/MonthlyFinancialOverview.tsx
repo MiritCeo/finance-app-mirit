@@ -174,15 +174,17 @@ export default function MonthlyFinancialOverview() {
         Powrót do dashboardu
       </Button>
 
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <BarChart3 className="h-6 w-6 text-teal-600" />
-            Przegląd finansowy miesięczny
-          </h1>
-          <p className="text-muted-foreground">
-            Szczegółowe dane finansowe dla każdego miesiąca roku
-          </p>
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <BarChart3 className="h-6 w-6 text-primary" />
+              Przegląd finansowy miesięczny
+            </h1>
+            <p className="text-muted-foreground">
+              Szczegółowe dane finansowe dla każdego miesiąca roku
+            </p>
+          </div>
         </div>
       </div>
 

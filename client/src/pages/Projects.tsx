@@ -195,28 +195,29 @@ export default function Projects() {
         <ArrowLeft className="mr-2 h-4 w-4" />
         Powrót do dashboardu
       </Button>
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Briefcase className="h-6 w-6" />
-            Projekty
-          </h1>
-          <p className="text-muted-foreground">Zarządzaj projektami klientów</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={resetForm}>
-              <Plus className="w-4 h-4 mr-2" />
-              Dodaj projekt
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <form onSubmit={handleSubmit}>
-              <DialogHeader>
-                <DialogTitle>{editingProject ? "Edytuj projekt" : "Dodaj projekt"}</DialogTitle>
-                <DialogDescription>{editingProject ? "Zaktualizuj dane projektu" : "Wprowadź dane projektu"}</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Briefcase className="h-6 w-6 text-primary" />
+              Projekty
+            </h1>
+            <p className="text-muted-foreground">Zarządzaj projektami klientów</p>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={resetForm} className="shadow-lg hover:shadow-xl transition">
+                <Plus className="w-4 h-4 mr-2" />
+                Dodaj projekt
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <form onSubmit={handleSubmit}>
+                <DialogHeader>
+                  <DialogTitle>{editingProject ? "Edytuj projekt" : "Dodaj projekt"}</DialogTitle>
+                  <DialogDescription>{editingProject ? "Zaktualizuj dane projektu" : "Wprowadź dane projektu"}</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="clientId">Klient</Label>
                   <Select
@@ -349,7 +350,7 @@ export default function Projects() {
             const matchesClient = filterClient === "all" || project.clientId.toString() === filterClient;
             return matchesSearch && matchesStatus && matchesClient;
           }).length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 text-muted-foreground rounded-2xl border border-dashed bg-muted/30">
               Brak projektów spełniających kryteria wyszukiwania
             </div>
           )}

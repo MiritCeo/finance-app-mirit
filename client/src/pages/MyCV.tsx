@@ -310,23 +310,23 @@ export default function MyCV() {
 
   return (
     <div className="container mx-auto max-w-7xl py-8 space-y-6">
-      <div className="mb-4">
-        <Button
-          variant="ghost"
-          onClick={() => setLocation("/")}
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Powrót do Dashboard
-        </Button>
-      </div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Moje CV</h1>
-          <p className="text-muted-foreground">
-            Aktualizuj swoje CV aby było zawsze aktualne
-          </p>
-        </div>
-        <div className="flex gap-2">
+      <Button
+        variant="ghost"
+        onClick={() => setLocation("/")}
+        className="mb-2"
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Powrót do Dashboard
+      </Button>
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-transparent p-6 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Moje CV</h1>
+            <p className="text-muted-foreground">
+              Aktualizuj swoje CV aby było zawsze aktualne
+            </p>
+          </div>
+          <div className="flex gap-2">
           <Button onClick={handleOpenEdit} variant="outline">
             <Edit className="w-4 h-4 mr-2" />
             Edytuj CV
@@ -352,6 +352,7 @@ export default function MyCV() {
             <LogOut className="w-4 h-4 mr-2" />
             Wyloguj
           </Button>
+          </div>
         </div>
       </div>
 

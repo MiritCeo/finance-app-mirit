@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import logo from "@/assets/logolacheck.png";
 
 export default function ProjectHunterLogin() {
   const [, setLocation] = useLocation();
@@ -51,11 +52,11 @@ export default function ProjectHunterLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 via-white to-orange-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">
-      <Card className="w-full max-w-md shadow-xl">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-white to-primary/20 dark:from-[#1a0b12] dark:via-gray-900 dark:to-[#2b0d1d] p-4">
+      <Card className="w-full max-w-md border-0 shadow-2xl bg-white/90 dark:bg-gray-900/80 backdrop-blur">
         <CardHeader className="space-y-3 text-center">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center shadow-lg">
-            <Search className="w-8 h-8 text-white" />
+          <div className="mx-auto h-16 w-16 rounded-2xl bg-white shadow-md ring-1 ring-black/5 flex items-center justify-center">
+            <img src={logo} alt="Lacheck" className="h-12 w-12 object-contain" />
           </div>
           <CardTitle className="text-3xl font-bold">System Mirit Softwarehouse - Lacheck</CardTitle>
           <CardDescription className="text-base">
@@ -69,7 +70,7 @@ export default function ProjectHunterLogin() {
               <Input
                 id="email"
                 type="email"
-                placeholder="twoj@email.pl"
+                placeholder="imie.nazwisko@mirit.pl"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
@@ -94,7 +95,7 @@ export default function ProjectHunterLogin() {
 
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transition"
               disabled={isLoading}
               size="lg"
             >
@@ -104,12 +105,12 @@ export default function ProjectHunterLogin() {
                   Logowanie...
                 </>
               ) : (
-                "Zaloguj się"
+                "Wejdź do systemu"
               )}
             </Button>
 
             <div className="text-center text-sm text-muted-foreground pt-4">
-              <p>Nie masz konta?</p>
+              <p>Potrzebujesz dostępu?</p>
               <p className="mt-1">Skontaktuj się z administratorem systemu</p>
             </div>
           </form>
