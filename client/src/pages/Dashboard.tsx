@@ -102,9 +102,12 @@ export default function Dashboard() {
   });
   const normalizeEmploymentType = (value?: string | null) =>
     value?.trim().toLowerCase();
-  const isB2BEmployee =
-    normalizeEmploymentType(myProfile?.employmentType) === "b2b" ||
-    normalizeEmploymentType(myHoursStatus?.employmentType) === "b2b";
+  const normalizedProfileType = normalizeEmploymentType(myProfile?.employmentType);
+  const normalizedStatusType = normalizeEmploymentType(myHoursStatus?.employmentType);
+  const resolvedEmploymentType = normalizedProfileType || normalizedStatusType;
+  const isB2BEmployee = resolvedEmploymentType === "b2b";
+  const canShowB2BHoursCard =
+    isEmployee && (myProfileLoading || !resolvedEmploymentType || isB2BEmployee);
   const submitMyMonthlyHours = trpc.timeEntries.submitMyMonthlyHours.useMutation({
     onSuccess: () => {
       toast.success("Godziny zapisane.");
@@ -356,7 +359,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {(isEmployee && (myProfileLoading || isB2BEmployee)) && (
+        {canShowB2BHoursCard && (
           <Card>
             <CardHeader>
               <CardTitle>Godziny miesięczne (B2B)</CardTitle>
@@ -370,6 +373,10 @@ export default function Dashboard() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Ładowanie danych profilu...
                 </div>
+              ) : !isB2BEmployee ? (
+                <p className="text-sm text-muted-foreground">
+                  Funkcja dostępna tylko dla umowy B2B.
+                </p>
               ) : myHoursStatus?.isLastDay ? (
                 <>
                   <div className="space-y-2">
@@ -412,7 +419,9 @@ export default function Dashboard() {
         )}
 
         {/* Panel informacji z HRappka (ukryty dla pracownika B2B) */}
-        {(!isEmployee || (!myProfileLoading && !isB2BEmployee)) && <HRappkaInfoPanel />}
+        {(!isEmployee || (!myProfileLoading && !isB2BEmployee && !!myProfile?.hrappkaId)) && (
+          <HRappkaInfoPanel />
+        )}
 
       </div>
     );
