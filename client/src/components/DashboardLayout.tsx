@@ -377,47 +377,6 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset>
-        <div className="flex border-b h-14 items-center justify-between bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
-          <div className="flex items-center gap-3">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleSidebar}
-                  className="h-9 w-9 rounded-lg hover:bg-accent transition-all"
-                >
-                  {isCollapsed ? (
-                    <Menu className="h-5 w-5" />
-                  ) : (
-                    <PanelLeft className="h-5 w-5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{isCollapsed ? "Otwórz menu" : "Zwiń menu"}</p>
-              </TooltipContent>
-            </Tooltip>
-            <div className="flex items-center gap-2">
-              {activeMenuItem && (
-                <>
-                  <activeMenuItem.icon className={`h-5 w-5 ${activeMenuItem.color}`} />
-                  <h2 className="text-lg font-semibold">{activeMenuItem.label}</h2>
-                </>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {user && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted border">
-                <span className="text-xs text-muted-foreground">Zalogowany jako:</span>
-                <span className="text-xs font-semibold text-foreground">
-                  {user?.name || user?.email || "-"}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
         <main className="flex-1 p-6 min-h-screen">{children}</main>
       </SidebarInset>
     </>
