@@ -102,12 +102,15 @@ export default function Dashboard() {
   });
   const normalizeEmploymentType = (value?: string | null) =>
     value?.trim().toLowerCase();
+  const isB2BType = (value?: string | null) =>
+    Boolean(normalizeEmploymentType(value)?.includes("b2b"));
   const normalizedProfileType = normalizeEmploymentType(myProfile?.employmentType);
   const normalizedStatusType = normalizeEmploymentType(myHoursStatus?.employmentType);
   const resolvedEmploymentType = normalizedProfileType || normalizedStatusType;
-  const isB2BEmployee = resolvedEmploymentType === "b2b";
-  const canShowB2BHoursCard =
-    isEmployee && (myProfileLoading || !resolvedEmploymentType || isB2BEmployee);
+  const isB2BEmployee =
+    isB2BType(myProfile?.employmentType) || isB2BType(myHoursStatus?.employmentType);
+  const canShowB2BHoursCard = isEmployee;
+  const allowB2BHoursEntry = isB2BEmployee || !resolvedEmploymentType;
   const submitMyMonthlyHours = trpc.timeEntries.submitMyMonthlyHours.useMutation({
     onSuccess: () => {
       toast.success("Godziny zapisane.");
@@ -364,7 +367,7 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle>Godziny miesięczne (B2B)</CardTitle>
               <CardDescription>
-                Uzupełnij godziny pracy w ostatnim dniu miesiąca.
+                Uzupełnij godziny pracy w dowolnym dniu miesiąca.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -373,11 +376,11 @@ export default function Dashboard() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Ładowanie danych profilu...
                 </div>
-              ) : !isB2BEmployee ? (
+              ) : !allowB2BHoursEntry ? (
                 <p className="text-sm text-muted-foreground">
                   Funkcja dostępna tylko dla umowy B2B.
                 </p>
-              ) : myHoursStatus?.isLastDay ? (
+              ) : (
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="monthly-hours">Liczba godzin</Label>
@@ -408,18 +411,20 @@ export default function Dashboard() {
                   <p className="text-xs text-muted-foreground">
                     Dane zapisują się w raporcie miesięcznym do dalszych wyliczeń.
                   </p>
+                  {!resolvedEmploymentType && (
+                    <p className="text-xs text-muted-foreground">
+                      Jeśli widzisz ten formularz bez typu umowy, poproś administratora o
+                      uzupełnienie profilu.
+                    </p>
+                  )}
                 </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Funkcja dostępna tylko w ostatnim dniu miesiąca.
-                </p>
               )}
             </CardContent>
           </Card>
         )}
 
         {/* Panel informacji z HRappka (ukryty dla pracownika B2B) */}
-        {(!isEmployee || (!myProfileLoading && !isB2BEmployee && !!myProfile?.hrappkaId)) && (
+        {(!isEmployee || (!myProfileLoading && !allowB2BHoursEntry && !!myProfile?.hrappkaId)) && (
           <HRappkaInfoPanel />
         )}
 

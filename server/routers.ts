@@ -2182,8 +2182,6 @@ export const appRouter = router({
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth() + 1;
-        const lastDay = new Date(year, month, 0).getDate();
-        const isLastDay = now.getDate() === lastDay;
 
         const report = await db.getMonthlyReport(ctx.user.employeeId, year, month);
         const hours = report ? report.hoursWorked / 100 : 0;
@@ -2191,7 +2189,7 @@ export const appRouter = router({
         return {
           year,
           month,
-          isLastDay,
+          canEdit: employee.employmentType === "b2b",
           employmentType: employee.employmentType,
           hours,
         };
@@ -2218,10 +2216,6 @@ export const appRouter = router({
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth() + 1;
-        const lastDay = new Date(year, month, 0).getDate();
-        if (now.getDate() !== lastDay) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Godziny można uzupełnić tylko w ostatnim dniu miesiąca." });
-        }
 
         const assignments = await db.getAssignmentsByEmployee(ctx.user.employeeId);
         const activeAssignment = assignments.find(a => a.isActive && a.hourlyRateClient && a.hourlyRateClient > 0);
