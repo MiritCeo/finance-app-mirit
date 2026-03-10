@@ -237,15 +237,10 @@ function DashboardLayoutContent({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="font-bold text-lg tracking-tight truncate text-foreground dark:text-foreground">
-                        Mirit Lacheck
+                        Lacheck
                       </span>
                       {user?.role && (
-                        <span className={`text-xs font-semibold inline-flex items-center h-5 px-2 rounded-full bg-white text-slate-900 shadow-sm ${
-                          user.role === "admin" ? "border border-blue-200" : 
-                          user.role === "employee" ? "border border-green-200" :
-                          user.role === "project_hunter" ? "border border-amber-200" :
-                          "border border-slate-200"
-                        }`}>
+                        <span className="text-xs font-semibold text-muted-foreground">
                           {user.role === "employee"
                             ? (myProfile?.position?.trim() || "Zespół Mirit")
                             : user.role === "admin"
