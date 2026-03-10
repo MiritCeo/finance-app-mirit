@@ -97,7 +97,9 @@ export default function Dashboard() {
   const { data: myProfile, isLoading: myProfileLoading } = trpc.employees.myProfile.useQuery(undefined, {
     enabled: isEmployee,
   });
-  const isB2BEmployee = Boolean(myProfile?.employmentType === "b2b");
+  const isB2BEmployee = Boolean(
+    myProfile?.employmentType === "b2b" || myHoursStatus?.employmentType === "b2b"
+  );
   const { data: myHoursStatus, refetch: refetchMyHoursStatus } = trpc.timeEntries.myMonthlyHoursStatus.useQuery(undefined, {
     enabled: isEmployee,
   });
