@@ -2185,13 +2185,18 @@ export const appRouter = router({
 
         const report = await db.getMonthlyReport(ctx.user.employeeId, year, month);
         const hours = report ? report.hoursWorked / 100 : 0;
+        const isLocked = Boolean(report?.b2bHoursLocked);
+        const lastDayOfMonth = new Date(year, month, 0).getDate();
+        const isLastDay = now.getDate() === lastDayOfMonth;
 
         return {
           year,
           month,
-          canEdit: employee.employmentType === "b2b",
+          canEdit: employee.employmentType === "b2b" && !isLocked,
           employmentType: employee.employmentType,
           hours,
+          isLocked,
+          isLastDay,
         };
       }),
 
@@ -2236,6 +2241,16 @@ export const appRouter = router({
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth() + 1;
+        const lastDayOfMonth = new Date(year, month, 0).getDate();
+        const isLastDay = now.getDate() === lastDayOfMonth;
+
+        const existingReport = await db.getMonthlyReport(ctx.user.employeeId, year, month);
+        if (existingReport?.b2bHoursLocked) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Godziny za ten miesiąc zostały już zatwierdzone i nie można ich edytować.",
+          });
+        }
 
         const assignments = await db.getAssignmentsByEmployee(ctx.user.employeeId);
         const activeAssignment = assignments.find(a => a.isActive && a.hourlyRateClient && a.hourlyRateClient > 0);
@@ -2250,7 +2265,19 @@ export const appRouter = router({
           propagateChanges: false,
         });
 
-        return { success: true };
+        let pointsAwarded = 0;
+        let locked = false;
+        if (isLastDay) {
+          await db.lockMonthlyReportForB2B(ctx.user.employeeId, year, month, now);
+          const updatedReport = await db.getMonthlyReport(ctx.user.employeeId, year, month);
+          if (updatedReport) {
+            const pointsResult = await db.awardHoursPointsForMonthlyReport(updatedReport);
+            pointsAwarded = pointsResult.awarded;
+          }
+          locked = true;
+        }
+
+        return { success: true, locked, pointsAwarded };
       }),
     
     deleteMonthlyReport: adminProcedure

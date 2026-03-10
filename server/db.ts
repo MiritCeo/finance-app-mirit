@@ -982,6 +982,23 @@ export async function saveMonthlyReportSnapshot(data: {
   }
 }
 
+export async function lockMonthlyReportForB2B(
+  employeeId: number,
+  year: number,
+  month: number,
+  lockedAt: Date
+) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  await database
+    .update(monthlyEmployeeReports)
+    .set({ b2bHoursLocked: true, b2bLockedAt: lockedAt, updatedAt: new Date() })
+    .where(
+      sql`${monthlyEmployeeReports.employeeId} = ${employeeId} AND ${monthlyEmployeeReports.year} = ${year} AND ${monthlyEmployeeReports.month} = ${month}`
+    );
+}
+
 // Tasks
 export async function getAllTasks() {
   const database = await getDb();

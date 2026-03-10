@@ -210,6 +210,8 @@ export const monthlyEmployeeReports = mysqlTable("monthlyEmployeeReports", {
   cost: int("cost").default(0).notNull(), // Koszt domyślny pracownika w groszach (z bazy employees.monthlyCostTotal)
   actualCost: int("actualCost"), // Opcjonalny koszt rzeczywisty w groszach (ręcznie wprowadzony)
   profit: int("profit").default(0).notNull(), // Zysk w groszach (revenue - (actualCost ?? cost))
+  b2bHoursLocked: boolean("b2bHoursLocked").default(false).notNull(),
+  b2bLockedAt: timestamp("b2bLockedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

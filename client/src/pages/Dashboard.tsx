@@ -116,9 +116,16 @@ export default function Dashboard() {
     isB2BType(myProfile?.employmentType) || isB2BType(myHoursStatus?.employmentType);
   const canShowB2BHoursCard = isEmployee;
   const allowB2BHoursEntry = isB2BEmployee || !resolvedEmploymentType;
+  const isB2BHoursLocked = Boolean(myHoursStatus?.isLocked);
+  const isLastDayForB2B = Boolean(myHoursStatus?.isLastDay);
+  const canEditB2BHours = allowB2BHoursEntry && !isB2BHoursLocked;
   const submitMyMonthlyHours = trpc.timeEntries.submitMyMonthlyHours.useMutation({
-    onSuccess: () => {
-      toast.success("Godziny zapisane.");
+    onSuccess: (data) => {
+      if (data?.locked) {
+        toast.success("Godziny zapisane. Zapis z ostatniego dnia jest ostateczny.");
+      } else {
+        toast.success("Godziny zapisane.");
+      }
       refetchMyHoursStatus();
     },
     onError: (error) => {
@@ -406,11 +413,21 @@ export default function Dashboard() {
                       value={monthlyHoursInput}
                       onChange={(e) => setMonthlyHoursInput(e.target.value)}
                       placeholder="np. 160"
+                      disabled={!canEditB2BHours}
                     />
                   </div>
+                  {isB2BHoursLocked ? (
+                    <p className="text-sm text-muted-foreground">
+                      Godziny za ten miesiąc zostały już zatwierdzone i nie można ich edytować.
+                    </p>
+                  ) : isLastDayForB2B ? (
+                    <p className="text-sm text-amber-700">
+                      Uwaga: zapis w ostatnim dniu miesiąca jest ostateczny i nie będzie możliwy do edycji.
+                    </p>
+                  ) : null}
                   <Button
                     onClick={() => submitMyMonthlyHours.mutate({ hours: parseFloat(monthlyHoursInput || "0") })}
-                    disabled={submitMyMonthlyHours.isPending}
+                    disabled={submitMyMonthlyHours.isPending || !canEditB2BHours}
                   >
                     {submitMyMonthlyHours.isPending ? (
                       <>
